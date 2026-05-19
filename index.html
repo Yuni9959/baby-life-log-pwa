@@ -158,6 +158,58 @@
       margin: 6px 0 18px;
     }
 
+    .status-card {
+      display: grid;
+      gap: 12px;
+      margin: 0 0 18px;
+      padding: 14px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--panel-strong);
+      box-shadow: 0 1px 0 rgba(0, 0, 0, 0.03);
+    }
+
+    .status-card h2 {
+      margin: 0;
+      font-size: 1.05rem;
+      letter-spacing: 0;
+    }
+
+    .status-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 8px;
+    }
+
+    .status-item {
+      min-height: 86px;
+      padding: 11px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--panel);
+    }
+
+    .status-label {
+      color: var(--muted);
+      font-size: 0.78rem;
+      font-weight: 800;
+    }
+
+    .status-value {
+      margin-top: 5px;
+      font-size: 1rem;
+      font-weight: 900;
+      line-height: 1.28;
+      word-break: keep-all;
+    }
+
+    .status-detail {
+      margin-top: 4px;
+      color: var(--muted);
+      font-size: 0.8rem;
+      line-height: 1.3;
+    }
+
     .record-action {
       display: grid;
       grid-template-columns: 1fr;
@@ -255,6 +307,13 @@
       word-break: keep-all;
     }
 
+    .stat-note {
+      margin-top: 4px;
+      color: var(--muted);
+      font-size: 0.78rem;
+      line-height: 1.25;
+    }
+
     .logs {
       display: grid;
       gap: 14px;
@@ -299,8 +358,8 @@
     }
 
     .log-select {
-      width: 22px;
-      height: 22px;
+      width: 28px;
+      height: 28px;
       accent-color: var(--brand);
     }
 
@@ -309,9 +368,37 @@
       word-break: keep-all;
     }
 
+    .log-main {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      font-weight: 900;
+      line-height: 1.25;
+    }
+
+    .type-pill {
+      display: inline-flex;
+      align-items: center;
+      min-height: 26px;
+      padding: 0 8px;
+      border-radius: 999px;
+      background: rgba(40, 124, 120, 0.12);
+      color: var(--brand-strong);
+      font-size: 0.78rem;
+      font-weight: 900;
+      white-space: nowrap;
+    }
+
+    .log-meta {
+      margin-top: 4px;
+      color: var(--muted);
+      font-size: 0.86rem;
+      line-height: 1.35;
+    }
+
     .edit-record {
-      min-width: 52px;
-      min-height: 38px;
+      min-width: 58px;
+      min-height: 46px;
       border: 1px solid var(--line);
       border-radius: var(--radius);
       background: var(--panel-strong);
@@ -389,6 +476,56 @@
       display: grid;
       grid-template-columns: repeat(2, minmax(0, 1fr));
       gap: 9px;
+    }
+
+    .feeding-control {
+      display: grid;
+      gap: 10px;
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--panel);
+    }
+
+    .stepper-row {
+      display: grid;
+      grid-template-columns: minmax(64px, 0.4fr) minmax(0, 1fr) minmax(64px, 0.4fr);
+      gap: 8px;
+      align-items: stretch;
+    }
+
+    .stepper-btn {
+      min-height: 54px;
+      border-radius: var(--radius);
+      background: var(--panel-strong);
+      color: var(--text);
+      border: 1px solid var(--line);
+      font-size: 1rem;
+      font-weight: 900;
+    }
+
+    .selected-amount {
+      display: grid;
+      place-items: center;
+      min-height: 54px;
+      padding: 8px 10px;
+      border-radius: var(--radius);
+      background: var(--brand);
+      color: #ffffff;
+      text-align: center;
+      font-weight: 900;
+      line-height: 1.25;
+    }
+
+    .recent-feeds {
+      display: grid;
+      gap: 8px;
+    }
+
+    .recent-title {
+      color: var(--muted);
+      font-size: 0.85rem;
+      font-weight: 800;
     }
 
     .chip,
@@ -483,6 +620,10 @@
         grid-template-columns: repeat(2, minmax(0, 1fr));
       }
 
+      .status-grid {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+
       .record-action:first-child {
         grid-column: 1 / -1;
       }
@@ -494,6 +635,17 @@
       .chip-grid {
         grid-template-columns: repeat(3, minmax(0, 1fr));
       }
+    }
+
+    @media (max-width: 380px) {
+      .topbar {
+        display: grid;
+      }
+
+      .export-btn {
+        justify-self: start;
+      }
+
     }
   </style>
 </head>
@@ -511,6 +663,11 @@
       </div>
       <button type="button" class="export-btn" id="csvButton">CSV</button>
     </header>
+
+    <section class="status-card" aria-labelledby="currentStatusTitle">
+      <h2 id="currentStatusTitle">지금 상태</h2>
+      <div class="status-grid" id="currentStatusGrid"></div>
+    </section>
 
     <section class="main-actions" aria-label="빠른 기록">
       <button type="button" class="record-action" data-record-type="feeding" data-open-sheet="feeding">
@@ -564,6 +721,17 @@
       <button type="button" class="chip" data-feed-amount="120">120ml</button>
       <button type="button" class="chip secondary" id="feedNoAmount">수유량 없이</button>
     </div>
+    <div class="feeding-control" aria-label="수유량 20ml 단위 조절">
+      <div class="stepper-row">
+        <button type="button" class="stepper-btn" id="feedMinus20">-20</button>
+        <div class="selected-amount" id="selectedFeedAmount">현재 선택량 없음</div>
+        <button type="button" class="stepper-btn" id="feedPlus20">+20</button>
+      </div>
+      <div class="recent-feeds">
+        <div class="recent-title">최근 수유량</div>
+        <div class="chip-grid" id="recentFeedAmounts"></div>
+      </div>
+    </div>
     <div class="direct-input">
       <label for="feedAmountInput">직접 입력</label>
       <div class="direct-row">
@@ -612,6 +780,7 @@
       const STORAGE_KEY = "baby_life_records_v1";
       const TYPES = ["feeding", "burp", "diaper", "sleep", "wake"];
       const LONG_PRESS_MS = 700;
+      const MAX_FEED_AMOUNT = 500;
       const typeLabels = {
         feeding: "수유",
         burp: "트림",
@@ -632,6 +801,7 @@
         babyNameInput: document.getElementById("babyNameInput"),
         saveNameButton: document.getElementById("saveNameButton"),
         todayLine: document.getElementById("todayLine"),
+        currentStatusGrid: document.getElementById("currentStatusGrid"),
         statsGrid: document.getElementById("statsGrid"),
         logs: document.getElementById("logs"),
         deleteSelectedButton: document.getElementById("deleteSelectedButton"),
@@ -646,6 +816,8 @@
         editAmount: document.getElementById("editAmount"),
         feedNoAmount: document.getElementById("feedNoAmount"),
         feedAmountInput: document.getElementById("feedAmountInput"),
+        selectedFeedAmount: document.getElementById("selectedFeedAmount"),
+        recentFeedAmounts: document.getElementById("recentFeedAmounts"),
         toast: document.getElementById("toast")
       };
 
@@ -876,7 +1048,9 @@
       }
 
       function minutesSince(timestamp) {
-        return Math.max(0, Math.floor((Date.now() - new Date(timestamp).getTime()) / 60000));
+        const time = new Date(timestamp).getTime();
+        if (!Number.isFinite(time)) return 0;
+        return Math.max(0, Math.floor((Date.now() - time) / 60000));
       }
 
       function elapsedText(timestamp) {
@@ -899,6 +1073,10 @@
         return hours + "시간 " + mins + "분";
       }
 
+      function amountText(record) {
+        return record && record.value ? record.value + (record.unit || "ml") : "수유량 없음";
+      }
+
       function todayRange() {
         const now = new Date();
         const start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -915,6 +1093,31 @@
         return getRecords(type).filter(function (record) {
           return isToday(record.timestamp);
         });
+      }
+
+      function getSleepState() {
+        const latestSleepEvent = getAllRecords().find(function (record) {
+          return record.type === "sleep" || record.type === "wake";
+        });
+        if (!latestSleepEvent) {
+          return {
+            sleeping: false,
+            label: "수면 기록 없음",
+            detail: "잠듦/깨어남을 기록하면 표시됩니다."
+          };
+        }
+        if (latestSleepEvent.type === "sleep") {
+          return {
+            sleeping: true,
+            label: durationText(minutesSince(latestSleepEvent.timestamp)) + "째 자는 중",
+            detail: "잠든 시각 " + localTimeText(new Date(latestSleepEvent.timestamp))
+          };
+        }
+        return {
+          sleeping: false,
+          label: "깨어 있음",
+          detail: "마지막 깨어남 " + elapsedText(latestSleepEvent.timestamp)
+        };
       }
 
       function calculateSleepMinutesToday() {
@@ -970,6 +1173,34 @@
         target.textContent = "마지막 기록: " + elapsedText(last.timestamp) + suffix;
       }
 
+      function renderCurrentStatus() {
+        const lastFeeding = getRecords("feeding")[0];
+        const lastDiaper = getRecords("diaper")[0];
+        const sleep = getSleepState();
+        const items = [
+          {
+            label: "마지막 수유",
+            value: lastFeeding ? elapsedText(lastFeeding.timestamp) : "기록 없음",
+            detail: lastFeeding ? amountText(lastFeeding) : "수유를 기록하면 표시됩니다."
+          },
+          {
+            label: "마지막 기저귀",
+            value: lastDiaper ? elapsedText(lastDiaper.timestamp) : "기록 없음",
+            detail: lastDiaper && lastDiaper.subtype ? subtypeLabels[lastDiaper.subtype] : "기저귀를 기록하면 표시됩니다."
+          },
+          {
+            label: "현재 수면",
+            value: sleep.label,
+            detail: sleep.detail
+          }
+        ];
+        els.currentStatusGrid.innerHTML = items.map(function (item) {
+          return '<div class="status-item"><div class="status-label">' + escapeHtml(item.label) +
+            '</div><div class="status-value">' + escapeHtml(item.value) +
+            '</div><div class="status-detail">' + escapeHtml(item.detail) + '</div></div>';
+        }).join("");
+      }
+
       function hasBatchim(name) {
         if (!name) return false;
         const code = name.charCodeAt(name.length - 1);
@@ -996,51 +1227,69 @@
         const avgFeed = feedAmounts.length ? Math.round(totalFeed / feedAmounts.length) : 0;
         const lastFeeding = getRecords("feeding")[0];
         const diapers = recordsToday("diaper");
+        const sleepState = getSleepState();
+        const sleepMinutes = calculateSleepMinutesToday();
 
         const stats = [
-          ["오늘 수유", feedings.length + "회"],
-          ["총 수유량", totalFeed + "ml"],
-          ["평균 수유량", avgFeed + "ml"],
-          ["마지막 수유량", lastFeeding && lastFeeding.value ? lastFeeding.value + "ml" : "-"],
-          ["마지막 수유 경과", lastFeeding ? elapsedText(lastFeeding.timestamp) : "-"],
-          ["오늘 수면", durationText(calculateSleepMinutesToday())],
-          ["기저귀 교체", diapers.length + "회"],
-          ["소변", diapers.filter(function (r) { return r.subtype === "urine"; }).length + "회"],
-          ["대변", diapers.filter(function (r) { return r.subtype === "stool"; }).length + "회"],
-          ["소변+대변", diapers.filter(function (r) { return r.subtype === "both"; }).length + "회"]
+          { label: "오늘 수유", value: feedings.length + "회", note: "총 " + totalFeed + "ml" },
+          { label: "평균 수유량", value: avgFeed + "ml", note: feedAmounts.length ? "수유량 기록 기준" : "수유량 기록 없음" },
+          { label: "마지막 수유량", value: lastFeeding && lastFeeding.value ? lastFeeding.value + "ml" : "-", note: lastFeeding ? elapsedText(lastFeeding.timestamp) : "기록 없음" },
+          { label: "오늘 기저귀", value: diapers.length + "회", note: "소변 " + diapers.filter(function (r) { return r.subtype === "urine"; }).length + " · 대변 " + diapers.filter(function (r) { return r.subtype === "stool"; }).length },
+          { label: "소변+대변", value: diapers.filter(function (r) { return r.subtype === "both"; }).length + "회", note: "교체만 " + diapers.filter(function (r) { return r.subtype === "change"; }).length + "회" },
+          { label: "오늘 수면", value: durationText(sleepMinutes), note: sleepState.sleeping ? "현재 수면 시간 포함" : "완료된 수면 기준" }
         ];
 
         els.statsGrid.innerHTML = stats.map(function (item) {
-          return '<div class="stat"><div class="stat-label">' + escapeHtml(item[0]) +
-            '</div><div class="stat-value">' + escapeHtml(item[1]) + "</div></div>";
+          return '<div class="stat"><div class="stat-label">' + escapeHtml(item.label) +
+            '</div><div class="stat-value">' + escapeHtml(item.value) +
+            '</div><div class="stat-note">' + escapeHtml(item.note) + "</div></div>";
         }).join("");
       }
 
       function renderLogs() {
-        els.logs.innerHTML = TYPES.map(function (type, index) {
-          const records = getRecords(type).slice(0, 10);
-          const body = records.length ? records.map(function (record) {
+        const groups = [
+          { title: "오늘 기록", records: getAllRecords().filter(function (record) { return isToday(record.timestamp); }) },
+          { title: "이전 기록", records: getAllRecords().filter(function (record) { return !isToday(record.timestamp); }) }
+        ];
+        els.logs.innerHTML = groups.map(function (group, index) {
+          const body = group.records.length ? group.records.map(function (record) {
             return '<li class="log-item"><input class="log-select" type="checkbox" aria-label="기록 선택" value="' +
-              escapeHtml(record.id) + '"><span class="log-text">' + escapeHtml(logLine(record)) +
+              escapeHtml(record.id) + '"><span class="log-text">' + logItemHtml(record) +
               '</span><button type="button" class="edit-record" data-edit-id="' +
               escapeHtml(record.id) + '">수정</button></li>';
           }).join("") : '<li class="empty">기록 없음</li>';
           const open = index === 0 ? " open" : "";
-          return "<details" + open + "><summary>" + typeLabels[type] +
-            " 최근 기록</summary><ul class=\"log-list\">" + body + "</ul></details>";
+          return "<details" + open + "><summary>" + escapeHtml(group.title) +
+            " · " + group.records.length + "개</summary><ul class=\"log-list\">" + body + "</ul></details>";
         }).join("");
+        updateSelectionState();
       }
 
-      function logLine(record) {
+      function logItemHtml(record) {
         const type = typeLabels[record.type] || record.type;
-        const when = fullDateTimeText(record.timestamp);
+        const value = recordValueText(record);
+        const when = isToday(record.timestamp) ? localTimeText(new Date(record.timestamp)) : fullDateTimeText(record.timestamp);
+        const meta = when + " · " + elapsedText(record.timestamp);
+        return '<span class="log-main"><span class="type-pill">' + escapeHtml(type) +
+          '</span><span>' + escapeHtml(value) + '</span></span><span class="log-meta">' +
+          escapeHtml(meta) + '</span>';
+      }
+
+      function recordValueText(record) {
         if (record.type === "feeding" && record.value) {
-          return type + " — " + record.value + record.unit + " — " + when;
+          return record.value + record.unit;
         }
         if (record.type === "diaper" && record.subtype) {
-          return type + " — " + subtypeLabels[record.subtype] + " — " + when;
+          return subtypeLabels[record.subtype];
         }
-        return type + " — " + when;
+        if (record.type === "feeding") return "수유량 없음";
+        return "기록됨";
+      }
+
+      function updateSelectionState() {
+        const selectedCount = document.querySelectorAll(".log-select:checked").length;
+        els.deleteSelectedButton.textContent = selectedCount ? "선택 " + selectedCount + "개 삭제" : "선택 삭제";
+        els.deleteSelectedButton.classList.toggle("active", selectedCount > 0);
       }
 
       function render() {
@@ -1048,8 +1297,11 @@
         renderHeader(store.settings.babyName);
         els.todayLine.textContent = fullDateTimeText(new Date().toISOString()).slice(0, 10);
         TYPES.forEach(setLastRecord);
+        renderCurrentStatus();
         renderStats();
         renderLogs();
+        renderRecentFeedAmounts();
+        updateSelectedFeedAmount();
       }
 
       function escapeHtml(value) {
@@ -1097,10 +1349,54 @@
         URL.revokeObjectURL(url);
       }
 
+      function currentFeedAmount() {
+        const value = Math.round(Number(els.feedAmountInput.value));
+        return Number.isFinite(value) && value > 0 ? Math.min(value, MAX_FEED_AMOUNT) : 0;
+      }
+
+      function setFeedAmount(value) {
+        const amount = Math.max(0, Math.min(MAX_FEED_AMOUNT, Math.round(Number(value) || 0)));
+        els.feedAmountInput.value = amount > 0 ? amount : "";
+        updateSelectedFeedAmount();
+      }
+
+      function updateSelectedFeedAmount() {
+        const amount = currentFeedAmount();
+        els.selectedFeedAmount.textContent = amount > 0 ? "현재 선택량: " + amount + "ml" : "현재 선택량 없음";
+      }
+
+      function recentFeedAmounts() {
+        const seen = new Set();
+        return getRecords("feeding").reduce(function (amounts, record) {
+          const amount = Math.round(Number(record.value));
+          if (amount > 0 && amount <= MAX_FEED_AMOUNT && !seen.has(amount)) {
+            seen.add(amount);
+            amounts.push(amount);
+          }
+          return amounts;
+        }, []).slice(0, 4);
+      }
+
+      function renderRecentFeedAmounts() {
+        const amounts = recentFeedAmounts();
+        if (!amounts.length) {
+          els.recentFeedAmounts.innerHTML = '<button type="button" class="chip secondary" disabled>최근 기록 없음</button>';
+          return;
+        }
+        els.recentFeedAmounts.innerHTML = amounts.map(function (amount) {
+          return '<button type="button" class="chip secondary" data-feed-amount="' + amount + '">' + amount + 'ml</button>';
+        }).join("");
+      }
+
       function openSheet(name) {
         closeSheets(false);
         els.overlay.classList.add("active");
-        if (name === "feeding") els.feedingSheet.classList.add("active");
+        if (name === "feeding") {
+          const recent = recentFeedAmounts()[0];
+          if (recent && !els.feedAmountInput.value) setFeedAmount(recent);
+          renderRecentFeedAmounts();
+          els.feedingSheet.classList.add("active");
+        }
         if (name === "diaper") els.diaperSheet.classList.add("active");
         if (name === "edit") els.editSheet.classList.add("active");
       }
@@ -1111,10 +1407,16 @@
         els.editSheet.classList.remove("active");
         if (clearOverlay !== false) els.overlay.classList.remove("active");
         els.feedAmountInput.value = "";
+        updateSelectedFeedAmount();
       }
 
       function saveFeeding(value) {
-        addRecord("feeding", "formula", value || null, value ? "ml" : "", "");
+        const amount = value === null ? null : Math.round(Number(value));
+        if (amount !== null && (!Number.isFinite(amount) || amount <= 0 || amount > MAX_FEED_AMOUNT)) {
+          showToast("수유량은 1~" + MAX_FEED_AMOUNT + "ml로 입력해 주세요.");
+          return;
+        }
+        addRecord("feeding", "formula", amount || null, amount ? "ml" : "", "");
         closeSheets();
       }
 
@@ -1265,12 +1567,29 @@
       });
 
       document.getElementById("feedCustomSave").addEventListener("click", function () {
-        const value = Number(els.feedAmountInput.value);
-        if (!Number.isFinite(value) || value <= 0) {
-          showToast("수유량을 확인해 주세요.");
+        const value = currentFeedAmount();
+        if (!Number.isFinite(value) || value <= 0 || value > MAX_FEED_AMOUNT) {
+          showToast("수유량은 1~" + MAX_FEED_AMOUNT + "ml로 입력해 주세요.");
           return;
         }
-        saveFeeding(Math.round(value));
+        saveFeeding(value);
+      });
+
+      document.getElementById("feedMinus20").addEventListener("click", function () {
+        setFeedAmount(currentFeedAmount() - 20);
+      });
+
+      document.getElementById("feedPlus20").addEventListener("click", function () {
+        setFeedAmount(currentFeedAmount() + 20);
+      });
+
+      els.feedAmountInput.addEventListener("input", function () {
+        const value = Number(els.feedAmountInput.value);
+        if (Number.isFinite(value) && value > MAX_FEED_AMOUNT) {
+          els.feedAmountInput.value = MAX_FEED_AMOUNT;
+          showToast("최대 " + MAX_FEED_AMOUNT + "ml까지 입력할 수 있습니다.");
+        }
+        updateSelectedFeedAmount();
       });
 
       els.deleteSelectedButton.addEventListener("click", function () {
@@ -1284,6 +1603,10 @@
         if (window.confirm("선택한 기록 " + selected.length + "개를 삭제하시겠습니까?")) {
           deleteRecords(selected);
         }
+      });
+
+      els.logs.addEventListener("change", function (event) {
+        if (event.target.matches(".log-select")) updateSelectionState();
       });
 
       els.saveNameButton.addEventListener("click", saveBabyName);
