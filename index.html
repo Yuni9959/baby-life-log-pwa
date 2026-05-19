@@ -1,0 +1,1366 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#4a9e8e">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="생활기록">
+  <link rel="manifest" href="./manifest.json">
+  <link rel="apple-touch-icon" href="./icons/icon-192.png">
+  <title>아기 생활 기록</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --bg: #f7f3ec;
+      --panel: #fffaf2;
+      --panel-strong: #ffffff;
+      --text: #26221e;
+      --muted: #6f665e;
+      --line: #ded5c8;
+      --brand: #287c78;
+      --brand-strong: #176560;
+      --accent: #b15c36;
+      --danger: #a83d3d;
+      --shadow: 0 12px 28px rgba(37, 30, 22, 0.12);
+      --radius: 8px;
+      --sheet-offset: 0px;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans KR", sans-serif;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #161a1d;
+        --panel: #202528;
+        --panel-strong: #252b2f;
+        --text: #f2eee7;
+        --muted: #b9b0a7;
+        --line: #3b4247;
+        --brand: #64c2bb;
+        --brand-strong: #8ed8d2;
+        --accent: #e09b76;
+        --danger: #ef8a8a;
+        --shadow: 0 16px 34px rgba(0, 0, 0, 0.35);
+      }
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html {
+      min-height: 100%;
+      background: var(--bg);
+    }
+
+    body {
+      margin: 0;
+      min-height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-size: 16px;
+      line-height: 1.5;
+    }
+
+    button,
+    input {
+      font: inherit;
+    }
+
+    button {
+      border: 0;
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    .app {
+      width: min(100%, 760px);
+      margin: 0 auto;
+      padding: 18px 14px calc(26px + env(safe-area-inset-bottom));
+    }
+
+    .topbar {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 14px;
+      padding: 8px 2px 14px;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 1.55rem;
+      letter-spacing: 0;
+      line-height: 1.18;
+    }
+
+    .title-button {
+      display: inline;
+      padding: 0;
+      background: transparent;
+      color: var(--text);
+      text-align: left;
+      font-weight: 900;
+    }
+
+    .today-line,
+    .name-line {
+      margin-top: 5px;
+      color: var(--muted);
+      font-size: 0.92rem;
+    }
+
+    .name-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 8px;
+      width: min(100%, 420px);
+      margin-top: 10px;
+    }
+
+    .name-row input,
+    .form-field input {
+      width: 100%;
+      min-height: 46px;
+      padding: 0 12px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--panel);
+      color: var(--text);
+      font-weight: 800;
+    }
+
+    .export-btn,
+    .small-action,
+    .danger-action {
+      min-height: 44px;
+      padding: 0 14px;
+      border-radius: var(--radius);
+      font-weight: 800;
+      white-space: nowrap;
+    }
+
+    .export-btn,
+    .small-action {
+      color: #ffffff;
+      background: var(--brand);
+    }
+
+    .danger-action {
+      color: #ffffff;
+      background: var(--danger);
+    }
+
+    .main-actions {
+      display: grid;
+      gap: 10px;
+      margin: 6px 0 18px;
+    }
+
+    .record-action {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 7px;
+      width: 100%;
+      min-height: 96px;
+      padding: 16px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--panel-strong);
+      color: var(--text);
+      text-align: left;
+      box-shadow: 0 1px 0 rgba(0, 0, 0, 0.03);
+      user-select: none;
+      -webkit-user-select: none;
+      -webkit-touch-callout: none;
+      touch-action: manipulation;
+    }
+
+    .record-action:active,
+    .chip:active,
+    .sheet-action:active,
+    .export-btn:active,
+    .small-action:active,
+    .danger-action:active {
+      transform: translateY(1px);
+    }
+
+    .action-title {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      font-size: 1.2rem;
+      font-weight: 900;
+    }
+
+    .action-title small {
+      color: var(--brand);
+      font-size: 0.82rem;
+      font-weight: 900;
+    }
+
+    .last-record {
+      min-height: 24px;
+      color: var(--muted);
+      font-size: 0.94rem;
+      word-break: keep-all;
+    }
+
+    .section {
+      margin-top: 20px;
+      padding-top: 18px;
+      border-top: 1px solid var(--line);
+    }
+
+    .section-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+
+    .section h2 {
+      margin: 0;
+      font-size: 1.18rem;
+      letter-spacing: 0;
+    }
+
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 9px;
+    }
+
+    .stat {
+      min-height: 82px;
+      padding: 13px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--panel);
+    }
+
+    .stat-label {
+      color: var(--muted);
+      font-size: 0.82rem;
+    }
+
+    .stat-value {
+      margin-top: 4px;
+      font-size: 1.28rem;
+      font-weight: 900;
+      line-height: 1.2;
+      word-break: keep-all;
+    }
+
+    .logs {
+      display: grid;
+      gap: 14px;
+    }
+
+    details {
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--panel);
+      overflow: hidden;
+    }
+
+    summary {
+      min-height: 52px;
+      padding: 14px;
+      font-weight: 900;
+      cursor: pointer;
+    }
+
+    .log-list {
+      display: grid;
+      gap: 0;
+      margin: 0;
+      padding: 0;
+      list-style: none;
+      border-top: 1px solid var(--line);
+    }
+
+    .log-item {
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr) auto;
+      align-items: center;
+      gap: 10px;
+      min-height: 58px;
+      padding: 11px 14px;
+      border-top: 1px solid var(--line);
+      color: var(--text);
+    }
+
+    .log-item:first-child {
+      border-top: 0;
+    }
+
+    .log-select {
+      width: 22px;
+      height: 22px;
+      accent-color: var(--brand);
+    }
+
+    .log-text {
+      min-width: 0;
+      word-break: keep-all;
+    }
+
+    .edit-record {
+      min-width: 52px;
+      min-height: 38px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--panel-strong);
+      color: var(--text);
+      font-weight: 800;
+    }
+
+    .empty {
+      padding: 16px 14px;
+      color: var(--muted);
+    }
+
+    .overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 40;
+      display: none;
+      background: rgba(0, 0, 0, 0.42);
+    }
+
+    .overlay.active {
+      display: block;
+    }
+
+    .bottom-sheet {
+      position: fixed;
+      right: 0;
+      bottom: var(--sheet-offset);
+      left: 0;
+      z-index: 50;
+      display: grid;
+      gap: 14px;
+      width: min(100%, 760px);
+      max-height: calc(92vh - var(--sheet-offset));
+      margin: 0 auto;
+      padding: 16px 14px calc(18px + env(safe-area-inset-bottom));
+      overflow-y: auto;
+      border: 1px solid var(--line);
+      border-bottom: 0;
+      border-radius: 14px 14px 0 0;
+      background: var(--panel-strong);
+      box-shadow: var(--shadow);
+      transform: translateY(110%);
+      transition: transform 180ms ease;
+    }
+
+    .bottom-sheet.active {
+      transform: translateY(0);
+    }
+
+    .sheet-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .sheet-title {
+      margin: 0;
+      font-size: 1.18rem;
+      font-weight: 900;
+    }
+
+    .sheet-close {
+      min-width: 44px;
+      min-height: 44px;
+      border-radius: var(--radius);
+      background: var(--panel);
+      color: var(--text);
+      font-size: 1.3rem;
+      font-weight: 900;
+    }
+
+    .chip-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 9px;
+    }
+
+    .chip,
+    .sheet-action {
+      min-height: 58px;
+      border-radius: var(--radius);
+      background: var(--brand);
+      color: #ffffff;
+      font-weight: 900;
+    }
+
+    .chip.secondary,
+    .sheet-action.secondary {
+      border: 1px solid var(--line);
+      background: var(--panel);
+      color: var(--text);
+    }
+
+    .sheet-action.danger {
+      background: var(--danger);
+      color: #ffffff;
+    }
+
+    .direct-input,
+    .edit-form {
+      display: grid;
+      gap: 9px;
+    }
+
+    .direct-input label,
+    .form-field label {
+      color: var(--muted);
+      font-size: 0.9rem;
+      font-weight: 800;
+    }
+
+    .direct-row {
+      display: grid;
+      grid-template-columns: 1fr minmax(92px, 0.38fr);
+      gap: 9px;
+    }
+
+    input[type="number"] {
+      width: 100%;
+      min-height: 58px;
+      padding: 0 14px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--panel);
+      color: var(--text);
+      font-size: 1.1rem;
+      font-weight: 800;
+    }
+
+    .form-field {
+      display: grid;
+      gap: 7px;
+    }
+
+    .hidden {
+      display: none;
+    }
+
+    .toast {
+      position: fixed;
+      right: 14px;
+      bottom: calc(18px + env(safe-area-inset-bottom));
+      left: 14px;
+      z-index: 80;
+      display: none;
+      width: min(calc(100% - 28px), 520px);
+      margin: 0 auto;
+      padding: 12px 14px;
+      border-radius: var(--radius);
+      background: var(--text);
+      color: var(--bg);
+      text-align: center;
+      font-weight: 800;
+      box-shadow: var(--shadow);
+    }
+
+    .toast.active {
+      display: block;
+    }
+
+    @media (min-width: 620px) {
+      .app {
+        padding-top: 24px;
+      }
+
+      .main-actions {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .record-action:first-child {
+        grid-column: 1 / -1;
+      }
+
+      .stats-grid {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+      }
+
+      .chip-grid {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <header class="topbar">
+      <div>
+        <h1><button type="button" class="title-button" id="titleButton">아기 생활 기록</button></h1>
+        <div class="today-line" id="todayLine"></div>
+        <div class="name-row" aria-label="아기 이름 설정">
+          <input id="babyNameInput" type="text" maxlength="20" placeholder="아기 이름">
+          <button type="button" class="small-action" id="saveNameButton">저장</button>
+        </div>
+        <div class="name-line">이름은 이 브라우저에만 저장됩니다.</div>
+      </div>
+      <button type="button" class="export-btn" id="csvButton">CSV</button>
+    </header>
+
+    <section class="main-actions" aria-label="빠른 기록">
+      <button type="button" class="record-action" data-record-type="feeding" data-open-sheet="feeding">
+        <span class="action-title">수유 <small>분유</small></span>
+        <span class="last-record" id="last-feeding">마지막 기록: 없음</span>
+      </button>
+      <button type="button" class="record-action" data-record-type="burp" data-quick-type="burp">
+        <span class="action-title">트림 <small>즉시 기록</small></span>
+        <span class="last-record" id="last-burp">마지막 기록: 없음</span>
+      </button>
+      <button type="button" class="record-action" data-record-type="diaper" data-open-sheet="diaper">
+        <span class="action-title">기저귀 <small>종류 선택</small></span>
+        <span class="last-record" id="last-diaper">마지막 기록: 없음</span>
+      </button>
+      <button type="button" class="record-action" data-record-type="sleep" data-quick-type="sleep">
+        <span class="action-title">잠듦 <small>즉시 기록</small></span>
+        <span class="last-record" id="last-sleep">마지막 기록: 없음</span>
+      </button>
+      <button type="button" class="record-action" data-record-type="wake" data-quick-type="wake">
+        <span class="action-title">깨어남 <small>즉시 기록</small></span>
+        <span class="last-record" id="last-wake">마지막 기록: 없음</span>
+      </button>
+    </section>
+
+    <section class="section" aria-labelledby="statsTitle">
+      <h2 id="statsTitle">오늘 통계</h2>
+      <div class="stats-grid" id="statsGrid"></div>
+    </section>
+
+    <section class="section" aria-labelledby="logsTitle">
+      <div class="section-head">
+        <h2 id="logsTitle">기록 로그</h2>
+        <button type="button" class="danger-action" id="deleteSelectedButton">선택 삭제</button>
+      </div>
+      <div class="logs" id="logs"></div>
+    </section>
+  </main>
+
+  <div class="overlay" id="overlay" tabindex="-1"></div>
+
+  <section class="bottom-sheet" id="feedingSheet" role="dialog" aria-modal="true" aria-labelledby="feedingSheetTitle">
+    <div class="sheet-head">
+      <h2 class="sheet-title" id="feedingSheetTitle">수유량 기록</h2>
+      <button type="button" class="sheet-close" data-close-sheet aria-label="닫기">×</button>
+    </div>
+    <div class="chip-grid">
+      <button type="button" class="chip" data-feed-amount="40">40ml</button>
+      <button type="button" class="chip" data-feed-amount="60">60ml</button>
+      <button type="button" class="chip" data-feed-amount="80">80ml</button>
+      <button type="button" class="chip" data-feed-amount="100">100ml</button>
+      <button type="button" class="chip" data-feed-amount="120">120ml</button>
+      <button type="button" class="chip secondary" id="feedNoAmount">수유량 없이</button>
+    </div>
+    <div class="direct-input">
+      <label for="feedAmountInput">직접 입력</label>
+      <div class="direct-row">
+        <input id="feedAmountInput" type="number" inputmode="numeric" min="1" max="500" step="1" placeholder="ml">
+        <button type="button" class="sheet-action" id="feedCustomSave">저장</button>
+      </div>
+    </div>
+  </section>
+
+  <section class="bottom-sheet" id="diaperSheet" role="dialog" aria-modal="true" aria-labelledby="diaperSheetTitle">
+    <div class="sheet-head">
+      <h2 class="sheet-title" id="diaperSheetTitle">기저귀 종류</h2>
+      <button type="button" class="sheet-close" data-close-sheet aria-label="닫기">×</button>
+    </div>
+    <div class="chip-grid">
+      <button type="button" class="chip" data-diaper-subtype="urine">소변</button>
+      <button type="button" class="chip" data-diaper-subtype="stool">대변</button>
+      <button type="button" class="chip" data-diaper-subtype="both">소변+대변</button>
+      <button type="button" class="chip secondary" data-diaper-subtype="change">교체만</button>
+    </div>
+  </section>
+
+  <section class="bottom-sheet" id="editSheet" role="dialog" aria-modal="true" aria-labelledby="editSheetTitle">
+    <div class="sheet-head">
+      <h2 class="sheet-title" id="editSheetTitle">기록 수정</h2>
+      <button type="button" class="sheet-close" data-close-sheet aria-label="닫기">×</button>
+    </div>
+    <form class="edit-form" id="editForm">
+      <input type="hidden" id="editRecordId">
+      <div class="form-field">
+        <label for="editDateTime">기록 시간</label>
+        <input id="editDateTime" type="datetime-local" required>
+      </div>
+      <div class="form-field hidden" id="editAmountField">
+        <label for="editAmount">수유량(ml)</label>
+        <input id="editAmount" type="number" inputmode="numeric" min="0" max="500" step="1" placeholder="비워두면 수유량 없음">
+      </div>
+      <button type="submit" class="sheet-action">수정 저장</button>
+    </form>
+  </section>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <script>
+    document.addEventListener("DOMContentLoaded", function () {
+      const STORAGE_KEY = "baby_life_records_v1";
+      const TYPES = ["feeding", "burp", "diaper", "sleep", "wake"];
+      const LONG_PRESS_MS = 700;
+      const typeLabels = {
+        feeding: "수유",
+        burp: "트림",
+        diaper: "기저귀",
+        sleep: "잠듦",
+        wake: "깨어남"
+      };
+      const subtypeLabels = {
+        formula: "분유",
+        urine: "소변",
+        stool: "대변",
+        both: "소변+대변",
+        change: "교체만"
+      };
+
+      const els = {
+        titleButton: document.getElementById("titleButton"),
+        babyNameInput: document.getElementById("babyNameInput"),
+        saveNameButton: document.getElementById("saveNameButton"),
+        todayLine: document.getElementById("todayLine"),
+        statsGrid: document.getElementById("statsGrid"),
+        logs: document.getElementById("logs"),
+        deleteSelectedButton: document.getElementById("deleteSelectedButton"),
+        overlay: document.getElementById("overlay"),
+        feedingSheet: document.getElementById("feedingSheet"),
+        diaperSheet: document.getElementById("diaperSheet"),
+        editSheet: document.getElementById("editSheet"),
+        editForm: document.getElementById("editForm"),
+        editRecordId: document.getElementById("editRecordId"),
+        editDateTime: document.getElementById("editDateTime"),
+        editAmountField: document.getElementById("editAmountField"),
+        editAmount: document.getElementById("editAmount"),
+        feedNoAmount: document.getElementById("feedNoAmount"),
+        feedAmountInput: document.getElementById("feedAmountInput"),
+        toast: document.getElementById("toast")
+      };
+
+      let suppressNextClick = false;
+
+      function pad(value) {
+        return String(value).padStart(2, "0");
+      }
+
+      function blankStore() {
+        return {
+          version: 2,
+          updatedAt: null,
+          settings: {
+            babyName: ""
+          },
+          records: {
+            feeding: [],
+            burp: [],
+            diaper: [],
+            sleep: [],
+            wake: []
+          }
+        };
+      }
+
+      function normalizeRecord(record, fallbackType) {
+        if (!record || typeof record !== "object") return null;
+        const type = TYPES.includes(record.type) ? record.type : fallbackType;
+        if (!TYPES.includes(type)) return null;
+        const rawTimestamp = record.timestamp || record.time || record.createdAt || new Date().toISOString();
+        const parsedTimestamp = new Date(rawTimestamp);
+        const timestamp = Number.isNaN(parsedTimestamp.getTime()) ? new Date().toISOString() : parsedTimestamp.toISOString();
+        return {
+          id: record.id || createId(),
+          type: type,
+          subtype: record.subtype || "",
+          value: record.value === undefined ? null : record.value,
+          unit: record.unit || "",
+          note: record.note || "",
+          timestamp: timestamp
+        };
+      }
+
+      function loadStore() {
+        try {
+          const raw = localStorage.getItem(STORAGE_KEY);
+          if (!raw) return blankStore();
+          const parsed = JSON.parse(raw);
+          const store = blankStore();
+          store.version = 2;
+          store.updatedAt = parsed.updatedAt || null;
+          store.settings = Object.assign({}, store.settings, parsed.settings || {});
+
+          if (parsed && parsed.records) {
+            if (Array.isArray(parsed.records)) {
+              parsed.records.forEach(function (record) {
+                const normalized = normalizeRecord(record, record.type);
+                if (normalized) store.records[normalized.type].push(normalized);
+              });
+            } else {
+              TYPES.forEach(function (type) {
+                const records = Array.isArray(parsed.records[type]) ? parsed.records[type] : [];
+                store.records[type] = records.map(function (record) {
+                  return normalizeRecord(record, type);
+                }).filter(Boolean);
+              });
+            }
+          }
+
+          TYPES.forEach(function (type) {
+            store.records[type].sort(sortNewestFirst);
+            store.records[type] = store.records[type].slice(0, 50);
+          });
+
+          return store;
+        } catch (error) {
+          showToast("저장된 데이터를 읽지 못했습니다.");
+          return blankStore();
+        }
+      }
+
+      function saveStore(store) {
+        try {
+          store.version = 2;
+          store.updatedAt = new Date().toISOString();
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(store));
+          return true;
+        } catch (error) {
+          showToast("기록을 저장할 공간이 부족합니다.");
+          return false;
+        }
+      }
+
+      function createId() {
+        if (window.crypto && typeof window.crypto.randomUUID === "function") {
+          return window.crypto.randomUUID();
+        }
+        return "rec_" + Date.now() + "_" + Math.random().toString(36).slice(2);
+      }
+
+      function sortNewestFirst(a, b) {
+        return new Date(b.timestamp) - new Date(a.timestamp);
+      }
+
+      function addRecord(type, subtype, value, unit, note) {
+        const store = loadStore();
+        const record = {
+          id: createId(),
+          type: type,
+          subtype: subtype || "",
+          value: value === undefined ? null : value,
+          unit: unit || "",
+          note: note || "",
+          timestamp: new Date().toISOString()
+        };
+        store.records[type].unshift(record);
+        store.records[type].sort(sortNewestFirst);
+        store.records[type] = store.records[type].slice(0, 50);
+        if (saveStore(store)) {
+          render();
+          showToast(typeLabels[type] + " 기록 완료");
+        }
+      }
+
+      function deleteRecord(id) {
+        const store = loadStore();
+        let deleted = false;
+        TYPES.forEach(function (type) {
+          const before = store.records[type].length;
+          store.records[type] = store.records[type].filter(function (record) {
+            return record.id !== id;
+          });
+          if (before !== store.records[type].length) deleted = true;
+        });
+        if (deleted && saveStore(store)) {
+          render();
+          showToast("기록을 삭제했습니다.");
+        }
+      }
+
+      function deleteRecords(ids) {
+        const idSet = new Set(ids);
+        const store = loadStore();
+        TYPES.forEach(function (type) {
+          store.records[type] = store.records[type].filter(function (record) {
+            return !idSet.has(record.id);
+          });
+        });
+        if (saveStore(store)) {
+          render();
+          showToast("선택한 기록을 삭제했습니다.");
+        }
+      }
+
+      function deleteLatestRecord(type) {
+        const records = getRecords(type);
+        const latest = records[0];
+        if (!latest) {
+          showToast("삭제할 기록이 없습니다.");
+          return;
+        }
+        const message = "직전 " + typeLabels[type] + " 기록을 삭제하시겠습니까?\n기록 시간: " + fullDateTimeText(latest.timestamp);
+        if (window.confirm(message)) deleteRecord(latest.id);
+      }
+
+      function updateRecord(id, patch) {
+        const store = loadStore();
+        let updated = false;
+        TYPES.forEach(function (type) {
+          store.records[type] = store.records[type].map(function (record) {
+            if (record.id !== id) return record;
+            updated = true;
+            return Object.assign({}, record, patch);
+          }).sort(sortNewestFirst).slice(0, 50);
+        });
+        if (updated && saveStore(store)) {
+          render();
+          showToast("기록을 수정했습니다.");
+        }
+      }
+
+      function saveBabyName() {
+        const store = loadStore();
+        store.settings.babyName = els.babyNameInput.value.trim();
+        if (saveStore(store)) {
+          renderHeader(store.settings.babyName);
+          showToast("아기 이름을 저장했습니다.");
+        }
+      }
+
+      function getRecords(type) {
+        return loadStore().records[type] || [];
+      }
+
+      function getAllRecords() {
+        const store = loadStore();
+        return TYPES.flatMap(function (type) {
+          return store.records[type] || [];
+        }).sort(sortNewestFirst);
+      }
+
+      function findRecord(id) {
+        return getAllRecords().find(function (record) {
+          return record.id === id;
+        });
+      }
+
+      function localDateKey(date) {
+        return date.getFullYear() + "-" + pad(date.getMonth() + 1) + "-" + pad(date.getDate());
+      }
+
+      function localTimeText(date) {
+        const period = date.getHours() < 12 ? "오전" : "오후";
+        const hour = date.getHours() % 12 || 12;
+        return period + " " + pad(hour) + ":" + pad(date.getMinutes());
+      }
+
+      function fullDateTimeText(timestamp) {
+        const date = new Date(timestamp);
+        return localDateKey(date) + " " + localTimeText(date);
+      }
+
+      function toDatetimeLocalValue(timestamp) {
+        const date = new Date(timestamp);
+        return date.getFullYear() + "-" + pad(date.getMonth() + 1) + "-" + pad(date.getDate()) +
+          "T" + pad(date.getHours()) + ":" + pad(date.getMinutes());
+      }
+
+      function minutesSince(timestamp) {
+        return Math.max(0, Math.floor((Date.now() - new Date(timestamp).getTime()) / 60000));
+      }
+
+      function elapsedText(timestamp) {
+        if (!timestamp) return "없음";
+        const minutes = minutesSince(timestamp);
+        if (minutes < 1) return "방금 전";
+        const days = Math.floor(minutes / 1440);
+        const hours = Math.floor((minutes % 1440) / 60);
+        const mins = minutes % 60;
+        if (days > 0) return days + "일 " + hours + "시간 전";
+        if (hours > 0) return hours + "시간 " + mins + "분 전";
+        return mins + "분 전";
+      }
+
+      function durationText(totalMinutes) {
+        const minutes = Math.max(0, Math.floor(totalMinutes));
+        const hours = Math.floor(minutes / 60);
+        const mins = minutes % 60;
+        if (hours === 0) return mins + "분";
+        return hours + "시간 " + mins + "분";
+      }
+
+      function todayRange() {
+        const now = new Date();
+        const start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        const end = new Date(start);
+        end.setDate(end.getDate() + 1);
+        return { start: start, end: end };
+      }
+
+      function isToday(timestamp) {
+        return localDateKey(new Date(timestamp)) === localDateKey(new Date());
+      }
+
+      function recordsToday(type) {
+        return getRecords(type).filter(function (record) {
+          return isToday(record.timestamp);
+        });
+      }
+
+      function calculateSleepMinutesToday() {
+        const range = todayRange();
+        const events = getAllRecords()
+          .filter(function (record) {
+            return record.type === "sleep" || record.type === "wake";
+          })
+          .sort(function (a, b) {
+            return new Date(a.timestamp) - new Date(b.timestamp);
+          });
+        let activeSleep = null;
+        let total = 0;
+
+        events.forEach(function (record) {
+          const time = new Date(record.timestamp);
+          if (record.type === "sleep") {
+            if (!activeSleep) activeSleep = time;
+          } else if (record.type === "wake" && activeSleep) {
+            total += overlappedMinutes(activeSleep, time, range.start, range.end);
+            activeSleep = null;
+          }
+        });
+
+        if (activeSleep) {
+          total += overlappedMinutes(activeSleep, new Date(), range.start, range.end);
+        }
+
+        return total;
+      }
+
+      function overlappedMinutes(start, end, boundaryStart, boundaryEnd) {
+        const from = Math.max(start.getTime(), boundaryStart.getTime());
+        const to = Math.min(end.getTime(), boundaryEnd.getTime());
+        return to > from ? (to - from) / 60000 : 0;
+      }
+
+      function setLastRecord(type) {
+        const last = getRecords(type)[0];
+        const target = document.getElementById("last-" + type);
+        if (!target) return;
+        if (!last) {
+          target.textContent = "마지막 기록: 없음";
+          return;
+        }
+        let suffix = "";
+        if (type === "feeding") {
+          suffix = last.value ? " · " + last.value + last.unit : " · 수유량 없음";
+        }
+        if (type === "diaper") {
+          suffix = last.subtype ? " · " + subtypeLabels[last.subtype] : "";
+        }
+        target.textContent = "마지막 기록: " + elapsedText(last.timestamp) + suffix;
+      }
+
+      function hasBatchim(name) {
+        if (!name) return false;
+        const code = name.charCodeAt(name.length - 1);
+        if (code < 0xAC00 || code > 0xD7A3) return false;
+        return (code - 0xAC00) % 28 !== 0;
+      }
+
+      function renderHeader(babyName) {
+        const name = (babyName || "").trim();
+        const title = name
+          ? (hasBatchim(name) ? name + "이 생활 기록" : name + " 생활 기록")
+          : "아기 생활 기록";
+        els.titleButton.textContent = title;
+        els.babyNameInput.value = name;
+        document.title = title;
+      }
+
+      function renderStats() {
+        const feedings = recordsToday("feeding");
+        const feedAmounts = feedings
+          .map(function (record) { return Number(record.value); })
+          .filter(function (value) { return Number.isFinite(value) && value > 0; });
+        const totalFeed = feedAmounts.reduce(function (sum, value) { return sum + value; }, 0);
+        const avgFeed = feedAmounts.length ? Math.round(totalFeed / feedAmounts.length) : 0;
+        const lastFeeding = getRecords("feeding")[0];
+        const diapers = recordsToday("diaper");
+
+        const stats = [
+          ["오늘 수유", feedings.length + "회"],
+          ["총 수유량", totalFeed + "ml"],
+          ["평균 수유량", avgFeed + "ml"],
+          ["마지막 수유량", lastFeeding && lastFeeding.value ? lastFeeding.value + "ml" : "-"],
+          ["마지막 수유 경과", lastFeeding ? elapsedText(lastFeeding.timestamp) : "-"],
+          ["오늘 수면", durationText(calculateSleepMinutesToday())],
+          ["기저귀 교체", diapers.length + "회"],
+          ["소변", diapers.filter(function (r) { return r.subtype === "urine"; }).length + "회"],
+          ["대변", diapers.filter(function (r) { return r.subtype === "stool"; }).length + "회"],
+          ["소변+대변", diapers.filter(function (r) { return r.subtype === "both"; }).length + "회"]
+        ];
+
+        els.statsGrid.innerHTML = stats.map(function (item) {
+          return '<div class="stat"><div class="stat-label">' + escapeHtml(item[0]) +
+            '</div><div class="stat-value">' + escapeHtml(item[1]) + "</div></div>";
+        }).join("");
+      }
+
+      function renderLogs() {
+        els.logs.innerHTML = TYPES.map(function (type, index) {
+          const records = getRecords(type).slice(0, 10);
+          const body = records.length ? records.map(function (record) {
+            return '<li class="log-item"><input class="log-select" type="checkbox" aria-label="기록 선택" value="' +
+              escapeHtml(record.id) + '"><span class="log-text">' + escapeHtml(logLine(record)) +
+              '</span><button type="button" class="edit-record" data-edit-id="' +
+              escapeHtml(record.id) + '">수정</button></li>';
+          }).join("") : '<li class="empty">기록 없음</li>';
+          const open = index === 0 ? " open" : "";
+          return "<details" + open + "><summary>" + typeLabels[type] +
+            " 최근 기록</summary><ul class=\"log-list\">" + body + "</ul></details>";
+        }).join("");
+      }
+
+      function logLine(record) {
+        const type = typeLabels[record.type] || record.type;
+        const when = fullDateTimeText(record.timestamp);
+        if (record.type === "feeding" && record.value) {
+          return type + " — " + record.value + record.unit + " — " + when;
+        }
+        if (record.type === "diaper" && record.subtype) {
+          return type + " — " + subtypeLabels[record.subtype] + " — " + when;
+        }
+        return type + " — " + when;
+      }
+
+      function render() {
+        const store = loadStore();
+        renderHeader(store.settings.babyName);
+        els.todayLine.textContent = fullDateTimeText(new Date().toISOString()).slice(0, 10);
+        TYPES.forEach(setLastRecord);
+        renderStats();
+        renderLogs();
+      }
+
+      function escapeHtml(value) {
+        return String(value)
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/"/g, "&quot;")
+          .replace(/'/g, "&#039;");
+      }
+
+      function csvEscape(value) {
+        if (value === null || value === undefined) return "";
+        const text = String(value);
+        if (/[",\n\r]/.test(text)) {
+          return '"' + text.replace(/"/g, '""') + '"';
+        }
+        return text;
+      }
+
+      function downloadCsv() {
+        const header = ["날짜", "시간", "종류", "세부종류", "값", "단위", "메모", "timestamp"];
+        const rows = getAllRecords().reverse().map(function (record) {
+          const date = new Date(record.timestamp);
+          return [
+            localDateKey(date),
+            localTimeText(date),
+            typeLabels[record.type] || record.type,
+            subtypeLabels[record.subtype] || record.subtype || "",
+            record.value === null ? "" : record.value,
+            record.unit || "",
+            record.note || "",
+            record.timestamp
+          ].map(csvEscape).join(",");
+        });
+        const csv = "\uFEFF" + header.join(",") + "\n" + rows.join("\n");
+        const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = "baby_records_" + localDateKey(new Date()) + ".csv";
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        URL.revokeObjectURL(url);
+      }
+
+      function openSheet(name) {
+        closeSheets(false);
+        els.overlay.classList.add("active");
+        if (name === "feeding") els.feedingSheet.classList.add("active");
+        if (name === "diaper") els.diaperSheet.classList.add("active");
+        if (name === "edit") els.editSheet.classList.add("active");
+      }
+
+      function closeSheets(clearOverlay) {
+        els.feedingSheet.classList.remove("active");
+        els.diaperSheet.classList.remove("active");
+        els.editSheet.classList.remove("active");
+        if (clearOverlay !== false) els.overlay.classList.remove("active");
+        els.feedAmountInput.value = "";
+      }
+
+      function saveFeeding(value) {
+        addRecord("feeding", "formula", value || null, value ? "ml" : "", "");
+        closeSheets();
+      }
+
+      function openEditSheet(id) {
+        const record = findRecord(id);
+        if (!record) {
+          showToast("수정할 기록을 찾지 못했습니다.");
+          return;
+        }
+        els.editRecordId.value = record.id;
+        els.editDateTime.value = toDatetimeLocalValue(record.timestamp);
+        if (record.type === "feeding") {
+          els.editAmountField.classList.remove("hidden");
+          els.editAmount.value = record.value || "";
+        } else {
+          els.editAmountField.classList.add("hidden");
+          els.editAmount.value = "";
+        }
+        openSheet("edit");
+      }
+
+      function handleEditSubmit(event) {
+        event.preventDefault();
+        const id = els.editRecordId.value;
+        const record = findRecord(id);
+        if (!record) {
+          showToast("수정할 기록을 찾지 못했습니다.");
+          return;
+        }
+        const date = new Date(els.editDateTime.value);
+        if (Number.isNaN(date.getTime())) {
+          showToast("기록 시간을 확인해 주세요.");
+          return;
+        }
+        const patch = { timestamp: date.toISOString() };
+        if (record.type === "feeding") {
+          const amountText = els.editAmount.value.trim();
+          const amount = amountText === "" ? null : Math.round(Number(amountText));
+          if (amount !== null && (!Number.isFinite(amount) || amount < 0)) {
+            showToast("수유량을 확인해 주세요.");
+            return;
+          }
+          patch.value = amount && amount > 0 ? amount : null;
+          patch.unit = patch.value ? "ml" : "";
+          patch.subtype = "formula";
+        }
+        updateRecord(id, patch);
+        closeSheets();
+      }
+
+      function showToast(message) {
+        els.toast.textContent = message;
+        els.toast.classList.add("active");
+        clearTimeout(showToast.timer);
+        showToast.timer = setTimeout(function () {
+          els.toast.classList.remove("active");
+        }, 1700);
+      }
+
+      function setupLongPress(button) {
+        let timer = null;
+        let moved = false;
+        let startX = 0;
+        let startY = 0;
+
+        function clearTimer() {
+          if (timer) {
+            clearTimeout(timer);
+            timer = null;
+          }
+        }
+
+        function start(event) {
+          moved = false;
+          const point = event.touches ? event.touches[0] : event;
+          startX = point.clientX || 0;
+          startY = point.clientY || 0;
+          clearTimer();
+          timer = setTimeout(function () {
+            timer = null;
+            suppressNextClick = true;
+            deleteLatestRecord(button.dataset.recordType);
+          }, LONG_PRESS_MS);
+        }
+
+        function move(event) {
+          const point = event.touches ? event.touches[0] : event;
+          const dx = Math.abs((point.clientX || 0) - startX);
+          const dy = Math.abs((point.clientY || 0) - startY);
+          if (dx > 12 || dy > 12) {
+            moved = true;
+            clearTimer();
+          }
+        }
+
+        function end() {
+          if (!moved) clearTimer();
+        }
+
+        button.addEventListener("touchstart", start, { passive: true });
+        button.addEventListener("touchmove", move, { passive: true });
+        button.addEventListener("touchend", end);
+        button.addEventListener("touchcancel", clearTimer);
+        button.addEventListener("mousedown", start);
+        button.addEventListener("mousemove", move);
+        button.addEventListener("mouseup", end);
+        button.addEventListener("mouseleave", clearTimer);
+        button.addEventListener("contextmenu", function (event) {
+          event.preventDefault();
+        });
+      }
+
+      document.querySelectorAll(".record-action").forEach(setupLongPress);
+
+      document.addEventListener("click", function (event) {
+        if (suppressNextClick) {
+          event.preventDefault();
+          event.stopPropagation();
+          suppressNextClick = false;
+          return;
+        }
+
+        const openButton = event.target.closest("[data-open-sheet]");
+        if (openButton) openSheet(openButton.dataset.openSheet);
+
+        const quickButton = event.target.closest("[data-quick-type]");
+        if (quickButton) addRecord(quickButton.dataset.quickType, "", null, "", "");
+
+        const feedButton = event.target.closest("[data-feed-amount]");
+        if (feedButton) saveFeeding(Number(feedButton.dataset.feedAmount));
+
+        const diaperButton = event.target.closest("[data-diaper-subtype]");
+        if (diaperButton) {
+          addRecord("diaper", diaperButton.dataset.diaperSubtype, null, "", "");
+          closeSheets();
+        }
+
+        const editButton = event.target.closest("[data-edit-id]");
+        if (editButton) openEditSheet(editButton.dataset.editId);
+
+        if (event.target.matches("[data-close-sheet]") || event.target === els.overlay) {
+          closeSheets();
+        }
+      });
+
+      els.feedNoAmount.addEventListener("click", function () {
+        saveFeeding(null);
+      });
+
+      document.getElementById("feedCustomSave").addEventListener("click", function () {
+        const value = Number(els.feedAmountInput.value);
+        if (!Number.isFinite(value) || value <= 0) {
+          showToast("수유량을 확인해 주세요.");
+          return;
+        }
+        saveFeeding(Math.round(value));
+      });
+
+      els.deleteSelectedButton.addEventListener("click", function () {
+        const selected = Array.from(document.querySelectorAll(".log-select:checked")).map(function (input) {
+          return input.value;
+        });
+        if (!selected.length) {
+          showToast("선택된 기록이 없습니다.");
+          return;
+        }
+        if (window.confirm("선택한 기록 " + selected.length + "개를 삭제하시겠습니까?")) {
+          deleteRecords(selected);
+        }
+      });
+
+      els.saveNameButton.addEventListener("click", saveBabyName);
+      els.babyNameInput.addEventListener("keydown", function (event) {
+        if (event.key === "Enter") saveBabyName();
+      });
+      els.titleButton.addEventListener("click", function () {
+        els.babyNameInput.focus();
+      });
+      els.editForm.addEventListener("submit", handleEditSubmit);
+      document.getElementById("csvButton").addEventListener("click", downloadCsv);
+
+      document.addEventListener("keydown", function (event) {
+        if (event.key === "Escape") closeSheets();
+      });
+
+      if (window.visualViewport) {
+        const syncViewportOffset = function () {
+          const offset = Math.max(0, window.innerHeight - window.visualViewport.height - window.visualViewport.offsetTop);
+          document.documentElement.style.setProperty("--sheet-offset", offset + "px");
+        };
+        window.visualViewport.addEventListener("resize", syncViewportOffset);
+        window.visualViewport.addEventListener("scroll", syncViewportOffset);
+        syncViewportOffset();
+      }
+
+      render();
+      setInterval(render, 60000);
+    });
+  </script>
+  <script>
+    (function () {
+      const params = new URLSearchParams(window.location.search);
+      const shouldResetPWA = params.get("resetPWA") === "1";
+
+      function resetPwaCache() {
+        const unregisterWorkers = "serviceWorker" in navigator
+          ? navigator.serviceWorker.getRegistrations().then(function (registrations) {
+              return Promise.all(registrations.map(function (registration) {
+                return registration.unregister();
+              }));
+            }).catch(function () {})
+          : Promise.resolve();
+
+        const clearCaches = "caches" in window
+          ? caches.keys().then(function (names) {
+              return Promise.all(names.map(function (name) {
+                return caches.delete(name);
+              }));
+            }).catch(function () {})
+          : Promise.resolve();
+
+        Promise.all([unregisterWorkers, clearCaches]).then(function () {
+          window.alert("PWA 캐시를 초기화했습니다. 사용자 기록은 유지됩니다. 새로고침 후 다시 사용해 주세요.");
+          window.location.replace("./index.html");
+        });
+      }
+
+      function registerServiceWorker() {
+        if (!("serviceWorker" in navigator) || window.location.protocol === "file:") {
+          return;
+        }
+
+        window.addEventListener("load", function () {
+          navigator.serviceWorker.register("./service-worker.js").catch(function () {
+            // PWA 등록 실패가 기록 앱 사용을 막지 않도록 조용히 무시한다.
+          });
+        });
+      }
+
+      if (shouldResetPWA) {
+        resetPwaCache();
+        return;
+      }
+
+      registerServiceWorker();
+    })();
+  </script>
+</body>
+</html>
