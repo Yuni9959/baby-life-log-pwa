@@ -585,6 +585,68 @@
       gap: 7px;
     }
 
+    .data-tools {
+      display: grid;
+      gap: 10px;
+    }
+
+    .data-tool-actions {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 8px;
+    }
+
+    .data-note,
+    .restore-message {
+      margin: 0;
+      color: var(--muted);
+      font-size: 0.88rem;
+      line-height: 1.45;
+    }
+
+    .restore-preview {
+      display: none;
+      gap: 10px;
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--panel);
+    }
+
+    .restore-preview.active {
+      display: grid;
+    }
+
+    .restore-preview h3 {
+      margin: 0;
+      font-size: 1rem;
+    }
+
+    .restore-preview dl {
+      display: grid;
+      grid-template-columns: minmax(96px, auto) minmax(0, 1fr);
+      gap: 6px 10px;
+      margin: 0;
+      font-size: 0.9rem;
+    }
+
+    .restore-preview dt {
+      color: var(--muted);
+      font-weight: 800;
+    }
+
+    .restore-preview dd {
+      margin: 0;
+      font-weight: 800;
+      word-break: break-word;
+    }
+
+    .restore-actions {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 8px;
+    }
+
     .hidden {
       display: none;
     }
@@ -633,6 +695,11 @@
       }
 
       .chip-grid {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+
+      .data-tool-actions,
+      .restore-actions {
         grid-template-columns: repeat(3, minmax(0, 1fr));
       }
     }
@@ -703,6 +770,22 @@
         <button type="button" class="danger-action" id="deleteSelectedButton">선택 삭제</button>
       </div>
       <div class="logs" id="logs"></div>
+    </section>
+
+    <section class="section" aria-labelledby="dataToolsTitle">
+      <div class="section-head">
+        <h2 id="dataToolsTitle">데이터 관리</h2>
+      </div>
+      <div class="data-tools">
+        <p class="data-note">백업은 이 브라우저에 저장된 기록을 JSON 파일로 저장합니다. 복원은 파일을 먼저 검사하고 미리보기 확인 후에만 적용됩니다.</p>
+        <div class="data-tool-actions">
+          <button type="button" class="small-action" id="jsonBackupButton">JSON 백업</button>
+          <button type="button" class="small-action" id="jsonImportButton">JSON 가져오기</button>
+          <button type="button" class="small-action" id="csvDataButton">CSV 내보내기</button>
+        </div>
+        <input class="hidden" id="jsonImportInput" type="file" accept=".json,application/json">
+        <div class="restore-preview" id="restorePreview" aria-live="polite"></div>
+      </div>
     </section>
   </main>
 
@@ -778,6 +861,9 @@
   <script>
     document.addEventListener("DOMContentLoaded", function () {
       const STORAGE_KEY = "baby_life_records_v1";
+      const PRE_RESTORE_BACKUP_KEY = "babyLifeLog_lastPreRestoreBackup";
+      const BACKUP_FORMAT_VERSION = 1;
+      const APP_NAME = "baby-life-log";
       const TYPES = ["feeding", "burp", "diaper", "sleep", "wake"];
       const LONG_PRESS_MS = 700;
       const MAX_FEED_AMOUNT = 500;
@@ -818,10 +904,16 @@
         feedAmountInput: document.getElementById("feedAmountInput"),
         selectedFeedAmount: document.getElementById("selectedFeedAmount"),
         recentFeedAmounts: document.getElementById("recentFeedAmounts"),
+        jsonBackupButton: document.getElementById("jsonBackupButton"),
+        jsonImportButton: document.getElementById("jsonImportButton"),
+        jsonImportInput: document.getElementById("jsonImportInput"),
+        csvDataButton: document.getElementById("csvDataButton"),
+        restorePreview: document.getElementById("restorePreview"),
         toast: document.getElementById("toast")
       };
 
       let suppressNextClick = false;
+      let pendingBackupPayload = null;
 
       function pad(value) {
         return String(value).padStart(2, "0");
@@ -1349,6 +1441,287 @@
         URL.revokeObjectURL(url);
       }
 
+      function backupFileTimestamp(date) {
+        return date.getFullYear() + pad(date.getMonth() + 1) + pad(date.getDate()) +
+          "_" + pad(date.getHours()) + pad(date.getMinutes());
+      }
+
+      function buildLocalStorageSnapshot() {
+        const snapshot = {};
+        [STORAGE_KEY].forEach(function (key) {
+          const value = localStorage.getItem(key);
+          if (value !== null) snapshot[key] = value;
+        });
+        return snapshot;
+      }
+
+      function buildBackupPayload() {
+        const store = loadStore();
+        return {
+          backupFormatVersion: BACKUP_FORMAT_VERSION,
+          appName: APP_NAME,
+          appDisplayName: "아기 생활 기록",
+          appVersion: "phase-2.3",
+          exportedAt: new Date().toISOString(),
+          source: "local-pwa",
+          data: {
+            babyName: store.settings.babyName || "",
+            records: getAllRecords().slice().reverse(),
+            settings: Object.assign({}, store.settings)
+          },
+          localStorageSnapshot: buildLocalStorageSnapshot()
+        };
+      }
+
+      function downloadJsonFile(payload) {
+        const json = JSON.stringify(payload, null, 2);
+        const blob = new Blob([json], { type: "application/json;charset=utf-8" });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = "baby-life-log-backup_" + backupFileTimestamp(new Date()) + ".json";
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        URL.revokeObjectURL(url);
+      }
+
+      function exportJsonBackup() {
+        downloadJsonFile(buildBackupPayload());
+        showToast("JSON 백업 파일을 만들었습니다.");
+      }
+
+      function collectBackupRecords(payload) {
+        if (!payload || !payload.data) return [];
+        if (Array.isArray(payload.data.records)) return payload.data.records;
+        if (payload.data.records && typeof payload.data.records === "object") {
+          return TYPES.flatMap(function (type) {
+            const records = Array.isArray(payload.data.records[type]) ? payload.data.records[type] : [];
+            return records.map(function (record) {
+              return Object.assign({}, record, { type: record.type || type });
+            });
+          });
+        }
+        return [];
+      }
+
+      function validateBackupRecord(record) {
+        if (!record || typeof record !== "object") return false;
+        if (!TYPES.includes(record.type)) return false;
+        const date = new Date(record.timestamp || record.time || record.createdAt);
+        if (Number.isNaN(date.getTime())) return false;
+        if (record.type === "feeding" && record.value !== null && record.value !== undefined && record.value !== "") {
+          const amount = Number(record.value);
+          if (!Number.isFinite(amount) || amount < 0 || amount > MAX_FEED_AMOUNT) return false;
+        }
+        if (record.type === "diaper" && record.subtype && !["urine", "stool", "both", "change"].includes(record.subtype)) {
+          return false;
+        }
+        return true;
+      }
+
+      function validateBackupPayload(payload) {
+        if (!payload || typeof payload !== "object") {
+          return { ok: false, message: "올바른 백업 파일이 아닙니다." };
+        }
+        if (payload.backupFormatVersion !== BACKUP_FORMAT_VERSION) {
+          return { ok: false, message: "지원하지 않는 백업 포맷입니다." };
+        }
+        if (payload.appName !== APP_NAME && payload.appDisplayName !== "아기 생활 기록") {
+          return { ok: false, message: "이 앱의 백업 파일이 아닙니다." };
+        }
+        if (!payload.data || typeof payload.data !== "object") {
+          return { ok: false, message: "백업 데이터가 없습니다." };
+        }
+        if (!Object.prototype.hasOwnProperty.call(payload.data, "records")) {
+          return { ok: false, message: "백업 기록 데이터가 없습니다." };
+        }
+        const records = collectBackupRecords(payload);
+        if (!Array.isArray(records)) {
+          return { ok: false, message: "기록 데이터 형식이 올바르지 않습니다." };
+        }
+        const invalid = records.some(function (record) {
+          return !validateBackupRecord(record);
+        });
+        if (invalid) {
+          return { ok: false, message: "기록 항목에 올바르지 않은 값이 있습니다." };
+        }
+        return { ok: true, records: records };
+      }
+
+      function recordsDateRange(records) {
+        const times = records.map(function (record) {
+          return new Date(record.timestamp || record.time || record.createdAt).getTime();
+        }).filter(Number.isFinite).sort(function (a, b) { return a - b; });
+        if (!times.length) return { oldest: "-", newest: "-" };
+        return {
+          oldest: fullDateTimeText(new Date(times[0]).toISOString()),
+          newest: fullDateTimeText(new Date(times[times.length - 1]).toISOString())
+        };
+      }
+
+      function previewBackupPayload(payload) {
+        const records = collectBackupRecords(payload);
+        const range = recordsDateRange(records);
+        const currentCount = getAllRecords().length;
+        const babyName = (payload.data && (payload.data.babyName || (payload.data.settings && payload.data.settings.babyName))) || "-";
+        const exportedAt = payload.exportedAt ? fullDateTimeText(payload.exportedAt) : "-";
+        els.restorePreview.innerHTML =
+          "<h3>백업 미리보기</h3>" +
+          "<dl>" +
+          "<dt>백업 생성</dt><dd>" + escapeHtml(exportedAt) + "</dd>" +
+          "<dt>아기 이름</dt><dd>" + escapeHtml(babyName) + "</dd>" +
+          "<dt>백업 기록</dt><dd>" + records.length + "개</dd>" +
+          "<dt>가장 오래된 기록</dt><dd>" + escapeHtml(range.oldest) + "</dd>" +
+          "<dt>가장 최근 기록</dt><dd>" + escapeHtml(range.newest) + "</dd>" +
+          "<dt>현재 기록</dt><dd>" + currentCount + "개</dd>" +
+          "</dl>" +
+          "<p class=\"restore-message\">교체는 현재 기록을 백업 파일 내용으로 바꿉니다. 병합은 현재 기록과 백업 기록을 합치고 확실한 중복만 제거합니다.</p>" +
+          "<div class=\"restore-actions\">" +
+          "<button type=\"button\" class=\"danger-action\" id=\"restoreReplaceButton\">교체 복원</button>" +
+          "<button type=\"button\" class=\"small-action\" id=\"restoreMergeButton\">병합 복원</button>" +
+          "<button type=\"button\" class=\"small-action\" id=\"restoreCancelButton\">취소</button>" +
+          "</div>";
+        els.restorePreview.classList.add("active");
+      }
+
+      function showRestoreError(message) {
+        pendingBackupPayload = null;
+        els.restorePreview.innerHTML = "<p class=\"restore-message\">" + escapeHtml(message || "올바른 백업 파일이 아닙니다. 백업 파일을 다시 확인해 주세요.") + "</p>";
+        els.restorePreview.classList.add("active");
+        showToast("백업 파일을 확인해 주세요.");
+      }
+
+      function handleBackupFileSelected(event) {
+        const file = event.target.files && event.target.files[0];
+        event.target.value = "";
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = function () {
+          try {
+            const payload = JSON.parse(String(reader.result || ""));
+            const validation = validateBackupPayload(payload);
+            if (!validation.ok) {
+              showRestoreError(validation.message);
+              return;
+            }
+            pendingBackupPayload = payload;
+            previewBackupPayload(payload);
+          } catch (error) {
+            showRestoreError("올바른 백업 파일이 아닙니다. 백업 파일을 다시 확인해 주세요.");
+          }
+        };
+        reader.onerror = function () {
+          showRestoreError("파일을 읽지 못했습니다. 다시 선택해 주세요.");
+        };
+        reader.readAsText(file, "utf-8");
+      }
+
+      function backupPayloadToStore(payload, preserveMergeKey) {
+        const store = blankStore();
+        const data = payload.data || {};
+        store.settings = Object.assign({}, store.settings, data.settings || {});
+        store.settings.babyName = data.babyName || store.settings.babyName || "";
+        collectBackupRecords(payload).forEach(function (record) {
+          const normalized = normalizeRecord(record, record.type);
+          if (normalized && preserveMergeKey && !record.id) {
+            normalized.mergeKey = mergeDuplicateKey(Object.assign({}, normalized, { id: "" }));
+          }
+          if (normalized) store.records[normalized.type].push(normalized);
+        });
+        TYPES.forEach(function (type) {
+          store.records[type].sort(sortNewestFirst);
+        });
+        return store;
+      }
+
+      function createPreRestoreSafetyBackup() {
+        const payload = buildBackupPayload();
+        localStorage.setItem(PRE_RESTORE_BACKUP_KEY, JSON.stringify(payload));
+      }
+
+      function mergeDuplicateKey(record) {
+        if (record.mergeKey) return record.mergeKey;
+        if (record.id) return "id:" + record.id;
+        return [
+          "fallback",
+          record.type || "",
+          record.timestamp || "",
+          record.subtype || "",
+          record.value === null || record.value === undefined ? "" : record.value,
+          record.unit || ""
+        ].join("|");
+      }
+
+      function dedupeRecordsForMerge(records) {
+        const map = new Map();
+        records.forEach(function (record) {
+          const key = mergeDuplicateKey(record);
+          if (!map.has(key)) map.set(key, record);
+        });
+        return Array.from(map.values()).map(function (record) {
+          const cleaned = Object.assign({}, record);
+          delete cleaned.mergeKey;
+          return cleaned;
+        }).sort(sortNewestFirst);
+      }
+
+      function restoreBackupReplace() {
+        if (!pendingBackupPayload) {
+          showToast("먼저 백업 파일을 선택해 주세요.");
+          return;
+        }
+        const typed = window.prompt("현재 기록을 백업 파일의 기록으로 교체합니다.\n이 작업은 현재 기록을 바꿀 수 있습니다.\n계속하려면 '교체'를 입력해 주세요.");
+        if (typed !== "교체") {
+          showToast("교체 복원을 취소했습니다.");
+          return;
+        }
+        try {
+          createPreRestoreSafetyBackup();
+          if (saveStore(backupPayloadToStore(pendingBackupPayload, false))) {
+            pendingBackupPayload = null;
+            els.restorePreview.classList.remove("active");
+            render();
+            showToast("백업 파일로 교체 복원했습니다.");
+          }
+        } catch (error) {
+          showToast("복원에 실패했습니다. 기존 데이터는 유지됩니다.");
+        }
+      }
+
+      function restoreBackupMerge() {
+        if (!pendingBackupPayload) {
+          showToast("먼저 백업 파일을 선택해 주세요.");
+          return;
+        }
+        if (!window.confirm("현재 기록과 백업 파일의 기록을 병합하시겠습니까? 복원 직전에 현재 데이터의 안전 백업을 저장합니다.")) {
+          return;
+        }
+        try {
+          createPreRestoreSafetyBackup();
+          const currentStore = loadStore();
+          const importStore = backupPayloadToStore(pendingBackupPayload, true);
+          const mergedStore = blankStore();
+          mergedStore.settings = Object.assign({}, currentStore.settings);
+          if (!mergedStore.settings.babyName && importStore.settings.babyName) {
+            mergedStore.settings.babyName = importStore.settings.babyName;
+          }
+          TYPES.forEach(function (type) {
+            mergedStore.records[type] = dedupeRecordsForMerge(
+              (currentStore.records[type] || []).concat(importStore.records[type] || [])
+            );
+          });
+          if (saveStore(mergedStore)) {
+            pendingBackupPayload = null;
+            els.restorePreview.classList.remove("active");
+            render();
+            showToast("백업 파일을 현재 기록과 병합했습니다.");
+          }
+        } catch (error) {
+          showToast("복원에 실패했습니다. 기존 데이터는 유지됩니다.");
+        }
+      }
+
       function currentFeedAmount() {
         const value = Math.round(Number(els.feedAmountInput.value));
         return Number.isFinite(value) && value > 0 ? Math.min(value, MAX_FEED_AMOUNT) : 0;
@@ -1618,6 +1991,21 @@
       });
       els.editForm.addEventListener("submit", handleEditSubmit);
       document.getElementById("csvButton").addEventListener("click", downloadCsv);
+      els.csvDataButton.addEventListener("click", downloadCsv);
+      els.jsonBackupButton.addEventListener("click", exportJsonBackup);
+      els.jsonImportButton.addEventListener("click", function () {
+        els.jsonImportInput.click();
+      });
+      els.jsonImportInput.addEventListener("change", handleBackupFileSelected);
+      els.restorePreview.addEventListener("click", function (event) {
+        if (event.target.id === "restoreReplaceButton") restoreBackupReplace();
+        if (event.target.id === "restoreMergeButton") restoreBackupMerge();
+        if (event.target.id === "restoreCancelButton") {
+          pendingBackupPayload = null;
+          els.restorePreview.classList.remove("active");
+          els.restorePreview.innerHTML = "";
+        }
+      });
 
       document.addEventListener("keydown", function (event) {
         if (event.key === "Escape") closeSheets();
