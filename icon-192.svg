@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="192" height="192" viewBox="0 0 192 192" role="img" aria-labelledby="title desc">
+  <title id="title">Baby Log Icon 192</title>
+  <desc id="desc">A simple teal baby log app icon.</desc>
+  <rect width="192" height="192" rx="38" fill="#4a9e8e"/>
+  <circle cx="96" cy="78" r="34" fill="#fff7ed"/>
+  <path d="M58 138c7-26 24-42 38-42s31 16 38 42c-11 10-24 16-38 16s-27-6-38-16z" fill="#fff7ed"/>
+  <circle cx="84" cy="76" r="5" fill="#287c78"/>
+  <circle cx="108" cy="76" r="5" fill="#287c78"/>
+  <path d="M84 96c8 7 16 7 24 0" fill="none" stroke="#287c78" stroke-width="6" stroke-linecap="round"/>
+  <text x="96" y="176" text-anchor="middle" font-family="Arial, sans-serif" font-size="22" font-weight="700" fill="#fff7ed">BABY</text>
+</svg>
