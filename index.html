@@ -744,7 +744,7 @@
   <main class="app">
     <header class="topbar">
       <div>
-        <div class="version-badge" id="versionBadge">v3.4 · 동기화 상태</div>
+        <div class="version-badge" id="versionBadge">v3.5 · 가족/아기 구조</div>
         <h1 id="babyTitle">우리 아기</h1>
         <div class="baby-days" id="babyDays">생년월일을 입력해 주세요</div>
         <div class="today-line" id="todayLine"></div>
@@ -970,6 +970,18 @@
             <p class="sync-offline-note" id="syncOfflineNote">현재 오프라인이에요. 기록은 이 기기에 저장되고, 나중에 다시 동기화할 수 있어요.</p>
           </div>
           <div class="data-grid" id="cloudStatusGrid"></div>
+          <div class="data-subsection" aria-labelledby="familyBabyStructureTitle">
+            <h3 id="familyBabyStructureTitle">가족/아기 서버 구조</h3>
+            <p class="cloud-message">가족/아기 구조는 Phase 4 로그인 기능으로 넘어가기 위한 준비 단계예요. 현재는 익명 사용자 기준으로 안전하게 연결해 둡니다.</p>
+            <div class="data-grid" id="familyBabyStructureGrid"></div>
+            <div class="data-tool-actions">
+              <button type="button" class="small-action" id="cloudProfileSyncButton">로컬 프로필을 서버에 반영</button>
+              <button type="button" class="small-action" id="cloudRepairServerRecordsButton">기존 서버 기록 family/baby 보정</button>
+              <button type="button" class="small-action" id="cloudRepairLocalContextButton">로컬 기록 cloud context 보정</button>
+              <button type="button" class="small-action" id="cloudProfilePreviewButton">프로필 차이 미리보기</button>
+            </div>
+            <p class="cloud-message" id="familyBabyStructureMessage">가족/아기 구조를 확인하면 현재 서버 연결 상태를 볼 수 있어요.</p>
+          </div>
           <div class="data-tool-actions">
             <button type="button" class="small-action" id="cloudCheckButton">서버 연결 진단</button>
             <button type="button" class="small-action" id="cloudEnsureFamilyButton">가족/아기 서버 구조 확인</button>
@@ -1140,8 +1152,8 @@
       const PRE_REPAIR_BACKUP_KEY = "baby_life_log_app_backup_before_repair";
       const BACKUP_FORMAT_VERSION = 2;
       const APP_NAME = "baby-life-log";
-      const APP_VERSION = "3.4";
-      const APP_PHASE_LABEL = "동기화 상태";
+      const APP_VERSION = "3.5";
+      const APP_PHASE_LABEL = "가족/아기 구조";
       const TYPES = ["feeding", "burp", "diaper", "sleep", "wake"];
       const LONG_PRESS_MS = 700;
       const MAX_FEED_AMOUNT = 500;
@@ -1226,8 +1238,14 @@
         cloudStatusMessage: document.getElementById("cloudStatusMessage"),
         syncOfflineNote: document.getElementById("syncOfflineNote"),
         cloudStatusGrid: document.getElementById("cloudStatusGrid"),
+        familyBabyStructureGrid: document.getElementById("familyBabyStructureGrid"),
+        familyBabyStructureMessage: document.getElementById("familyBabyStructureMessage"),
         cloudCheckButton: document.getElementById("cloudCheckButton"),
         cloudEnsureFamilyButton: document.getElementById("cloudEnsureFamilyButton"),
+        cloudProfileSyncButton: document.getElementById("cloudProfileSyncButton"),
+        cloudRepairServerRecordsButton: document.getElementById("cloudRepairServerRecordsButton"),
+        cloudRepairLocalContextButton: document.getElementById("cloudRepairLocalContextButton"),
+        cloudProfilePreviewButton: document.getElementById("cloudProfilePreviewButton"),
         cloudRefreshSyncButton: document.getElementById("cloudRefreshSyncButton"),
         cloudTestSaveButton: document.getElementById("cloudTestSaveButton"),
         cloudTestFetchButton: document.getElementById("cloudTestFetchButton"),
@@ -1261,6 +1279,8 @@
       let cloudLastFetchResult = null;
       let cloudMergePreview = null;
       let cloudLastMergeResult = null;
+      let familyBabyDiagnosis = null;
+      let profileSyncPreview = null;
 
       // 필터 상태
       let currentTypeFilter = "all";
@@ -2767,7 +2787,22 @@
         appData.profile = normalizeProfile(Object.assign({}, appData.profile, {
           babyName: name, birthDate: birthDate, gender: els.genderInput.value, updatedAt: nowIso()
         }));
-        if (saveAppData()) { renderApp(); showToast("프로필을 저장했습니다."); }
+        if (saveAppData()) {
+          renderApp();
+          showToast("프로필을 저장했습니다.");
+          if (window.BabyCloud && typeof window.BabyCloud.syncLocalProfileToBaby === "function") {
+            window.BabyCloud.syncLocalProfileToBaby(appData.profile).then(function (result) {
+              renderCloudStatus();
+              if (result && result.ok) {
+                if (els.familyBabyStructureMessage) els.familyBabyStructureMessage.textContent = "로컬 프로필을 서버 아기 정보에 반영했어요.";
+              } else if (els.familyBabyStructureMessage) {
+                els.familyBabyStructureMessage.textContent = "프로필은 이 기기에 저장됐어요. 서버 반영은 나중에 다시 시도할 수 있어요.";
+              }
+            }).catch(function () {
+              if (els.familyBabyStructureMessage) els.familyBabyStructureMessage.textContent = "프로필은 이 기기에 저장됐어요. 서버 반영은 나중에 다시 시도할 수 있어요.";
+            });
+          }
+        }
       }
 
       function parseQuickAmounts(text) {
@@ -3487,10 +3522,39 @@
           els.cloudCheckButton.disabled = status.status === "checking";
           els.cloudCheckButton.textContent = status.status === "checking" ? "확인 중" : "서버 연결 진단";
         }
-        [els.cloudEnsureFamilyButton, els.cloudTestSaveButton, els.cloudTestFetchButton, els.cloudRetryPendingButton, els.cloudRetryErrorButton, els.cloudFetchRecordsButton, els.cloudRefreshSyncButton].forEach(function (button) {
+        [els.cloudEnsureFamilyButton, els.cloudProfileSyncButton, els.cloudRepairServerRecordsButton, els.cloudRepairLocalContextButton, els.cloudProfilePreviewButton, els.cloudTestSaveButton, els.cloudTestFetchButton, els.cloudRetryPendingButton, els.cloudRetryErrorButton, els.cloudFetchRecordsButton, els.cloudRefreshSyncButton].forEach(function (button) {
           if (button) button.disabled = status.status === "checking";
         });
+        renderFamilyBabyStructureStatus(status);
         renderCloudMergeStatus();
+      }
+
+      function renderFamilyBabyStructureStatus(status) {
+        const safeStatus = status || getCloudSafeStatus();
+        const context = window.BabyCloud && typeof window.BabyCloud.getCloudContext === "function"
+          ? window.BabyCloud.getCloudContext()
+          : {};
+        const diagnosis = familyBabyDiagnosis || {};
+        const preview = profileSyncPreview;
+        const localNeeds = Array.isArray(appData.records)
+          ? appData.records.filter(function (record) { return record && (!record.cloud || !record.cloud.familyId || !record.cloud.babyId); }).length
+          : 0;
+        if (els.familyBabyStructureGrid) {
+          els.familyBabyStructureGrid.innerHTML = dataItemsHtml([
+            { label: "익명 사용자 상태", value: safeStatus.userId ? "확보됨 (" + shortUserId(safeStatus.userId) + ")" : "확인 전" },
+            { label: "Family ID 상태", value: (diagnosis.familyId || context.currentFamilyId || safeStatus.currentFamilyId) ? "준비됨" : "준비 전" },
+            { label: "Baby ID 상태", value: (diagnosis.babyId || context.currentBabyId || safeStatus.currentBabyId) ? "준비됨" : "준비 전" },
+            { label: "Device ID 상태", value: (diagnosis.deviceId || context.deviceId || safeStatus.deviceId) ? "준비됨" : "준비 전" },
+            { label: "서버 가족 이름", value: diagnosis.familyName || context.familyName || "-" },
+            { label: "서버 아기 이름", value: diagnosis.babyName || context.babyName || "-" },
+            { label: "서버 생년월일", value: diagnosis.babyBirthDate || context.babyBirthDate || "-" },
+            { label: "서버 성별", value: diagnosis.babyGender || context.babyGender || "-" },
+            { label: "프로필 일치", value: preview ? (preview.hasDifferences ? "차이 있음" : "일치") : (diagnosis.profileMatchesBaby ? "일치" : "미리보기 전") },
+            { label: "family_id 없는 서버 기록", value: (diagnosis.serverRecordsMissingFamilyId || 0) + "개" },
+            { label: "baby_id 없는 서버 기록", value: (diagnosis.serverRecordsMissingBabyId || 0) + "개" },
+            { label: "로컬 context 보정 필요", value: (diagnosis.localRecordsNeedingCloudContext !== undefined ? diagnosis.localRecordsNeedingCloudContext : localNeeds) + "개" }
+          ]);
+        }
       }
 
       function canWriteServerMergeBackup() {
@@ -3924,6 +3988,12 @@
             renderCloudStatus();
             if (context && context.currentFamilyId && context.currentBabyId) {
               if (els.cloudActionMessage) els.cloudActionMessage.textContent = "가족/아기 서버 구조가 준비됐어요.";
+              if (window.BabyCloud && typeof window.BabyCloud.diagnoseFamilyBabyStructure === "function") {
+                window.BabyCloud.diagnoseFamilyBabyStructure().then(function (diagnosis) {
+                  familyBabyDiagnosis = diagnosis;
+                  renderCloudStatus();
+                });
+              }
               showToast("가족/아기 서버 구조가 준비됐어요.");
             } else {
               if (els.cloudActionMessage) els.cloudActionMessage.textContent = "가족/아기 서버 구조를 준비하지 못했어요. Supabase SQL과 RLS를 확인해 주세요.";
@@ -3934,6 +4004,93 @@
             renderCloudStatus();
             if (els.cloudActionMessage) els.cloudActionMessage.textContent = "가족/아기 서버 구조를 준비하지 못했어요. 이 기기의 기록은 그대로 유지됩니다.";
             showToast("가족/아기 서버 구조를 준비하지 못했어요.");
+          });
+        });
+      }
+      if (els.cloudProfileSyncButton) {
+        els.cloudProfileSyncButton.addEventListener("click", function () {
+          if (!window.BabyCloud || typeof window.BabyCloud.syncLocalProfileToBaby !== "function") {
+            showToast("프로필 서버 반영을 실행할 수 없어요.");
+            return;
+          }
+          if (els.familyBabyStructureMessage) els.familyBabyStructureMessage.textContent = "로컬 프로필을 서버에 반영하는 중입니다.";
+          window.BabyCloud.syncLocalProfileToBaby(appData.profile).then(function (result) {
+            if (result && result.ok) {
+              if (els.familyBabyStructureMessage) els.familyBabyStructureMessage.textContent = "로컬 프로필을 서버 아기 정보에 반영했어요.";
+              showToast("로컬 프로필을 서버 아기 정보에 반영했어요.");
+            } else {
+              if (els.familyBabyStructureMessage) els.familyBabyStructureMessage.textContent = "프로필은 이 기기에 저장됐어요. 서버 반영은 나중에 다시 시도할 수 있어요.";
+              showToast("서버 반영은 나중에 다시 시도할 수 있어요.");
+            }
+            renderCloudStatus();
+          }).catch(function () {
+            if (els.familyBabyStructureMessage) els.familyBabyStructureMessage.textContent = "프로필은 이 기기에 저장됐어요. 서버 반영은 나중에 다시 시도할 수 있어요.";
+            showToast("서버 반영은 나중에 다시 시도할 수 있어요.");
+            renderCloudStatus();
+          });
+        });
+      }
+      if (els.cloudRepairServerRecordsButton) {
+        els.cloudRepairServerRecordsButton.addEventListener("click", function () {
+          if (!window.BabyCloud || typeof window.BabyCloud.assignExistingRecordsToCurrentFamilyBaby !== "function") {
+            showToast("서버 기록 보정을 실행할 수 없어요.");
+            return;
+          }
+          if (els.familyBabyStructureMessage) els.familyBabyStructureMessage.textContent = "기존 서버 기록을 현재 가족/아기 구조에 맞게 정리하는 중입니다.";
+          window.BabyCloud.assignExistingRecordsToCurrentFamilyBaby().then(function (result) {
+            const ok = result && result.ok;
+            const message = ok
+              ? "기존 서버 기록을 현재 가족/아기 구조에 맞게 정리했어요. 보정 " + result.repaired + "개"
+              : "일부 서버 기록은 정리하지 못했어요. 기록은 이 기기에 그대로 유지됩니다.";
+            if (els.familyBabyStructureMessage) els.familyBabyStructureMessage.textContent = message;
+            showToast(ok ? "기존 서버 기록을 정리했어요." : "일부 서버 기록은 정리하지 못했어요.");
+            renderCloudStatus();
+          }).catch(function () {
+            if (els.familyBabyStructureMessage) els.familyBabyStructureMessage.textContent = "일부 서버 기록은 정리하지 못했어요. 기록은 이 기기에 그대로 유지됩니다.";
+            showToast("일부 서버 기록은 정리하지 못했어요.");
+            renderCloudStatus();
+          });
+        });
+      }
+      if (els.cloudRepairLocalContextButton) {
+        els.cloudRepairLocalContextButton.addEventListener("click", function () {
+          if (!window.BabyCloud || typeof window.BabyCloud.repairLocalRecordsCloudContext !== "function") {
+            showToast("로컬 기록 보정을 실행할 수 없어요.");
+            return;
+          }
+          const result = window.BabyCloud.repairLocalRecordsCloudContext(appData);
+          if (result && result.ok) {
+            saveAppData();
+            if (els.familyBabyStructureMessage) els.familyBabyStructureMessage.textContent = "로컬 기록 cloud context를 보정했어요. 보정 " + result.repaired + "개";
+            showToast("로컬 기록 cloud context를 보정했어요.");
+          } else {
+            if (els.familyBabyStructureMessage) els.familyBabyStructureMessage.textContent = "로컬 기록 cloud context를 보정하지 못했어요. 기존 기록은 유지됩니다.";
+            showToast("로컬 기록 보정에 실패했어요.");
+          }
+          renderApp();
+        });
+      }
+      if (els.cloudProfilePreviewButton) {
+        els.cloudProfilePreviewButton.addEventListener("click", function () {
+          if (!window.BabyCloud || typeof window.BabyCloud.buildProfileSyncPreview !== "function") {
+            showToast("프로필 차이 미리보기를 실행할 수 없어요.");
+            return;
+          }
+          if (els.familyBabyStructureMessage) els.familyBabyStructureMessage.textContent = "로컬 프로필과 서버 아기 정보를 비교하는 중입니다.";
+          window.BabyCloud.buildProfileSyncPreview(appData.profile).then(function (preview) {
+            profileSyncPreview = preview;
+            if (!preview || !preview.ok) {
+              if (els.familyBabyStructureMessage) els.familyBabyStructureMessage.textContent = "프로필 차이 미리보기를 만들지 못했어요. 서버 구조를 먼저 확인해 주세요.";
+            } else if (!preview.hasDifferences) {
+              if (els.familyBabyStructureMessage) els.familyBabyStructureMessage.textContent = "로컬 프로필과 서버 아기 정보가 일치해요.";
+            } else {
+              const fields = preview.differences.map(function (diff) { return diff.field; }).join(", ");
+              if (els.familyBabyStructureMessage) els.familyBabyStructureMessage.textContent = "로컬 프로필과 서버 아기 정보가 달라요. 이번 단계에서는 로컬 프로필을 기준으로 서버 정보를 맞추는 것을 권장합니다. 차이: " + fields;
+            }
+            renderCloudStatus();
+          }).catch(function () {
+            if (els.familyBabyStructureMessage) els.familyBabyStructureMessage.textContent = "프로필 차이 미리보기를 만들지 못했어요. 서버 구조를 먼저 확인해 주세요.";
+            renderCloudStatus();
           });
         });
       }
