@@ -370,11 +370,5 @@ with check (
   or (family_id is null and user_id = auth.uid())
 );
 
-create policy "Users can delete own records"
-on public.records
-for delete
-to authenticated
-using (
-  family_id is not null
-  and public.has_family_role(records.family_id, array['owner', 'parent'])
-);
+-- No hard-delete policy for records.
+-- Record deletion is handled by updating deleted_at through the update policy above.

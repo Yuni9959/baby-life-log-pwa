@@ -1,4 +1,4 @@
-// Baby life log - Phase 3.3 Supabase sync helpers.
+// Baby life log - Phase 3.4 Supabase sync helpers.
 // Client-safe only: never put service_role keys, DB passwords, or direct DB URLs here.
 
 (function () {
@@ -7,8 +7,21 @@
   const STATUS_EVENT = "baby-cloud-status-change";
   const CLOUD_CONTEXT_KEY = "babyAppCloudContext";
   const APP_STORAGE_KEY = "baby_life_log_app_v2";
+  const LAST_SYNC_DIAGNOSIS_KEY = "babyAppLastSyncDiagnosis";
+  const LAST_SYNC_SUMMARY_KEY = "babyAppLastSyncSummary";
+  const LAST_RETRY_RESULT_KEY = "babyAppLastRetryResult";
   const PLACEHOLDER_URL = "https://YOUR_PROJECT_REF.supabase.co";
   const PLACEHOLDER_KEY = "YOUR_SUPABASE_PUBLISHABLE_OR_ANON_KEY";
+  const CLOUD_STATUSES = [
+    "local_only",
+    "pending",
+    "synced",
+    "error",
+    "deleted_pending",
+    "deleted_synced",
+    "deleted_error"
+  ];
+  const RETRY_STATUSES = ["pending", "error", "deleted_pending", "deleted_error"];
 
   let supabaseClient = null;
 
@@ -46,7 +59,14 @@
     updateRecord: updateRecord,
     softDeleteRecord: softDeleteRecord,
     softDeleteRecords: softDeleteRecords,
-    retryPendingMutations: retryPendingMutations
+    retryPendingMutations: retryPendingMutations,
+    getRecordCloudStatus: getRecordCloudStatus,
+    getSyncSummary: getSyncSummary,
+    updateRecordCloudStatus: updateRecordCloudStatus,
+    diagnoseConnection: diagnoseConnection,
+    retryPendingRecords: retryPendingRecords,
+    retryRecordSync: retryRecordSync,
+    getHumanStatusMessage: getHumanStatusMessage
   };
 
   window.BabyCloud = BabyCloud;
@@ -67,6 +87,93 @@
 
   function isObject(value) {
     return !!value && typeof value === "object" && !Array.isArray(value);
+  }
+
+  function safeIso(value) {
+    if (!value) return null;
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? null : date.toISOString();
+  }
+
+  function normalizeRecordCloud(record) {
+    const cloud = record && isObject(record.cloud) ? record.cloud : {};
+    let status = CLOUD_STATUSES.includes(cloud.status) ? cloud.status : "local_only";
+    if (record && record.deletedAt) {
+      if (status === "synced") status = "deleted_synced";
+      else if (status === "error") status = "deleted_error";
+      else if (status === "pending") status = "deleted_pending";
+      else if (!["deleted_pending", "deleted_synced", "deleted_error"].includes(status)) status = "deleted_pending";
+    } else if (status.indexOf("deleted_") === 0) {
+      status = "local_only";
+    }
+    return {
+      status: status,
+      syncedAt: safeIso(cloud.syncedAt),
+      error: cloud.error ? String(cloud.error).slice(0, 300) : "",
+      familyId: cloud.familyId || null,
+      babyId: cloud.babyId || null,
+      lastAttemptAt: safeIso(cloud.lastAttemptAt),
+      retryCount: Math.max(0, Math.round(Number(cloud.retryCount) || 0))
+    };
+  }
+
+  function getRecordCloudStatus(record) {
+    const cloud = normalizeRecordCloud(record || {});
+    const meta = {
+      local_only: { label: "로컬 전용", tone: "local" },
+      pending: { label: "동기화 대기", tone: "waiting" },
+      synced: { label: "서버 저장됨", tone: "ok" },
+      error: { label: "서버 오류", tone: "error" },
+      deleted_pending: { label: "삭제 동기화 중", tone: "deleted" },
+      deleted_synced: { label: "삭제 반영됨", tone: "deleted" },
+      deleted_error: { label: "삭제 서버 오류", tone: "error" }
+    }[cloud.status] || { label: "로컬 전용", tone: "local" };
+    return Object.assign({}, cloud, meta);
+  }
+
+  function getSyncSummary(records) {
+    const list = Array.isArray(records) ? records : [];
+    const summary = {
+      total: list.length,
+      visibleTotal: 0,
+      deletedTotal: 0,
+      synced: 0,
+      pending: 0,
+      error: 0,
+      localOnly: 0,
+      deletedPending: 0,
+      deletedSynced: 0,
+      deletedError: 0,
+      needsRetry: 0,
+      lastSyncedAt: null,
+      hasServerError: false
+    };
+    list.forEach(function (record) {
+      const state = getRecordCloudStatus(record);
+      const deleted = !!(record && record.deletedAt);
+      if (deleted) summary.deletedTotal += 1;
+      else summary.visibleTotal += 1;
+
+      if (state.status === "synced") summary.synced += 1;
+      else if (state.status === "pending") summary.pending += 1;
+      else if (state.status === "error") summary.error += 1;
+      else if (state.status === "local_only") summary.localOnly += 1;
+      else if (state.status === "deleted_pending") summary.deletedPending += 1;
+      else if (state.status === "deleted_synced") summary.deletedSynced += 1;
+      else if (state.status === "deleted_error") summary.deletedError += 1;
+
+      if (RETRY_STATUSES.includes(state.status)) summary.needsRetry += 1;
+      if (state.status === "error" || state.status === "deleted_error") summary.hasServerError = true;
+      if (state.syncedAt && (!summary.lastSyncedAt || new Date(state.syncedAt) > new Date(summary.lastSyncedAt))) {
+        summary.lastSyncedAt = state.syncedAt;
+      }
+    });
+    try {
+      window.localStorage.setItem(LAST_SYNC_SUMMARY_KEY, JSON.stringify(Object.assign({ createdAt: nowIso() }, summary)));
+    } catch (error) {
+      console.warn("BabyCloud sync summary storage failed", error);
+    }
+    return summary;
   }
 
   function normalizeError(error) {
@@ -578,12 +685,16 @@
     appData.records = appData.records.map(function (record) {
       if (!record || String(record.id) !== String(recordId)) return record;
       changed = true;
-      const currentCloud = isObject(record.cloud) ? record.cloud : {};
+      const currentCloud = normalizeRecordCloud(record);
       return Object.assign({}, record, {
-        cloud: Object.assign({}, currentCloud, cloudPatch || {})
+        cloud: normalizeRecordCloud(Object.assign({}, record, { cloud: Object.assign({}, currentCloud, cloudPatch || {}) }))
       });
     });
     return changed ? writeStoredAppData(appData) : false;
+  }
+
+  function updateRecordCloudStatus(recordId, nextCloud) {
+    return updateStoredRecordCloud(recordId, nextCloud);
   }
 
   async function saveRecord(record) {
@@ -733,20 +844,208 @@
   }
 
   async function retryPendingMutations(records) {
-    const list = Array.isArray(records) ? records : ((readStoredAppData() || {}).records || []);
-    const targets = list.filter(function (record) {
-      return record && record.cloud && (record.cloud.status === "pending" || record.cloud.status === "error");
+    return retryPendingRecords({ records: Array.isArray(records) ? records : ((readStoredAppData() || {}).records || []) });
+  }
+
+  async function retryRecordSync(record) {
+    const startedAt = nowIso();
+    const state = getRecordCloudStatus(record);
+    updateStoredRecordCloud(record && record.id, {
+      status: state.status,
+      lastAttemptAt: startedAt,
+      retryCount: state.retryCount
     });
-    const results = [];
-    for (let i = 0; i < targets.length; i += 1) {
-      const record = targets[i];
-      const result = record.deletedAt ? await softDeleteRecord(record) : await saveRecord(record);
-      results.push(result);
-      updateStoredRecordCloud(record.id, result && result.ok
-        ? { status: "synced", syncedAt: result.syncedAt || nowIso(), error: "" }
-        : { status: "error", syncedAt: null, error: (result && result.error) || "retry_failed" });
+    try {
+      let result;
+      if (record && record.deletedAt) {
+        result = await softDeleteRecord(record);
+      } else if (state.status === "local_only") {
+        result = await saveRecord(record);
+      } else if (state.status === "pending" || state.status === "error") {
+        result = await updateRecord(record);
+      } else {
+        return { ok: true, status: "skipped", recordId: record && record.id, skipped: true };
+      }
+
+      if (result && result.ok) {
+        const syncedAt = result.syncedAt || nowIso();
+        const nextStatus = record && record.deletedAt ? "deleted_synced" : "synced";
+        updateStoredRecordCloud(record.id, {
+          status: nextStatus,
+          syncedAt: syncedAt,
+          error: "",
+          lastAttemptAt: startedAt,
+          familyId: (getCloudContext() || {}).currentFamilyId || state.familyId || null,
+          babyId: (getCloudContext() || {}).currentBabyId || state.babyId || null
+        });
+        return Object.assign({}, result, { ok: true, status: nextStatus, syncedAt: syncedAt });
+      }
+
+      throw new Error((result && result.error) || "sync_failed");
+    } catch (error) {
+      const nextStatus = record && record.deletedAt ? "deleted_error" : "error";
+      const retryCount = (state.retryCount || 0) + 1;
+      updateStoredRecordCloud(record && record.id, {
+        status: nextStatus,
+        syncedAt: null,
+        error: errorMessage(error),
+        lastAttemptAt: startedAt,
+        retryCount: retryCount
+      });
+      return { ok: false, status: nextStatus, recordId: record && record.id, error: errorMessage(error) };
     }
-    return { ok: results.every(function (result) { return result && result.ok; }), count: targets.length, results: results };
+  }
+
+  async function retryPendingRecords(appData, options) {
+    const opts = options || {};
+    const target = appData && Array.isArray(appData.records) ? appData : readStoredAppData();
+    const records = target && Array.isArray(target.records) ? target.records : [];
+    const statuses = Array.isArray(opts.statuses) && opts.statuses.length ? opts.statuses : RETRY_STATUSES.slice();
+    if (opts.includeLocalOnly && !statuses.includes("local_only")) statuses.push("local_only");
+    const targets = records.filter(function (record) {
+      return record && statuses.includes(getRecordCloudStatus(record).status);
+    });
+    const summary = {
+      ok: true,
+      attempted: targets.length,
+      succeeded: 0,
+      failed: 0,
+      skipped: records.length - targets.length,
+      finishedAt: null,
+      results: []
+    };
+    for (let i = 0; i < targets.length; i += 1) {
+      const result = await retryRecordSync(targets[i]);
+      summary.results.push(result);
+      if (result && result.ok) summary.succeeded += 1;
+      else summary.failed += 1;
+      await new Promise(function (resolve) { setTimeout(resolve, 0); });
+    }
+    summary.ok = summary.failed === 0;
+    summary.finishedAt = nowIso();
+    const refreshed = readStoredAppData();
+    if (appData && Array.isArray(appData.records) && refreshed && Array.isArray(refreshed.records)) {
+      appData.records = refreshed.records;
+      appData.cloud = refreshed.cloud || appData.cloud;
+    }
+    try {
+      window.localStorage.setItem(LAST_RETRY_RESULT_KEY, JSON.stringify(summary));
+    } catch (error) {
+      console.warn("BabyCloud retry result storage failed", error);
+    }
+    return summary;
+  }
+
+  async function diagnoseConnection() {
+    const checkedAt = nowIso();
+    const config = getConfig();
+    const checks = {
+      config: !!config && config.provider === "supabase" && !isPlaceholderConfig(config),
+      enabled: !!(config && config.enabled),
+      client: false,
+      online: typeof navigator === "undefined" ? true : navigator.onLine !== false,
+      auth: false,
+      family: false,
+      baby: false,
+      familyMembersSelect: false,
+      familiesSelect: false,
+      babiesSelect: false,
+      recordsSelect: false
+    };
+    const diagnosis = {
+      ok: false,
+      mode: "local",
+      status: "local_mode",
+      userId: null,
+      familyId: null,
+      babyId: null,
+      checkedAt: checkedAt,
+      checks: checks,
+      error: ""
+    };
+
+    try {
+      if (!checks.config) throw new Error("Supabase config not available");
+      if (!checks.enabled) {
+        diagnosis.status = "local_mode";
+        return diagnosis;
+      }
+
+      const client = getClient();
+      checks.client = !!client;
+      if (!client) throw new Error("Supabase client not initialized");
+
+      const user = await ensureUser();
+      checks.auth = !!(user && user.id);
+      diagnosis.userId = user && user.id ? user.id : null;
+      if (!checks.auth) throw new Error("Anonymous Auth user missing");
+
+      const context = await ensureDefaultFamilyAndBaby();
+      diagnosis.familyId = context && context.currentFamilyId ? context.currentFamilyId : null;
+      diagnosis.babyId = context && context.currentBabyId ? context.currentBabyId : null;
+      checks.family = !!diagnosis.familyId;
+      checks.baby = !!diagnosis.babyId;
+
+      const familyMembersResult = await client.from("family_members").select("id,family_id,user_id").eq("user_id", user.id).limit(1);
+      checks.familyMembersSelect = !familyMembersResult.error;
+      if (familyMembersResult.error) throw familyMembersResult.error;
+
+      const familiesResult = await client.from("families").select("id").limit(1);
+      checks.familiesSelect = !familiesResult.error;
+      if (familiesResult.error) throw familiesResult.error;
+
+      const babiesResult = await client.from("babies").select("id,family_id").limit(1);
+      checks.babiesSelect = !babiesResult.error;
+      if (babiesResult.error) throw babiesResult.error;
+
+      const recordsQuery = client.from("records").select("id,client_id").limit(1);
+      const recordsResult = diagnosis.familyId ? await recordsQuery.eq("family_id", diagnosis.familyId) : await recordsQuery;
+      checks.recordsSelect = !recordsResult.error;
+      if (recordsResult.error) throw recordsResult.error;
+
+      diagnosis.ok = checks.auth && checks.family && checks.baby && checks.recordsSelect;
+      diagnosis.mode = diagnosis.ok ? "cloud_ready" : "local";
+      diagnosis.status = diagnosis.ok ? "connected" : "error";
+      setState({
+        ready: diagnosis.ok,
+        mode: diagnosis.mode,
+        status: diagnosis.status,
+        userId: diagnosis.userId,
+        lastCheckedAt: checkedAt,
+        lastError: null
+      });
+    } catch (error) {
+      diagnosis.ok = false;
+      diagnosis.status = checks.online ? "error" : "offline";
+      diagnosis.mode = "local";
+      diagnosis.error = errorMessage(error);
+      setState({
+        ready: false,
+        mode: "local",
+        status: diagnosis.status,
+        lastCheckedAt: checkedAt,
+        lastError: normalizeError(error)
+      });
+    } finally {
+      try {
+        window.localStorage.setItem(LAST_SYNC_DIAGNOSIS_KEY, JSON.stringify(diagnosis));
+      } catch (storageError) {
+        console.warn("BabyCloud diagnosis storage failed", storageError);
+      }
+    }
+    return diagnosis;
+  }
+
+  function getHumanStatusMessage(status) {
+    const value = typeof status === "string" ? status : (status && status.status);
+    if (value === "synced") return "서버에 저장됐어요.";
+    if (value === "pending") return "서버 저장을 기다리고 있어요.";
+    if (value === "error") return "서버 저장은 실패했지만, 이 기기의 기록은 유지되고 있어요.";
+    if (value === "deleted_pending") return "삭제 내용을 서버에 반영하는 중이에요.";
+    if (value === "deleted_error") return "이 기기에서는 삭제됐지만, 서버 반영은 다시 시도해야 해요.";
+    if (value === "connected" || value === "cloud_ready") return "서버 저장이 준비됐어요. 새 기록은 이 기기에 먼저 저장되고, 가능하면 서버에도 함께 저장됩니다.";
+    if (value === "offline") return "현재 오프라인이에요. 기록은 이 기기에 저장되고, 나중에 다시 동기화할 수 있어요.";
+    return "이 기록은 아직 서버에 저장되지 않았어요. 이 기기에는 안전하게 저장되어 있어요.";
   }
 
   async function testSaveRecord() {
@@ -756,7 +1055,7 @@
       type: "test",
       subtype: "connection",
       amount: null,
-      memo: "Phase 3.3 server test",
+      memo: "Phase 3.4 server test",
       isSample: true,
       createdAt: now,
       updatedAt: now,
@@ -968,9 +1267,9 @@
 
     const preview = opts.preview || buildMergePreview(target.records, serverRows);
     const backup = {
-      reason: "before_server_merge_phase3_3",
+      reason: "before_server_merge_phase3_4",
       createdAt: mergedAt,
-      appVersion: "3.3",
+      appVersion: "3.4",
       appData: JSON.parse(JSON.stringify(target))
     };
 

@@ -1,6 +1,6 @@
-const CACHE_NAME = "baby-life-log-v3.3";
+const CACHE_NAME = "baby-life-log-v3.4";
 const CACHE_PREFIX = "baby-life-log-";
-const LEGACY_CACHE_NAME = "baby-life-log-v3.3-legacy";
+const LEGACY_CACHE_NAME = "baby-life-log-v3.4-legacy";
 const APP_SHELL = [
   "./",
   "./index.html",

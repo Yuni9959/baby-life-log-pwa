@@ -1,6 +1,6 @@
-const CACHE_NAME = 'baby-life-log-v3.3-legacy';
+const CACHE_NAME = 'baby-life-log-v3.4-legacy';
 const CACHE_PREFIX = 'baby-life-log-';
-const PRIMARY_CACHE_NAME = 'baby-life-log-v3.3';
+const PRIMARY_CACHE_NAME = 'baby-life-log-v3.4';
 const ASSETS_TO_CACHE = [
   './index.html',
   './manifest.json',
