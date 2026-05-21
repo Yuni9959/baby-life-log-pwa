@@ -69,19 +69,6 @@
     h1 { margin: 0; font-size: 1.58rem; line-height: 1.16; letter-spacing: 0; }
     .baby-days { margin-top: 5px; color: var(--muted); font-weight: 700; }
     .today-line { margin-top: 3px; color: var(--muted); font-size: 0.9rem; }
-    .version-badge {
-      display: inline-flex;
-      align-items: center;
-      min-height: 28px;
-      margin-bottom: 6px;
-      padding: 0 9px;
-      border-radius: 999px;
-      background: rgba(40, 124, 120, 0.12);
-      color: var(--brand-strong);
-      font-size: 0.78rem;
-      font-weight: 900;
-      white-space: nowrap;
-    }
 
     .icon-actions {
       display: flex;
@@ -148,14 +135,10 @@
     .field-note { margin: 0; color: var(--muted); font-size: 0.82rem; }
     .error-text { min-height: 20px; color: var(--danger); font-size: 0.84rem; font-weight: 800; }
 
-    .status-grid, .stats-grid, .report-grid, .analysis-grid {
+    .status-grid, .stats-grid, .report-grid {
       display: grid;
       grid-template-columns: 1fr;
       gap: 8px;
-    }
-    .status-grid {
-      grid-template-columns: repeat(3, minmax(0, 1fr));
-      align-items: stretch;
     }
 
     .status-card h2, .section h2 {
@@ -174,15 +157,6 @@
     .status-label, .stat-label { color: var(--muted); font-size: 0.78rem; font-weight: 850; }
     .status-value, .stat-value { margin-top: 5px; font-size: 1.05rem; font-weight: 900; line-height: 1.25; }
     .status-detail, .stat-note { margin-top: 4px; color: var(--muted); font-size: 0.82rem; line-height: 1.35; }
-    .status-item {
-      min-width: 0;
-      min-height: 82px;
-      padding: 10px;
-      overflow-wrap: break-word;
-    }
-    .status-label { font-size: 0.7rem; line-height: 1.2; }
-    .status-value { font-size: 0.9rem; line-height: 1.22; }
-    .status-detail { font-size: 0.72rem; line-height: 1.3; }
     .report-copy {
       margin: 0 0 10px;
       color: var(--muted);
@@ -204,122 +178,10 @@
       line-height: 1.45;
     }
 
-    .analysis-section {
-      border-color: rgba(34, 139, 120, 0.22);
-    }
-    .analysis-grid {
-      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-      gap: 10px;
-      align-items: stretch;
-    }
-    .analysis-card {
-      min-width: 0;
-      padding: 12px;
-      border: 1px solid var(--line);
-      border-radius: var(--radius);
-      background: var(--panel);
-      overflow-wrap: break-word;
-      word-break: keep-all;
-    }
-    .analysis-card h3 {
-      margin: 0 0 8px;
-      font-size: 0.96rem;
-      line-height: 1.3;
-      letter-spacing: 0;
-    }
-    .analysis-summary {
-      margin: 0 0 10px;
-      color: var(--text);
-      font-size: 0.88rem;
-      font-weight: 850;
-      line-height: 1.45;
-    }
-    .analysis-note, .analysis-empty {
-      margin: 0;
-      color: var(--muted);
-      font-size: 0.82rem;
-      line-height: 1.45;
-    }
-    .analysis-empty {
-      padding: 10px;
-      border: 1px dashed var(--line);
-      border-radius: var(--radius);
-      background: var(--panel-strong);
-    }
-    .analysis-chart {
-      display: grid;
-      gap: 7px;
-      margin-top: 9px;
-    }
-    .chart-row {
-      display: grid;
-      grid-template-columns: 42px minmax(0, 1fr) 54px;
-      align-items: center;
-      gap: 8px;
-      min-width: 0;
-      font-size: 0.78rem;
-      color: var(--muted);
-    }
-    .chart-bar-track {
-      height: 10px;
-      border-radius: 999px;
-      overflow: hidden;
-      background: rgba(34, 139, 120, 0.12);
-    }
-    .chart-bar-fill {
-      height: 100%;
-      min-width: 0;
-      border-radius: 999px;
-      background: var(--brand);
-    }
-    .chart-bar-fill.sleep { background: #6c7bd8; }
-    .chart-bar-fill.diaper { background: #d1785a; }
-    .chart-value {
-      min-width: 0;
-      text-align: right;
-      color: var(--text);
-      font-weight: 850;
-      white-space: nowrap;
-    }
-    .rhythm-list {
-      display: grid;
-      gap: 6px;
-      margin: 0;
-      padding: 0;
-      list-style: none;
-    }
-    .rhythm-list li {
-      color: var(--muted);
-      font-size: 0.85rem;
-      line-height: 1.45;
-    }
-
     .main-actions {
       display: grid;
       gap: 10px;
       margin: 6px 0 14px;
-    }
-
-    .quick-actions-title {
-      margin: 0;
-      font-size: 1.05rem;
-      font-weight: 900;
-    }
-
-    .quick-row-primary,
-    .quick-row-secondary {
-      display: grid;
-      gap: 8px;
-    }
-
-    .quick-row-primary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-    .quick-row-secondary { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-
-    .quick-feeding-card {
-      display: grid;
-      grid-template-rows: 1fr auto;
-      gap: 6px;
-      min-width: 0;
     }
 
     .quick-option-row {
@@ -342,26 +204,6 @@
       box-shadow: 0 1px 0 rgba(0, 0, 0, 0.03);
       user-select: none;
       touch-action: manipulation;
-    }
-    .quick-row-primary .record-action,
-    .quick-row-secondary .record-action {
-      min-height: 78px;
-      padding: 13px 11px;
-    }
-    .quick-row-secondary .record-action .action-title {
-      display: block;
-      font-size: 1rem;
-    }
-    .quick-row-secondary .last-record { font-size: 0.74rem; }
-    .feeding-detail-button {
-      min-height: 38px;
-      padding: 0 10px;
-      border-radius: var(--radius);
-      border: 1px solid var(--line);
-      color: var(--brand-strong);
-      background: var(--panel);
-      font-size: 0.86rem;
-      font-weight: 900;
     }
 
     .action-title {
@@ -490,47 +332,6 @@
     .data-note { margin: 0; color: var(--muted); font-size: 0.86rem; }
     .data-tool-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 
-    .collapsible-head {
-      width: 100%;
-      display: grid;
-      grid-template-columns: minmax(0, 1fr) auto;
-      gap: 10px;
-      align-items: center;
-      padding: 0;
-      color: var(--text);
-      background: transparent;
-      text-align: left;
-    }
-    .collapsible-head h2 { margin: 0; }
-    .collapse-mark { color: var(--brand-strong); font-weight: 900; }
-    .collapsible-body.hidden { display: none; }
-
-    .management-tabs {
-      display: grid;
-      grid-template-columns: repeat(3, minmax(0, 1fr));
-      gap: 8px;
-      margin-bottom: 12px;
-    }
-    .management-tab {
-      min-height: 42px;
-      border-radius: var(--radius);
-      border: 1px solid var(--line);
-      color: var(--text);
-      background: var(--panel);
-      font-weight: 900;
-    }
-    .management-tab.active {
-      color: #fff;
-      border-color: var(--brand);
-      background: var(--brand);
-    }
-    .management-panel-content { display: grid; gap: 10px; }
-    .management-panel-content > .profile-card,
-    .management-panel-content > .section {
-      margin-bottom: 0;
-      box-shadow: none;
-    }
-
     .overlay {
       position: fixed;
       inset: 0;
@@ -646,26 +447,17 @@
     }
 
     @media (min-width: 640px) {
-      .stats-grid, .report-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+      .status-grid, .stats-grid, .report-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
       .chip-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
       .form-grid.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     }
 
     @media (max-width: 390px) {
-      .topbar { align-items: flex-start; }
-      .small-action, .danger-action, .sheet-action, .ghost-action { padding: 0 11px; }
+      .topbar { display: grid; }
+      .icon-actions { justify-content: flex-start; }
       .form-row, .direct-row { grid-template-columns: 1fr; }
       .log-item { grid-template-columns: auto minmax(0, 1fr); }
       .edit-record, .delete-record { grid-column: 2; justify-self: start; }
-    }
-
-    @media (max-width: 360px) {
-      .status-grid { gap: 6px; }
-      .status-item { padding: 8px 6px; }
-      .status-value { font-size: 0.82rem; }
-      .status-detail { font-size: 0.68rem; }
-      .quick-row-primary .record-action,
-      .quick-row-secondary .record-action { padding: 11px 8px; }
     }
   </style>
 </head>
@@ -673,13 +465,14 @@
   <main class="app">
     <header class="topbar">
       <div>
-        <div class="version-badge" id="versionBadge">v2.8 · UI 정리</div>
         <h1 id="babyTitle">우리 아기</h1>
         <div class="baby-days" id="babyDays">생년월일을 입력해 주세요</div>
         <div class="today-line" id="todayLine"></div>
       </div>
       <div class="icon-actions">
-        <button type="button" class="small-action" id="managementButton">관리</button>
+        <button type="button" class="ghost-action" id="profileFocusButton">프로필</button>
+        <button type="button" class="ghost-action" id="settingsFocusButton">설정</button>
+        <button type="button" class="small-action" id="csvButton">CSV</button>
       </div>
     </header>
 
@@ -750,20 +543,6 @@
               <option value="false">기억하지 않음</option>
             </select>
           </div>
-          <div class="form-field">
-            <label for="lifeReportDefaultInput">생활 리포트 기본 상태</label>
-            <select id="lifeReportDefaultInput">
-              <option value="false">기본 접힘</option>
-              <option value="true">기본 펼침</option>
-            </select>
-          </div>
-          <div class="form-field">
-            <label for="analysisDefaultInput">최근 7일 분석 기본 상태</label>
-            <select id="analysisDefaultInput">
-              <option value="false">기본 접힘</option>
-              <option value="true">기본 펼침</option>
-            </select>
-          </div>
         </div>
         <div class="form-row sheet-block">
           <div class="error-text" id="settingsError"></div>
@@ -778,57 +557,37 @@
     </section>
 
     <section class="main-actions" aria-label="빠른 기록">
-      <h2 class="quick-actions-title">빠른 기록</h2>
-      <div class="quick-row-primary">
-        <div class="quick-feeding-card">
-          <button type="button" class="record-action" data-record-type="feeding" data-record-direct="true">
-            <span class="action-title">수유 <small>즉시 기록</small></span>
-            <span class="last-record" id="last-feeding">마지막 기록: 없음</span>
-          </button>
-          <button type="button" class="feeding-detail-button" data-sheet-only="feeding">상세설정</button>
-        </div>
-        <button type="button" class="record-action" data-record-type="diaper" data-sheet-only="diaper">
-          <span class="action-title">기저귀 <small>종류 선택</small></span>
-          <span class="last-record" id="last-diaper">마지막 기록: 없음</span>
-        </button>
-      </div>
-      <div class="quick-row-secondary">
-        <button type="button" class="record-action" data-record-type="burp" data-record-direct="true">
-          <span class="action-title">트림</span>
-          <span class="last-record" id="last-burp">없음</span>
-        </button>
-        <button type="button" class="record-action" data-record-type="sleep" data-record-direct="true">
-          <span class="action-title">잠듦</span>
-          <span class="last-record" id="last-sleep">없음</span>
-        </button>
-        <button type="button" class="record-action" data-record-type="wake" data-record-direct="true">
-          <span class="action-title">깨어남</span>
-          <span class="last-record" id="last-wake">없음</span>
-        </button>
+      <button type="button" class="record-action" data-record-type="feeding" data-record-direct="true">
+        <span class="action-title">수유 <small>탭하면 즉시 기록</small></span>
+        <span class="last-record" id="last-feeding">마지막 기록: 없음</span>
+      </button>
+      <button type="button" class="record-action" data-record-type="burp" data-record-direct="true">
+        <span class="action-title">트림 <small>탭하면 즉시 기록</small></span>
+        <span class="last-record" id="last-burp">마지막 기록: 없음</span>
+      </button>
+      <button type="button" class="record-action" data-record-type="diaper" data-record-direct="true">
+        <span class="action-title">기저귀 <small>탭하면 즉시 기록</small></span>
+        <span class="last-record" id="last-diaper">마지막 기록: 없음</span>
+      </button>
+      <button type="button" class="record-action" data-record-type="sleep" data-record-direct="true">
+        <span class="action-title">잠듦 <small>탭하면 즉시 기록</small></span>
+        <span class="last-record" id="last-sleep">마지막 기록: 없음</span>
+      </button>
+      <button type="button" class="record-action" data-record-type="wake" data-record-direct="true">
+        <span class="action-title">깨어남 <small>탭하면 즉시 기록</small></span>
+        <span class="last-record" id="last-wake">마지막 기록: 없음</span>
+      </button>
+      <div class="quick-option-row" aria-label="빠른 기록 옵션">
+        <button type="button" class="ghost-action" data-sheet-only="feeding">수유 옵션</button>
+        <button type="button" class="ghost-action" data-sheet-only="diaper">기저귀 옵션</button>
       </div>
     </section>
 
     <section class="section" aria-labelledby="statsTitle">
-      <button type="button" class="collapsible-head" id="lifeReportToggle" aria-expanded="false">
-        <h2 id="statsTitle">생활 리포트</h2>
-        <span class="collapse-mark" id="lifeReportMark">▾</span>
-      </button>
+      <h2 id="statsTitle">생활 리포트 (오늘 기준)</h2>
       <p class="report-copy" id="reportSummary">기록이 쌓이면 아기의 생활 패턴을 요약해드릴게요.</p>
-      <div class="collapsible-body hidden" id="lifeReportBody">
-        <div class="stats-grid" id="statsGrid"></div>
-        <div class="report-grid" id="reportGrid"></div>
-      </div>
-    </section>
-
-    <section class="section analysis-section" aria-labelledby="analysisTitle">
-      <button type="button" class="collapsible-head" id="analysisToggle" aria-expanded="false">
-        <h2 id="analysisTitle">최근 7일 분석</h2>
-        <span class="collapse-mark" id="analysisMark">▾</span>
-      </button>
-      <p class="report-copy">수유량 · 수면 · 기저귀 흐름 보기</p>
-      <div class="collapsible-body hidden" id="analysisBody">
-        <div class="analysis-grid" id="analysisDashboard"></div>
-      </div>
+      <div class="stats-grid" id="statsGrid"></div>
+      <div class="report-grid" id="reportGrid"></div>
     </section>
 
     <!-- 필터 / 날짜 / 검색 컨트롤 -->
@@ -880,21 +639,6 @@
 
   <div class="overlay" id="overlay" tabindex="-1"></div>
 
-  <section class="bottom-sheet" id="managementSheet" role="dialog" aria-modal="true" aria-labelledby="managementSheetTitle">
-    <div class="sheet-head">
-      <h2 class="sheet-title" id="managementSheetTitle">관리</h2>
-      <button type="button" class="sheet-close" data-close-sheet aria-label="닫기">×</button>
-    </div>
-    <div class="management-tabs" role="tablist" aria-label="관리 탭">
-      <button type="button" class="management-tab active" data-management-tab="profile" role="tab">프로필</button>
-      <button type="button" class="management-tab" data-management-tab="settings" role="tab">설정</button>
-      <button type="button" class="management-tab" data-management-tab="csv" role="tab">CSV</button>
-    </div>
-    <div class="management-panel-content" id="managementProfilePanel"></div>
-    <div class="management-panel-content hidden" id="managementSettingsPanel"></div>
-    <div class="management-panel-content hidden" id="managementCsvPanel"></div>
-  </section>
-
   <!-- 수유 시트 -->
   <section class="bottom-sheet" id="feedingSheet" role="dialog" aria-modal="true" aria-labelledby="feedingSheetTitle">
     <div class="sheet-head">
@@ -945,10 +689,10 @@
     </div>
     <p class="diaper-hint">종류를 선택하면 즉시 기록됩니다.</p>
     <div class="chip-grid" id="diaperSubtypeChips">
-      <button type="button" class="chip" data-diaper-save="stool">대변</button>
       <button type="button" class="chip" data-diaper-save="urine">소변</button>
+      <button type="button" class="chip" data-diaper-save="stool">대변</button>
       <button type="button" class="chip" data-diaper-save="both">소변+대변</button>
-      <button type="button" class="chip secondary" data-diaper-save="change">기저귀만 갈기</button>
+      <button type="button" class="chip secondary" data-diaper-save="change">교체만</button>
     </div>
   </section>
 
@@ -1015,8 +759,6 @@
       const PRE_RESTORE_BACKUP_KEY = "baby_life_log_app_backup_before_restore";
       const BACKUP_FORMAT_VERSION = 2;
       const APP_NAME = "baby-life-log";
-      const APP_VERSION = "2.8";
-      const APP_PHASE_LABEL = "UI 정리";
       const TYPES = ["feeding", "burp", "diaper", "sleep", "wake"];
       const LONG_PRESS_MS = 700;
       const MAX_FEED_AMOUNT = 500;
@@ -1025,19 +767,13 @@
       const typeLabels = { feeding: "수유", burp: "트림", diaper: "기저귀", sleep: "잠듦", wake: "깨어남" };
       const subtypeLabels = {
         formula: "분유", breast: "모유", pumped: "유축",
-        urine: "소변", pee: "소변", stool: "대변", poop: "대변", both: "소변+대변", change: "기저귀만 갈기"
+        urine: "소변", stool: "대변", both: "소변+대변", change: "교체만"
       };
 
       const els = {
         babyTitle: document.getElementById("babyTitle"),
-        versionBadge: document.getElementById("versionBadge"),
         babyDays: document.getElementById("babyDays"),
         todayLine: document.getElementById("todayLine"),
-        managementButton: document.getElementById("managementButton"),
-        managementSheet: document.getElementById("managementSheet"),
-        managementProfilePanel: document.getElementById("managementProfilePanel"),
-        managementSettingsPanel: document.getElementById("managementSettingsPanel"),
-        managementCsvPanel: document.getElementById("managementCsvPanel"),
         profileDetails: document.getElementById("profileDetails"),
         settingsDetails: document.getElementById("settingsDetails"),
         babyNameInput: document.getElementById("babyNameInput"),
@@ -1051,21 +787,12 @@
         timeFormatInput: document.getElementById("timeFormatInput"),
         rememberLastFeedingInput: document.getElementById("rememberLastFeedingInput"),
         rememberLastDiaperInput: document.getElementById("rememberLastDiaperInput"),
-        lifeReportDefaultInput: document.getElementById("lifeReportDefaultInput"),
-        analysisDefaultInput: document.getElementById("analysisDefaultInput"),
         saveSettingsButton: document.getElementById("saveSettingsButton"),
         settingsError: document.getElementById("settingsError"),
         currentStatusGrid: document.getElementById("currentStatusGrid"),
-        lifeReportToggle: document.getElementById("lifeReportToggle"),
-        lifeReportBody: document.getElementById("lifeReportBody"),
-        lifeReportMark: document.getElementById("lifeReportMark"),
         reportSummary: document.getElementById("reportSummary"),
         reportGrid: document.getElementById("reportGrid"),
         statsGrid: document.getElementById("statsGrid"),
-        analysisToggle: document.getElementById("analysisToggle"),
-        analysisBody: document.getElementById("analysisBody"),
-        analysisMark: document.getElementById("analysisMark"),
-        analysisDashboard: document.getElementById("analysisDashboard"),
         logs: document.getElementById("logs"),
         recordCount: document.getElementById("recordCount"),
         deleteSelectedButton: document.getElementById("deleteSelectedButton"),
@@ -1105,9 +832,6 @@
       let suppressNextClick = false;
       let selectedFeedingSubtype = "formula";
       let selectedDiaperSubtype = "urine";
-      let activeManagementTab = "profile";
-      let lifeReportExpanded = !!(appData.settings && appData.settings.ui && appData.settings.ui.lifeReportExpandedByDefault);
-      let analysisExpanded = !!(appData.settings && appData.settings.ui && appData.settings.ui.analysisExpandedByDefault);
 
       // 필터 상태
       let currentTypeFilter = "all";
@@ -1149,13 +873,7 @@
           rememberLastFeedingAmount: true,
           rememberLastDiaperType: true,
           lastFeedingAmount: null,
-          lastDiaperType: "",
-          analysisRangeDays: 7,
-          defaultAnalysisTab: "summary",
-          ui: {
-            lifeReportExpandedByDefault: false,
-            analysisExpandedByDefault: false
-          }
+          lastDiaperType: ""
         };
       }
 
@@ -1188,13 +906,6 @@
         };
       }
 
-      function normalizeDiaperSubtype(value) {
-        const subtype = String(value || "").trim();
-        if (subtype === "pee") return "urine";
-        if (subtype === "poop") return "stool";
-        return ["urine", "stool", "both", "change"].includes(subtype) ? subtype : "";
-      }
-
       function normalizeSettings(settings) {
         const base = defaultSettings();
         const source = settings && typeof settings === "object" ? settings : {};
@@ -1205,7 +916,6 @@
         const listLimit = Math.max(5, Math.min(100, Math.round(Number(source.recordListLimit) || base.recordListLimit)));
         const defaultAmount = normalizeAmount(source.defaultFeedingAmount) || base.defaultFeedingAmount;
         const lastAmount = normalizeAmount(source.lastFeedingAmount);
-        const sourceUi = source.ui && typeof source.ui === "object" ? source.ui : {};
         return {
           defaultFeedingAmount: defaultAmount,
           quickFeedingAmounts: quick,
@@ -1214,13 +924,7 @@
           rememberLastFeedingAmount: source.rememberLastFeedingAmount !== false,
           rememberLastDiaperType: source.rememberLastDiaperType !== false,
           lastFeedingAmount: lastAmount && lastAmount > 0 ? lastAmount : null,
-          lastDiaperType: normalizeDiaperSubtype(source.lastDiaperType) || "",
-          analysisRangeDays: [3, 7, 14].includes(Number(source.analysisRangeDays)) ? Number(source.analysisRangeDays) : base.analysisRangeDays,
-          defaultAnalysisTab: ["summary", "feeding", "sleep", "diaper"].includes(source.defaultAnalysisTab) ? source.defaultAnalysisTab : base.defaultAnalysisTab,
-          ui: {
-            lifeReportExpandedByDefault: sourceUi.lifeReportExpandedByDefault === true,
-            analysisExpandedByDefault: sourceUi.analysisExpandedByDefault === true
-          }
+          lastDiaperType: ["urine", "stool", "both", "change"].includes(source.lastDiaperType) ? source.lastDiaperType : ""
         };
       }
 
@@ -1231,7 +935,7 @@
         const createdAt = safeIso(record.createdAt || record.timestamp || record.time);
         let subtype = String(record.subtype || "").trim();
         if (type === "feeding" && !["formula", "breast", "pumped"].includes(subtype)) subtype = "formula";
-        if (type === "diaper") subtype = normalizeDiaperSubtype(subtype) || "change";
+        if (type === "diaper" && !["urine", "stool", "both", "change"].includes(subtype)) subtype = subtype || "change";
         if (type !== "feeding" && type !== "diaper") subtype = subtype || "";
         const amount = type === "feeding" ? normalizeAmount(record.amount !== undefined ? record.amount : record.value) : null;
         return {
@@ -1520,310 +1224,16 @@
         return Math.floor((start - birth) / 86400000) + 1;
       }
 
-      function validRecordDate(record) {
-        if (!record || !record.createdAt) return null;
-        const date = new Date(record.createdAt);
-        return Number.isNaN(date.getTime()) ? null : date;
-      }
-
-      function startOfLocalDay(date) {
-        return new Date(date.getFullYear(), date.getMonth(), date.getDate());
-      }
-
-      function endOfLocalDay(date) {
-        const end = startOfLocalDay(date);
-        end.setDate(end.getDate() + 1);
-        return end;
-      }
-
-      function getLastNDays(days) {
-        const count = Math.max(1, Math.round(Number(days) || 7));
-        const today = startOfLocalDay(new Date());
-        const result = [];
-        for (let i = count - 1; i >= 0; i -= 1) {
-          const date = new Date(today);
-          date.setDate(today.getDate() - i);
-          result.push({
-            date: date,
-            dateKey: localDateKey(date),
-            label: (date.getMonth() + 1) + "/" + date.getDate()
-          });
-        }
-        return result;
-      }
-
-      function getRecordsInDateRange(records, start, end, type) {
-        return (records || []).filter(function (record) {
-          if (type && record.type !== type) return false;
-          const date = validRecordDate(record);
-          return date && date >= start && date < end;
-        });
-      }
-
-      function calculateDailyFeedingTotals(records, days) {
-        const dayList = getLastNDays(days);
-        const byDay = dayList.reduce(function (map, day) {
-          map[day.dateKey] = Object.assign({}, day, { totalAmount: 0 });
-          return map;
-        }, {});
-        (records || []).forEach(function (record) {
-          if (!record || record.type !== "feeding") return;
-          const date = validRecordDate(record);
-          if (!date) return;
-          const key = localDateKey(date);
-          const amount = Number(record.amount);
-          if (byDay[key] && Number.isFinite(amount) && amount > 0) byDay[key].totalAmount += amount;
-        });
-        return dayList.map(function (day) { return byDay[day.dateKey]; });
-      }
-
-      function calculateDailyFeedingCounts(records, days) {
-        const dayList = getLastNDays(days);
-        const byDay = dayList.reduce(function (map, day) {
-          map[day.dateKey] = Object.assign({}, day, { total: 0, formula: 0, breast: 0, pumped: 0 });
-          return map;
-        }, {});
-        (records || []).forEach(function (record) {
-          if (!record || record.type !== "feeding") return;
-          const date = validRecordDate(record);
-          if (!date) return;
-          const key = localDateKey(date);
-          if (!byDay[key]) return;
-          byDay[key].total += 1;
-          if (byDay[key][record.subtype] !== undefined) byDay[key][record.subtype] += 1;
-        });
-        return dayList.map(function (day) { return byDay[day.dateKey]; });
-      }
-
-      function averageMinutes(values) {
-        return values.length ? Math.round(values.reduce(function (sum, value) { return sum + value; }, 0) / values.length) : 0;
-      }
-
-      function calculateFeedingIntervals(records, days) {
-        const dayList = getLastNDays(days);
-        const rangeStart = dayList[0].date;
-        const rangeEnd = endOfLocalDay(dayList[dayList.length - 1].date);
-        const todayKey = localDateKey(new Date());
-        const feedings = (records || []).filter(function (record) {
-          return record && record.type === "feeding" && validRecordDate(record);
-        }).slice().sort(function (a, b) {
-          return new Date(a.createdAt) - new Date(b.createdAt);
-        });
-        const todayIntervals = [];
-        const rangeIntervals = [];
-        for (let i = 1; i < feedings.length; i += 1) {
-          const previous = validRecordDate(feedings[i - 1]);
-          const current = validRecordDate(feedings[i]);
-          if (!previous || !current || current <= previous) continue;
-          const minutes = (current - previous) / 60000;
-          if (localDateKey(previous) === todayKey && localDateKey(current) === todayKey) todayIntervals.push(minutes);
-          if (current >= rangeStart && current < rangeEnd && previous >= rangeStart) rangeIntervals.push(minutes);
-        }
-        const last = feedings.length ? feedings[feedings.length - 1] : null;
-        return {
-          lastFeedingAt: last ? last.createdAt : null,
-          minutesSinceLastFeeding: last ? minutesSince(last.createdAt) : 0,
-          todayAverageIntervalMinutes: averageMinutes(todayIntervals),
-          sevenDayAverageIntervalMinutes: averageMinutes(rangeIntervals),
-          intervalCount: rangeIntervals.length,
-          feedingCount: feedings.length
-        };
-      }
-
-      function calculateSleepSessions(records) {
-        const sleepRecords = (records || []).filter(function (record) {
-          return record && (record.type === "sleep" || record.type === "wake") && validRecordDate(record);
-        }).slice().sort(function (a, b) {
-          return new Date(a.createdAt) - new Date(b.createdAt);
-        });
-        const sessions = [];
-        let activeSleep = null;
-        sleepRecords.forEach(function (record) {
-          const date = validRecordDate(record);
-          if (!date) return;
-          if (record.type === "sleep") {
-            activeSleep = date;
-            return;
-          }
-          if (record.type === "wake" && activeSleep && date > activeSleep) {
-            sessions.push({
-              startedAt: activeSleep.toISOString(),
-              endedAt: date.toISOString(),
-              durationMinutes: Math.round((date - activeSleep) / 60000),
-              isOngoing: false
-            });
-            activeSleep = null;
-          }
-        });
-        if (activeSleep) {
-          const now = new Date();
-          sessions.push({
-            startedAt: activeSleep.toISOString(),
-            endedAt: null,
-            durationMinutes: Math.max(0, Math.round((now - activeSleep) / 60000)),
-            isOngoing: true
-          });
-        }
-        return sessions;
-      }
-
-      function calculateDailySleepTotals(records, days) {
-        const dayList = getLastNDays(days);
-        const totals = dayList.reduce(function (map, day) {
-          map[day.dateKey] = Object.assign({}, day, { totalMinutes: 0 });
-          return map;
-        }, {});
-        calculateSleepSessions(records).forEach(function (session) {
-          const start = new Date(session.startedAt);
-          const end = session.endedAt ? new Date(session.endedAt) : new Date();
-          dayList.forEach(function (day) {
-            const boundaryStart = day.date;
-            const boundaryEnd = endOfLocalDay(day.date);
-            totals[day.dateKey].totalMinutes += Math.round(overlappedMinutes(start, end, boundaryStart, boundaryEnd));
-          });
-        });
-        return dayList.map(function (day) { return totals[day.dateKey]; });
-      }
-
-      function diaperSubtypeMatches(record, target) {
-        const subtype = record.subtype || "";
-        if (target === "pee") return subtype === "urine" || subtype === "pee" || subtype === "both";
-        if (target === "poop") return subtype === "stool" || subtype === "poop" || subtype === "both";
-        return false;
-      }
-
-      function calculateDailyDiaperCounts(records, days) {
-        const dayList = getLastNDays(days);
-        const byDay = dayList.reduce(function (map, day) {
-          map[day.dateKey] = Object.assign({}, day, { total: 0, pee: 0, poop: 0 });
-          return map;
-        }, {});
-        (records || []).forEach(function (record) {
-          if (!record || record.type !== "diaper") return;
-          const date = validRecordDate(record);
-          if (!date) return;
-          const key = localDateKey(date);
-          if (!byDay[key]) return;
-          byDay[key].total += 1;
-          if (diaperSubtypeMatches(record, "pee")) byDay[key].pee += 1;
-          if (diaperSubtypeMatches(record, "poop")) byDay[key].poop += 1;
-        });
-        return dayList.map(function (day) { return byDay[day.dateKey]; });
-      }
-
-      function averageDailyValue(items, key) {
-        return items.length ? items.reduce(function (sum, item) { return sum + safeNumber(item[key]); }, 0) / items.length : 0;
-      }
-
-      function calculateSevenDayAverages(summary) {
-        return {
-          feedingAmount: averageDailyValue(summary.feedingTotals, "totalAmount"),
-          feedingCount: averageDailyValue(summary.feedingCounts, "total"),
-          sleepMinutes: averageDailyValue(summary.sleepTotals, "totalMinutes"),
-          diaperCount: averageDailyValue(summary.diaperCounts, "total")
-        };
-      }
-
-      function calculateAnalysisSummary(records) {
-        const days = appData.settings.analysisRangeDays || 7;
-        const todayKey = localDateKey(new Date());
-        const feedingTotals = calculateDailyFeedingTotals(records, days);
-        const feedingCounts = calculateDailyFeedingCounts(records, days);
-        const feedingIntervals = calculateFeedingIntervals(records, days);
-        const sleepSessions = calculateSleepSessions(records);
-        const sleepTotals = calculateDailySleepTotals(records, days);
-        const diaperCounts = calculateDailyDiaperCounts(records, days);
-        const summary = { days: days, feedingTotals: feedingTotals, feedingCounts: feedingCounts, feedingIntervals: feedingIntervals, sleepSessions: sleepSessions, sleepTotals: sleepTotals, diaperCounts: diaperCounts };
-        summary.averages = calculateSevenDayAverages(summary);
-        summary.today = {
-          feedingAmount: (feedingTotals.find(function (d) { return d.dateKey === todayKey; }) || {}).totalAmount || 0,
-          feedingCount: (feedingCounts.find(function (d) { return d.dateKey === todayKey; }) || {}).total || 0,
-          sleepMinutes: (sleepTotals.find(function (d) { return d.dateKey === todayKey; }) || {}).totalMinutes || 0,
-          diaper: diaperCounts.find(function (d) { return d.dateKey === todayKey; }) || { total: 0, pee: 0, poop: 0 }
-        };
-        return summary;
-      }
-
-      function compareToAverage(today, average, unit) {
-        if (!average) return "최근 흐름과 비교하려면 기록이 조금 더 필요해요.";
-        const diffRatio = (today - average) / average;
-        if (Math.abs(diffRatio) < 0.15) return "최근 7일 흐름과 비슷해요.";
-        return "최근 7일 평균보다 " + (diffRatio > 0 ? "조금 많은 편이에요." : "조금 적은 편이에요.");
-      }
-
-      function calculateTodayRhythmSummary(summary) {
-        const todayRecords = getAllRecords().filter(function (record) { return isToday(record.createdAt); });
-        if (!todayRecords.length) return ["오늘 기록이 조금 더 쌓이면 생활 리듬을 더 정확히 정리할 수 있어요."];
-        const lines = [];
-        lines.push("오늘은 수유 " + summary.today.feedingCount + "회, 기저귀 " + summary.today.diaper.total + "회, 수면 " + durationText(summary.today.sleepMinutes) + "이 기록됐어요.");
-        if (summary.today.feedingAmount > 0) lines.push("수유량은 총 " + Math.round(summary.today.feedingAmount) + "ml로 정리됐어요.");
-        if (summary.feedingIntervals.todayAverageIntervalMinutes) lines.push("오늘 평균 수유 간격은 " + durationText(summary.feedingIntervals.todayAverageIntervalMinutes) + " 정도예요.");
-        if (summary.feedingIntervals.lastFeedingAt) lines.push("마지막 수유는 " + elapsedText(summary.feedingIntervals.lastFeedingAt) + "이에요.");
-        const ongoing = summary.sleepSessions.find(function (session) { return session.isOngoing; });
-        if (ongoing) lines.push("현재 아기는 자는 중으로 보여요. 이번 수면은 " + durationText(ongoing.durationMinutes) + "째 이어지고 있어요.");
-        else lines.push("현재는 깨어 있는 상태로 보여요.");
-        return lines;
-      }
-
       // ─── 렌더링 ───────────────────────────────────────────────
-      function initializeManagementPanel() {
-        const profileSection = document.querySelector('[aria-labelledby="profileTitle"]');
-        const settingsSection = document.querySelector('[aria-labelledby="settingsTitle"]');
-        const dataSection = document.querySelector('[aria-labelledby="dataToolsTitle"]');
-        if (profileSection && els.managementProfilePanel) {
-          els.managementProfilePanel.appendChild(profileSection);
-          if (els.profileDetails) els.profileDetails.open = true;
-        }
-        if (settingsSection && els.managementSettingsPanel) {
-          els.managementSettingsPanel.appendChild(settingsSection);
-          if (els.settingsDetails) els.settingsDetails.open = true;
-        }
-        if (dataSection && els.managementCsvPanel) {
-          els.managementCsvPanel.appendChild(dataSection);
-        }
-      }
-
-      function renderManagementTabs() {
-        document.querySelectorAll("[data-management-tab]").forEach(function (button) {
-          const active = button.dataset.managementTab === activeManagementTab;
-          button.classList.toggle("active", active);
-          button.setAttribute("aria-selected", active ? "true" : "false");
-        });
-        [
-          { key: "profile", panel: els.managementProfilePanel },
-          { key: "settings", panel: els.managementSettingsPanel },
-          { key: "csv", panel: els.managementCsvPanel }
-        ].forEach(function (item) {
-          if (item.panel) item.panel.classList.toggle("hidden", item.key !== activeManagementTab);
-        });
-      }
-
-      function setManagementTab(tab) {
-        activeManagementTab = ["profile", "settings", "csv"].includes(tab) ? tab : "profile";
-        renderManagementTabs();
-      }
-
-      function renderCollapsibleSections() {
-        if (els.lifeReportBody) els.lifeReportBody.classList.toggle("hidden", !lifeReportExpanded);
-        if (els.lifeReportToggle) els.lifeReportToggle.setAttribute("aria-expanded", lifeReportExpanded ? "true" : "false");
-        if (els.lifeReportMark) els.lifeReportMark.textContent = lifeReportExpanded ? "▴" : "▾";
-        if (els.analysisBody) els.analysisBody.classList.toggle("hidden", !analysisExpanded);
-        if (els.analysisToggle) els.analysisToggle.setAttribute("aria-expanded", analysisExpanded ? "true" : "false");
-        if (els.analysisMark) els.analysisMark.textContent = analysisExpanded ? "▴" : "▾";
-      }
-
       function renderProfile() {
         const name = appData.profile.babyName || "우리 아기";
-        if (els.versionBadge) els.versionBadge.textContent = "v" + APP_VERSION + " · " + APP_PHASE_LABEL;
         els.babyTitle.textContent = name;
         document.title = name + " 생활 기록";
         els.babyNameInput.value = appData.profile.babyName || "";
         els.birthDateInput.value = appData.profile.birthDate || "";
         els.genderInput.value = appData.profile.gender || "";
         const days = daysSinceBirth(appData.profile.birthDate);
-        els.babyDays.textContent = appData.profile.birthDate
-          ? appData.profile.birthDate + (days ? " · 생후 " + days + "일" : "")
-          : "생년월일을 입력해 주세요";
+        els.babyDays.textContent = days ? "생후 " + days + "일" : "생년월일을 입력해 주세요";
         els.todayLine.textContent = fullDateTimeText(nowIso());
       }
 
@@ -1834,8 +1244,6 @@
         els.timeFormatInput.value = appData.settings.timeFormat;
         els.rememberLastFeedingInput.value = String(appData.settings.rememberLastFeedingAmount);
         els.rememberLastDiaperInput.value = String(appData.settings.rememberLastDiaperType);
-        if (els.lifeReportDefaultInput) els.lifeReportDefaultInput.value = String(!!appData.settings.ui.lifeReportExpandedByDefault);
-        if (els.analysisDefaultInput) els.analysisDefaultInput.value = String(!!appData.settings.ui.analysisExpandedByDefault);
       }
 
       function renderCurrentStatus() {
@@ -1968,14 +1376,6 @@
           { label: "수면 요약", title: sleepInsight.title, note: sleepInsight.note },
           { label: "최근 기록 기반 분석", title: "최근 흐름", note: recentInsight }
         ];
-        const analysis = calculateAnalysisSummary(appData.records);
-        cards.push({
-          label: "최근 7일 비교",
-          title: "오늘과 최근 흐름",
-          note: "수유량은 " + compareToAverage(analysis.today.feedingAmount, analysis.averages.feedingAmount, "ml") +
-            " 수면 시간은 " + compareToAverage(analysis.today.sleepMinutes, analysis.averages.sleepMinutes, "분") +
-            " 기저귀 기록은 " + compareToAverage(analysis.today.diaper.total, analysis.averages.diaperCount, "회")
-        });
         els.reportGrid.innerHTML = cards.map(reportCardHtml).join("");
       }
 
@@ -2026,100 +1426,6 @@
         return '<div class="report-card"><div class="report-label">' + escapeHtml(item.label) +
           '</div><div class="report-title">' + escapeHtml(item.title) +
           '</div><div class="report-note">' + escapeHtml(item.note || "") + "</div></div>";
-      }
-
-      function chartRowsHtml(items, valueKey, formatter, fillClass) {
-        const maxValue = Math.max.apply(null, items.map(function (item) { return safeNumber(item[valueKey]); }).concat([0]));
-        return '<div class="analysis-chart">' + items.map(function (item) {
-          const value = safeNumber(item[valueKey]);
-          const width = maxValue > 0 ? Math.max(3, Math.round((value / maxValue) * 100)) : 0;
-          return '<div class="chart-row"><span>' + escapeHtml(item.label) + '</span>' +
-            '<div class="chart-bar-track"><div class="chart-bar-fill ' + escapeHtml(fillClass || "") + '" style="width:' + width + '%"></div></div>' +
-            '<span class="chart-value">' + escapeHtml(formatter(value)) + '</span></div>';
-        }).join("") + "</div>";
-      }
-
-      function analysisCardHtml(title, summary, body) {
-        return '<article class="analysis-card"><h3>' + escapeHtml(title) + '</h3>' +
-          (summary ? '<p class="analysis-summary">' + escapeHtml(summary) + '</p>' : "") +
-          body + '</article>';
-      }
-
-      function analysisEmptyHtml(message) {
-        return '<p class="analysis-empty">' + escapeHtml(message) + '</p>';
-      }
-
-      function renderAnalysisDashboard() {
-        if (!els.analysisDashboard) return;
-        if (!analysisExpanded) {
-          els.analysisDashboard.innerHTML = "";
-          return;
-        }
-        try {
-          const summary = calculateAnalysisSummary(appData.records);
-          const hasFeedings = summary.feedingCounts.some(function (day) { return day.total > 0; });
-          const hasFeedingAmount = summary.feedingTotals.some(function (day) { return day.totalAmount > 0; });
-          const hasSleep = summary.sleepTotals.some(function (day) { return day.totalMinutes > 0; });
-          const hasDiaper = summary.diaperCounts.some(function (day) { return day.total > 0; });
-          const todayFeedingSubtypes = summary.feedingCounts[summary.feedingCounts.length - 1] || { formula: 0, breast: 0, pumped: 0 };
-          const ongoingSleep = summary.sleepSessions.find(function (session) { return session.isOngoing; });
-          const rhythmLines = calculateTodayRhythmSummary(summary);
-
-          const feedingAmountCard = analysisCardHtml(
-            "수유량 추이",
-            hasFeedingAmount ? "오늘 " + Math.round(summary.today.feedingAmount) + "ml · 최근 평균 " + Math.round(summary.averages.feedingAmount) + "ml" : "",
-            hasFeedings
-              ? chartRowsHtml(summary.feedingTotals, "totalAmount", function (value) { return Math.round(value) + "ml"; }, "")
-              : analysisEmptyHtml("수유 기록이 쌓이면 최근 7일 수유량 흐름을 보여드릴게요.")
-          );
-
-          const feedingCountCard = analysisCardHtml(
-            "수유 횟수",
-            hasFeedings ? "오늘 " + summary.today.feedingCount + "회 · 평균 " + summary.averages.feedingCount.toFixed(1) + "회" : "",
-            hasFeedings
-              ? '<p class="analysis-note">분유 ' + todayFeedingSubtypes.formula + '회 · 모유 ' + todayFeedingSubtypes.breast + '회 · 유축 ' + todayFeedingSubtypes.pumped + '회</p>' +
-                chartRowsHtml(summary.feedingCounts, "total", function (value) { return Math.round(value) + "회"; }, "")
-              : analysisEmptyHtml("수유 기록이 있으면 횟수와 방식별 흐름을 정리할 수 있어요.")
-          );
-
-          const intervalBody = summary.feedingIntervals.feedingCount < 2
-            ? analysisEmptyHtml("수유 기록이 2개 이상 쌓이면 수유 간격을 계산할 수 있어요.")
-            : '<ul class="rhythm-list">' +
-              '<li>마지막 수유 후 ' + escapeHtml(durationText(summary.feedingIntervals.minutesSinceLastFeeding)) + '</li>' +
-              '<li>오늘 평균 간격 ' + escapeHtml(summary.feedingIntervals.todayAverageIntervalMinutes ? durationText(summary.feedingIntervals.todayAverageIntervalMinutes) : "기록 더 필요") + '</li>' +
-              '<li>최근 7일 평균 간격 ' + escapeHtml(summary.feedingIntervals.sevenDayAverageIntervalMinutes ? durationText(summary.feedingIntervals.sevenDayAverageIntervalMinutes) : "기록 더 필요") + '</li>' +
-              '</ul>';
-          const intervalCard = analysisCardHtml("수유 간격", "", intervalBody);
-
-          const sleepCard = analysisCardHtml(
-            "수면 분석",
-            ongoingSleep ? "현재 자는 중 · 이번 수면 " + durationText(ongoingSleep.durationMinutes) : "오늘 " + durationText(summary.today.sleepMinutes) + " · 최근 평균 " + durationText(summary.averages.sleepMinutes),
-            hasSleep || ongoingSleep
-              ? chartRowsHtml(summary.sleepTotals, "totalMinutes", function (value) { return durationText(value); }, "sleep") +
-                '<p class="analysis-note">' + escapeHtml(ongoingSleep ? "오늘 총 수면에는 현재 진행 중인 수면 시간이 포함돼요." : "잠듦과 깨어남 기록을 짝지어 계산했어요.") + '</p>'
-              : analysisEmptyHtml("잠듦과 깨어남 기록이 함께 있으면 수면 시간을 계산할 수 있어요.")
-          );
-
-          const diaperCard = analysisCardHtml(
-            "기저귀 분석",
-            hasDiaper ? "오늘 " + summary.today.diaper.total + "회 · 소변 " + summary.today.diaper.pee + "회 · 대변 " + summary.today.diaper.poop + "회" : "",
-            hasDiaper
-              ? '<p class="analysis-note">최근 7일 평균 ' + summary.averages.diaperCount.toFixed(1) + '회</p>' +
-                chartRowsHtml(summary.diaperCounts, "total", function (value) { return Math.round(value) + "회"; }, "diaper")
-              : analysisEmptyHtml("기저귀 기록이 쌓이면 소변과 대변 흐름을 함께 보여드릴게요.")
-          );
-
-          const rhythmCard = analysisCardHtml(
-            "오늘 생활 리듬",
-            "",
-            '<ul class="rhythm-list">' + rhythmLines.map(function (line) { return '<li>' + escapeHtml(line) + '</li>'; }).join("") + '</ul>'
-          );
-
-          els.analysisDashboard.innerHTML = feedingAmountCard + feedingCountCard + intervalCard + sleepCard + diaperCard + rhythmCard;
-        } catch (error) {
-          console.error("Failed to render analysis dashboard", error);
-          els.analysisDashboard.innerHTML = analysisCardHtml("최근 7일 분석", "", analysisEmptyHtml("분석을 계산하는 중 문제가 생겨 기본 화면으로 표시합니다."));
-        }
       }
 
       function setLastRecord(type) {
@@ -2261,11 +1567,8 @@
         appData = normalizeV2Data(appData);
         renderProfile();
         renderSettings();
-        renderManagementTabs();
-        renderCollapsibleSections();
         renderCurrentStatus();
         renderStats();
-        renderAnalysisDashboard();
         renderLogs();
         renderQuickFeedAmounts();
         TYPES.forEach(setLastRecord);
@@ -2327,11 +1630,7 @@
           recordListLimit: limit,
           timeFormat: els.timeFormatInput.value,
           rememberLastFeedingAmount: els.rememberLastFeedingInput.value === "true",
-          rememberLastDiaperType: els.rememberLastDiaperInput.value === "true",
-          ui: {
-            lifeReportExpandedByDefault: els.lifeReportDefaultInput && els.lifeReportDefaultInput.value === "true",
-            analysisExpandedByDefault: els.analysisDefaultInput && els.analysisDefaultInput.value === "true"
-          }
+          rememberLastDiaperType: els.rememberLastDiaperInput.value === "true"
         }));
         if (saveAppData()) { renderApp(); showToast("설정을 저장했습니다."); }
       }
@@ -2354,16 +1653,11 @@
           renderDiaperSubtype();
           els.diaperSheet.classList.add("active");
         }
-        if (name === "management") {
-          renderManagementTabs();
-          els.managementSheet.classList.add("active");
-        }
         if (name === "edit") els.editSheet.classList.add("active");
         if (name === "restorePreview") els.restorePreviewSheet.classList.add("active");
       }
 
       function closeSheets(clearOverlay) {
-        els.managementSheet.classList.remove("active");
         els.feedingSheet.classList.remove("active");
         els.diaperSheet.classList.remove("active");
         els.editSheet.classList.remove("active");
@@ -2450,7 +1744,7 @@
           backupFormatVersion: BACKUP_FORMAT_VERSION,
           appName: APP_NAME,
           appDisplayName: "아기 생활 기록",
-          appVersion: "phase-" + APP_VERSION,
+          appVersion: "phase-2.5",
           exportedAt: nowIso(),
           schemaVersion: data.schemaVersion,
           profile: data.profile,
@@ -2724,8 +2018,6 @@
         // 고급 옵션 버튼은 기본 빠른 기록 흐름과 분리한다.
         const sheetOnlyButton = event.target.closest("[data-sheet-only]");
         if (sheetOnlyButton) {
-          event.preventDefault();
-          event.stopPropagation();
           openSheet(sheetOnlyButton.dataset.sheetOnly);
           return;
         }
@@ -2831,22 +2123,13 @@
       // 기타 버튼 이벤트
       els.saveProfileButton.addEventListener("click", saveProfile);
       els.saveSettingsButton.addEventListener("click", saveSettings);
-      els.managementButton.addEventListener("click", function () {
-        setManagementTab("profile");
-        openSheet("management");
+      document.getElementById("profileFocusButton").addEventListener("click", function () {
+        els.profileDetails.open = true;
+        els.babyNameInput.focus();
       });
-      document.querySelectorAll("[data-management-tab]").forEach(function (button) {
-        button.addEventListener("click", function () {
-          setManagementTab(button.dataset.managementTab);
-        });
-      });
-      els.lifeReportToggle.addEventListener("click", function () {
-        lifeReportExpanded = !lifeReportExpanded;
-        renderApp();
-      });
-      els.analysisToggle.addEventListener("click", function () {
-        analysisExpanded = !analysisExpanded;
-        renderApp();
+      document.getElementById("settingsFocusButton").addEventListener("click", function () {
+        els.settingsDetails.open = true;
+        els.defaultFeedingAmountInput.focus();
       });
       document.getElementById("feedSaveButton").addEventListener("click", function () { saveFeeding(currentFeedAmount()); });
       document.getElementById("feedSaveBottomButton").addEventListener("click", function () {
@@ -2868,6 +2151,7 @@
         if (event.target.matches(".log-select")) updateSelectionState();
       });
       els.editForm.addEventListener("submit", handleEditSubmit);
+      document.getElementById("csvButton").addEventListener("click", downloadCsv);
       els.csvDataButton.addEventListener("click", downloadCsv);
       els.jsonBackupButton.addEventListener("click", exportJsonBackup);
       els.jsonImportButton.addEventListener("click", function () { els.jsonImportInput.click(); });
@@ -2894,7 +2178,6 @@
         syncViewportOffset();
       }
 
-      initializeManagementPanel();
       saveAppData();
       renderApp();
       setInterval(renderApp, 60000);
