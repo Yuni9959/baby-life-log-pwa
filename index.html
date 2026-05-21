@@ -531,6 +531,9 @@
     .health-badge.warning { background: #c86838; }
     .health-badge.repair { background: var(--danger); }
     .data-message { margin: 0; color: var(--muted); font-size: 0.84rem; line-height: 1.45; }
+    .cloud-message { margin: 0; color: var(--muted); font-size: 0.84rem; line-height: 1.45; }
+    .cloud-status-line { display: grid; gap: 4px; }
+    .cloud-status-line strong { color: var(--text); }
 
     .collapsible-head {
       width: 100%;
@@ -715,7 +718,7 @@
   <main class="app">
     <header class="topbar">
       <div>
-        <div class="version-badge" id="versionBadge">v2.8 · UI 정리</div>
+        <div class="version-badge" id="versionBadge">v3.1 · 서버 저장</div>
         <h1 id="babyTitle">우리 아기</h1>
         <div class="baby-days" id="babyDays">생년월일을 입력해 주세요</div>
         <div class="today-line" id="todayLine"></div>
@@ -933,6 +936,21 @@
           <p class="data-message" id="phase3Summary">서버 저장 준비 상태를 확인하는 중입니다.</p>
           <div class="data-grid" id="phase3Grid"></div>
         </div>
+        <div class="data-subsection" aria-labelledby="cloudBackupTitle">
+          <h3 id="cloudBackupTitle">서버 저장</h3>
+          <div class="cloud-status-line">
+            <p class="cloud-message" id="cloudStatusMessage">현재는 로컬 모드예요. 기록은 이 기기에 안전하게 저장되고 있어요.</p>
+            <p class="cloud-message">새 기록은 이 기기에 먼저 저장되고, 가능하면 서버에도 함께 저장됩니다.</p>
+          </div>
+          <div class="data-grid" id="cloudStatusGrid"></div>
+          <div class="data-tool-actions">
+            <button type="button" class="small-action" id="cloudCheckButton">서버 연결 확인</button>
+            <button type="button" class="small-action" id="cloudTestSaveButton">서버 테스트 저장</button>
+            <button type="button" class="small-action" id="cloudTestFetchButton">서버 테스트 조회</button>
+            <button type="button" class="small-action" id="cloudRetryPendingButton">동기화 대기 기록 재시도</button>
+          </div>
+          <p class="cloud-message" id="cloudActionMessage">현재는 익명 사용자로 서버 저장을 준비하고 있어요. 나중에 로그인 기능이 추가되면 여러 기기에서 더 안전하게 사용할 수 있어요.</p>
+        </div>
         <div class="data-subsection" aria-labelledby="sampleToolsTitle">
           <h3 id="sampleToolsTitle">테스트 도구</h3>
           <p class="data-message">샘플 기록은 <strong>isSample: true</strong>로만 추가되며, 삭제 버튼은 샘플 기록만 삭제합니다.</p>
@@ -955,7 +973,7 @@
     <div class="management-tabs" role="tablist" aria-label="관리 탭">
       <button type="button" class="management-tab active" data-management-tab="profile" role="tab">프로필</button>
       <button type="button" class="management-tab" data-management-tab="settings" role="tab">설정</button>
-      <button type="button" class="management-tab" data-management-tab="csv" role="tab">CSV</button>
+      <button type="button" class="management-tab" data-management-tab="csv" role="tab">데이터</button>
     </div>
     <div class="management-panel-content" id="managementProfilePanel"></div>
     <div class="management-panel-content hidden" id="managementSettingsPanel"></div>
@@ -1068,6 +1086,9 @@
     <button type="button" class="undo-btn" id="undoButton">되돌리기</button>
   </div>
 
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="./cloud-config.js"></script>
+  <script src="./cloud-supabase.js"></script>
   <script>
     document.addEventListener("DOMContentLoaded", function () {
       if ("serviceWorker" in navigator) {
@@ -1083,8 +1104,8 @@
       const PRE_REPAIR_BACKUP_KEY = "baby_life_log_app_backup_before_repair";
       const BACKUP_FORMAT_VERSION = 2;
       const APP_NAME = "baby-life-log";
-      const APP_VERSION = "2.9";
-      const APP_PHASE_LABEL = "안정화";
+      const APP_VERSION = "3.1";
+      const APP_PHASE_LABEL = "서버 저장";
       const TYPES = ["feeding", "burp", "diaper", "sleep", "wake"];
       const LONG_PRESS_MS = 700;
       const MAX_FEED_AMOUNT = 500;
@@ -1166,6 +1187,13 @@
         storageStatusGrid: document.getElementById("storageStatusGrid"),
         phase3Summary: document.getElementById("phase3Summary"),
         phase3Grid: document.getElementById("phase3Grid"),
+        cloudStatusMessage: document.getElementById("cloudStatusMessage"),
+        cloudStatusGrid: document.getElementById("cloudStatusGrid"),
+        cloudCheckButton: document.getElementById("cloudCheckButton"),
+        cloudTestSaveButton: document.getElementById("cloudTestSaveButton"),
+        cloudTestFetchButton: document.getElementById("cloudTestFetchButton"),
+        cloudRetryPendingButton: document.getElementById("cloudRetryPendingButton"),
+        cloudActionMessage: document.getElementById("cloudActionMessage"),
         repairDataButton: document.getElementById("repairDataButton"),
         createSampleButton: document.getElementById("createSampleButton"),
         deleteSampleButton: document.getElementById("deleteSampleButton"),
@@ -1288,6 +1316,16 @@
         return ["urine", "stool", "both", "change"].includes(subtype) ? subtype : "";
       }
 
+      function normalizeCloudState(cloud) {
+        const source = cloud && typeof cloud === "object" ? cloud : {};
+        const status = ["local_only", "pending", "synced", "error"].includes(source.status) ? source.status : "local_only";
+        return {
+          status: status,
+          syncedAt: source.syncedAt ? safeIso(source.syncedAt) : null,
+          error: source.error ? String(source.error).slice(0, 200) : ""
+        };
+      }
+
       function normalizeSettings(settings) {
         const base = defaultSettings();
         const source = settings && typeof settings === "object" ? settings : {};
@@ -1350,7 +1388,8 @@
           memo: String(record.memo !== undefined ? record.memo : (record.note || "")).slice(0, 100),
           isSample: record.isSample === true,
           createdAt: createdAt,
-          updatedAt: safeIso(record.updatedAt || record.createdAt || record.timestamp || createdAt)
+          updatedAt: safeIso(record.updatedAt || record.createdAt || record.timestamp || createdAt),
+          cloud: normalizeCloudState(record.cloud)
         };
       }
 
@@ -1453,13 +1492,78 @@
           createdAt: nowIso(),
           updatedAt: nowIso()
         }, type);
+        record.cloud = shouldAttemptCloudSave() ? { status: "pending", syncedAt: null, error: "" } : { status: "local_only", syncedAt: null, error: "" };
         appData.records.push(record);
         if (type === "feeding") appData.settings.lastFeedingAmount = record.amount || appData.settings.lastFeedingAmount;
         if (type === "diaper") appData.settings.lastDiaperType = record.subtype || appData.settings.lastDiaperType;
         if (saveAppData()) {
           renderApp();
           showToast(typeLabels[type] + " 기록 완료");
+          setTimeout(function () {
+            trySaveRecordToCloud(record.id);
+          }, 0);
         }
+      }
+
+      function shouldAttemptCloudSave() {
+        const config = window.BABY_APP_CLOUD_CONFIG;
+        return !!(config && config.provider === "supabase" && config.enabled);
+      }
+
+      function updateRecordCloudState(recordId, cloudState) {
+        const record = findRecord(recordId);
+        if (!record) return false;
+        record.cloud = normalizeCloudState(cloudState);
+        return saveAppData();
+      }
+
+      function trySaveRecordToCloud(recordId) {
+        const record = findRecord(recordId);
+        if (!record) return Promise.resolve({ ok: false, status: "error", error: "record_not_found" });
+
+        if (!window.BabyCloud || typeof window.BabyCloud.saveRecord !== "function") {
+          updateRecordCloudState(recordId, { status: shouldAttemptCloudSave() ? "pending" : "local_only", syncedAt: null, error: "" });
+          renderCloudStatus();
+          return Promise.resolve({ ok: false, status: "local_only", error: "cloud_module_unavailable" });
+        }
+
+        return window.BabyCloud.saveRecord(record).then(function (result) {
+          if (result && result.ok) {
+            updateRecordCloudState(recordId, { status: "synced", syncedAt: result.syncedAt || nowIso(), error: "" });
+            renderLogs();
+            renderCloudStatus();
+            return result;
+          }
+          const status = result && result.status === "local_only" ? "local_only" : "error";
+          updateRecordCloudState(recordId, { status: status, syncedAt: null, error: (result && result.error) || "" });
+          renderLogs();
+          renderCloudStatus();
+          if (status === "error") showToast("서버 저장은 실패했지만, 기록은 이 기기에 저장됐어요.");
+          return result || { ok: false, status: status, error: "" };
+        }).catch(function (error) {
+          console.warn("Background cloud save failed", error);
+          updateRecordCloudState(recordId, { status: "error", syncedAt: null, error: error.message || "server_save_failed" });
+          renderLogs();
+          renderCloudStatus();
+          showToast("서버 저장은 실패했지만, 기록은 이 기기에 저장됐어요.");
+          return { ok: false, status: "error", error: error.message || "server_save_failed" };
+        });
+      }
+
+      function retryPendingCloudRecords() {
+        const targets = appData.records.filter(function (record) {
+          return record && record.cloud && (record.cloud.status === "pending" || record.cloud.status === "error");
+        });
+        if (!targets.length) {
+          showToast("재시도할 동기화 대기 기록이 없습니다.");
+          return;
+        }
+        showToast("동기화 대기 기록 " + targets.length + "개를 다시 시도합니다.");
+        targets.forEach(function (record, index) {
+          setTimeout(function () {
+            trySaveRecordToCloud(record.id);
+          }, index * 50);
+        });
       }
 
       function updateRecord(id, patch) {
@@ -2296,9 +2400,18 @@
         const value = recordValueText(record);
         const when = isToday(record.createdAt) ? localTimeText(new Date(record.createdAt)) : fullDateTimeText(record.createdAt);
         const memo = record.memo ? '<span class="log-memo">메모: ' + escapeHtml(record.memo) + '</span>' : "";
+        const cloud = '<span class="log-memo">' + escapeHtml(recordCloudLabel(record)) + '</span>';
         return '<span class="log-main"><span class="type-pill">' + escapeHtml(type) +
           '</span><span>' + escapeHtml(value) + '</span></span><span class="log-meta">' +
-          escapeHtml(when + " · " + elapsedText(record.createdAt)) + '</span>' + memo;
+          escapeHtml(when + " · " + elapsedText(record.createdAt)) + '</span>' + memo + cloud;
+      }
+
+      function recordCloudLabel(record) {
+        const status = record && record.cloud && record.cloud.status;
+        if (status === "synced") return "서버 저장됨";
+        if (status === "pending") return "서버 대기";
+        if (status === "error") return "서버 오류";
+        return "로컬 전용";
       }
 
       function recordValueText(record) {
@@ -2916,6 +3029,7 @@
         }
         renderStorageStatus();
         renderPhase3Readiness(diagnostics);
+        renderCloudStatus();
       }
 
       function formatBytes(bytes) {
@@ -2975,6 +3089,90 @@
             : "일부 필드가 부족해 서버 동기화 전 데이터 보정을 권장합니다.";
         }
         if (els.phase3Grid) els.phase3Grid.innerHTML = dataItemsHtml(phase3.items);
+      }
+
+      function cloudStatusLabel(status) {
+        const labels = {
+          not_configured: "설정 필요",
+          local_mode: "로컬 모드",
+          checking: "확인 중",
+          anonymous_ready: "익명 사용자 준비",
+          connected: "연결됨",
+          test_saved: "테스트 저장됨",
+          test_fetched: "테스트 조회됨",
+          synced: "정상",
+          save_failed: "저장 실패",
+          offline: "오프라인",
+          error: "오류"
+        };
+        return labels[status] || "확인 전";
+      }
+
+      function cloudModeLabel(mode) {
+        if (mode === "cloud_ready") return "서버 준비됨";
+        return "로컬 모드";
+      }
+
+      function shortUserId(userId) {
+        if (!userId) return "확인 전";
+        const value = String(userId);
+        return value.length > 14 ? value.slice(0, 6) + "..." + value.slice(-6) : value;
+      }
+
+      function formatCloudCheckedAt(value) {
+        if (!value) return "-";
+        const date = new Date(value);
+        if (Number.isNaN(date.getTime())) return "-";
+        return fullDateTimeText(date.toISOString());
+      }
+
+      function getCloudSafeStatus() {
+        if (window.BabyCloud && typeof window.BabyCloud.getSafeStatus === "function") {
+          return window.BabyCloud.getSafeStatus();
+        }
+        return {
+          enabled: false,
+          ready: false,
+          mode: "local",
+          status: "local_mode",
+          userId: null,
+          lastCheckedAt: null,
+          lastSavedAt: null,
+          lastError: null
+        };
+      }
+
+      function renderCloudStatus() {
+        const status = getCloudSafeStatus();
+        if (els.cloudStatusMessage) {
+          if (status.ready || status.status === "connected" || status.status === "synced" || status.status === "test_saved" || status.status === "test_fetched") {
+            els.cloudStatusMessage.textContent = "서버 저장이 준비됐어요. 새 기록은 이 기기에 먼저 저장되고, 가능하면 서버에도 함께 저장됩니다.";
+          } else if (status.status === "save_failed" || status.status === "offline" || status.status === "error") {
+            els.cloudStatusMessage.textContent = "지금은 서버에 연결할 수 없어요. 기록은 계속 이 기기에 저장됩니다.";
+          } else if (status.status === "not_configured" || status.status === "local_mode" || !status.enabled) {
+            els.cloudStatusMessage.textContent = "현재는 로컬 모드예요. 기록은 이 기기에 안전하게 저장되고 있어요.";
+          } else if (status.status === "checking") {
+            els.cloudStatusMessage.textContent = "서버 연결 상태를 확인하는 중입니다.";
+          } else {
+            els.cloudStatusMessage.textContent = "현재는 로컬 모드예요. 기록은 이 기기에 안전하게 저장되고 있어요.";
+          }
+        }
+        if (els.cloudStatusGrid) {
+          els.cloudStatusGrid.innerHTML = dataItemsHtml([
+            { label: "현재 모드", value: cloudModeLabel(status.mode) },
+            { label: "서버 연결 상태", value: cloudStatusLabel(status.status) },
+            { label: "익명 사용자", value: status.userId ? "확보됨 (" + shortUserId(status.userId) + ")" : "확인 전" },
+            { label: "마지막 서버 저장", value: formatCloudCheckedAt(status.lastSavedAt) },
+            { label: "서버 저장 상태", value: cloudStatusLabel(status.status) }
+          ]);
+        }
+        if (els.cloudCheckButton) {
+          els.cloudCheckButton.disabled = status.status === "checking";
+          els.cloudCheckButton.textContent = status.status === "checking" ? "확인 중" : "서버 연결 확인";
+        }
+        [els.cloudTestSaveButton, els.cloudTestFetchButton, els.cloudRetryPendingButton].forEach(function (button) {
+          if (button) button.disabled = status.status === "checking";
+        });
       }
 
       function backupBeforeRepair() {
@@ -3310,6 +3508,81 @@
       els.repairDataButton.addEventListener("click", repairAppData);
       els.createSampleButton.addEventListener("click", createSampleData);
       els.deleteSampleButton.addEventListener("click", deleteSampleData);
+      if (els.cloudCheckButton) {
+        els.cloudCheckButton.addEventListener("click", function () {
+          if (!window.BabyCloud || typeof window.BabyCloud.checkConnection !== "function") {
+            renderCloudStatus();
+            showToast("클라우드 연결 모듈을 아직 불러오지 못했어요.");
+            return;
+          }
+          window.BabyCloud.checkConnection().then(function (status) {
+            renderCloudStatus();
+            if (status && status.status === "connected") {
+              showToast("서버 연결이 준비됐어요.");
+            } else if (status && (status.status === "local_mode" || status.status === "not_configured")) {
+              showToast("현재는 로컬 모드로 작동합니다.");
+            } else {
+              showToast("서버 연결을 확인하지 못했어요. 기록은 계속 이 기기에 저장됩니다.");
+            }
+          }).catch(function (error) {
+            console.warn("Cloud check failed", error);
+            renderCloudStatus();
+            showToast("서버 연결을 확인하지 못했어요. 기록은 계속 이 기기에 저장됩니다.");
+          });
+        });
+      }
+      if (els.cloudTestSaveButton) {
+        els.cloudTestSaveButton.addEventListener("click", function () {
+          if (!window.BabyCloud || typeof window.BabyCloud.testSaveRecord !== "function") {
+            renderCloudStatus();
+            showToast("서버 테스트 저장을 실행할 수 없어요.");
+            return;
+          }
+          window.BabyCloud.testSaveRecord().then(function (result) {
+            renderCloudStatus();
+            if (result && result.ok) {
+              if (els.cloudActionMessage) els.cloudActionMessage.textContent = "서버 테스트 저장에 성공했어요.";
+              showToast("서버 테스트 저장에 성공했어요.");
+            } else {
+              if (els.cloudActionMessage) els.cloudActionMessage.textContent = "서버 테스트 저장에 실패했어요. Supabase 설정과 RLS 정책을 확인해 주세요.";
+              showToast("서버 테스트 저장에 실패했어요. Supabase 설정과 RLS 정책을 확인해 주세요.");
+            }
+          }).catch(function (error) {
+            console.warn("Cloud test save failed", error);
+            renderCloudStatus();
+            if (els.cloudActionMessage) els.cloudActionMessage.textContent = "서버 테스트 저장에 실패했어요. Supabase 설정과 RLS 정책을 확인해 주세요.";
+            showToast("서버 테스트 저장에 실패했어요. Supabase 설정과 RLS 정책을 확인해 주세요.");
+          });
+        });
+      }
+      if (els.cloudTestFetchButton) {
+        els.cloudTestFetchButton.addEventListener("click", function () {
+          if (!window.BabyCloud || typeof window.BabyCloud.testFetchRecords !== "function") {
+            renderCloudStatus();
+            showToast("서버 테스트 조회를 실행할 수 없어요.");
+            return;
+          }
+          window.BabyCloud.testFetchRecords().then(function (result) {
+            renderCloudStatus();
+            if (result && result.ok) {
+              const message = "서버 테스트 기록 " + result.count + "개를 조회했어요.";
+              if (els.cloudActionMessage) els.cloudActionMessage.textContent = message;
+              showToast(message);
+            } else {
+              if (els.cloudActionMessage) els.cloudActionMessage.textContent = "서버 테스트 조회에 실패했어요. Supabase 설정과 RLS 정책을 확인해 주세요.";
+              showToast("서버 테스트 조회에 실패했어요.");
+            }
+          }).catch(function (error) {
+            console.warn("Cloud test fetch failed", error);
+            renderCloudStatus();
+            showToast("서버 테스트 조회에 실패했어요.");
+          });
+        });
+      }
+      if (els.cloudRetryPendingButton) {
+        els.cloudRetryPendingButton.addEventListener("click", retryPendingCloudRecords);
+      }
+      window.addEventListener("baby-cloud-status-change", renderCloudStatus);
 
       // Undo
       els.undoButton.addEventListener("click", undoDelete);

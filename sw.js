@@ -1,8 +1,14 @@
-const CACHE_NAME = 'baby-life-log-v2.9-legacy';
+const CACHE_NAME = 'baby-life-log-v3.1-legacy';
+const CACHE_PREFIX = 'baby-life-log-';
+const PRIMARY_CACHE_NAME = 'baby-life-log-v3.1';
 const ASSETS_TO_CACHE = [
   './index.html',
   './manifest.json',
   './sw.js',
+  './cloud-config.js',
+  './cloud-supabase.js',
+  './supabase_phase3_1_records.sql',
+  './PHASE3_1_SUPABASE_SETUP.md',
   './icon-192.svg',
   './icon-512.svg'
 ];
@@ -21,7 +27,11 @@ self.addEventListener('activate', function(event) {
     caches.keys().then(function(keys) {
       return Promise.all(
         keys.map(function(key) {
-          if (key !== CACHE_NAME) {
+          if (
+            key.indexOf(CACHE_PREFIX) === 0 &&
+            key !== CACHE_NAME &&
+            key !== PRIMARY_CACHE_NAME
+          ) {
             return caches.delete(key);
           }
           return undefined;

@@ -1,9 +1,15 @@
-const CACHE_NAME = "baby-life-log-v2.9";
+const CACHE_NAME = "baby-life-log-v3.1";
+const CACHE_PREFIX = "baby-life-log-";
+const LEGACY_CACHE_NAME = "baby-life-log-v3.1-legacy";
 const APP_SHELL = [
   "./",
   "./index.html",
   "./manifest.json",
   "./service-worker.js",
+  "./cloud-config.js",
+  "./cloud-supabase.js",
+  "./supabase_phase3_1_records.sql",
+  "./PHASE3_1_SUPABASE_SETUP.md",
   "./icons/icon-192.png",
   "./icons/icon-512.png"
 ];
@@ -30,7 +36,11 @@ self.addEventListener("activate", function (event) {
       .then(function (cacheNames) {
         return Promise.all(
           cacheNames.map(function (cacheName) {
-            if (cacheName !== CACHE_NAME) {
+            if (
+              cacheName.indexOf(CACHE_PREFIX) === 0 &&
+              cacheName !== CACHE_NAME &&
+              cacheName !== LEGACY_CACHE_NAME
+            ) {
               return caches.delete(cacheName);
             }
             return Promise.resolve();
