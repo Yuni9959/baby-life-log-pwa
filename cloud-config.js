@@ -15,6 +15,6 @@ window.BABY_APP_CLOUD_CONFIG = {
   // service_role key 또는 secret key가 아니다.
   supabaseAnonKey: "sb_publishable_o1NUthUHmVjaH4f-j186ng_AbspdQwa",
 
-  appVersion: "3.2",
+  appVersion: "3.3",
   schemaVersion: 2
 };

@@ -1,12 +1,13 @@
-const CACHE_NAME = 'baby-life-log-v3.2-legacy';
+const CACHE_NAME = 'baby-life-log-v3.3-legacy';
 const CACHE_PREFIX = 'baby-life-log-';
-const PRIMARY_CACHE_NAME = 'baby-life-log-v3.2';
+const PRIMARY_CACHE_NAME = 'baby-life-log-v3.3';
 const ASSETS_TO_CACHE = [
   './index.html',
   './manifest.json',
   './sw.js',
   './cloud-config.js',
   './cloud-supabase.js',
+  './supabase_phase3_3_family_baby_sync.sql',
   './supabase_phase3_1_records.sql',
   './PHASE3_1_SUPABASE_SETUP.md',
   './icon-192.svg',

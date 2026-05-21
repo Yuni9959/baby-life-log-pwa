@@ -718,7 +718,7 @@
   <main class="app">
     <header class="topbar">
       <div>
-        <div class="version-badge" id="versionBadge">v3.2 · 서버 병합</div>
+        <div class="version-badge" id="versionBadge">v3.3 · 수정/삭제 동기화</div>
         <h1 id="babyTitle">우리 아기</h1>
         <div class="baby-days" id="babyDays">생년월일을 입력해 주세요</div>
         <div class="today-line" id="todayLine"></div>
@@ -945,6 +945,7 @@
           <div class="data-grid" id="cloudStatusGrid"></div>
           <div class="data-tool-actions">
             <button type="button" class="small-action" id="cloudCheckButton">서버 연결 확인</button>
+            <button type="button" class="small-action" id="cloudEnsureFamilyButton">가족/아기 서버 구조 확인</button>
             <button type="button" class="small-action" id="cloudTestSaveButton">서버 테스트 저장</button>
             <button type="button" class="small-action" id="cloudTestFetchButton">서버 테스트 조회</button>
             <button type="button" class="small-action" id="cloudRetryPendingButton">동기화 대기 기록 재시도</button>
@@ -1110,8 +1111,8 @@
       const PRE_REPAIR_BACKUP_KEY = "baby_life_log_app_backup_before_repair";
       const BACKUP_FORMAT_VERSION = 2;
       const APP_NAME = "baby-life-log";
-      const APP_VERSION = "3.2";
-      const APP_PHASE_LABEL = "서버 병합";
+      const APP_VERSION = "3.3";
+      const APP_PHASE_LABEL = "수정/삭제 동기화";
       const TYPES = ["feeding", "burp", "diaper", "sleep", "wake"];
       const LONG_PRESS_MS = 700;
       const MAX_FEED_AMOUNT = 500;
@@ -1196,6 +1197,7 @@
         cloudStatusMessage: document.getElementById("cloudStatusMessage"),
         cloudStatusGrid: document.getElementById("cloudStatusGrid"),
         cloudCheckButton: document.getElementById("cloudCheckButton"),
+        cloudEnsureFamilyButton: document.getElementById("cloudEnsureFamilyButton"),
         cloudTestSaveButton: document.getElementById("cloudTestSaveButton"),
         cloudTestFetchButton: document.getElementById("cloudTestFetchButton"),
         cloudRetryPendingButton: document.getElementById("cloudRetryPendingButton"),
@@ -1296,7 +1298,22 @@
       }
 
       function createDefaultAppData() {
-        return { schemaVersion: 2, profile: defaultProfile(), settings: defaultSettings(), records: [] };
+        return {
+          schemaVersion: 2,
+          profile: defaultProfile(),
+          settings: defaultSettings(),
+          records: [],
+          cloud: {
+            provider: "supabase",
+            currentFamilyId: null,
+            currentBabyId: null,
+            currentUserId: null,
+            lastSetupAt: null,
+            lastSyncAt: null,
+            lastUpdateSyncAt: null,
+            lastDeleteSyncAt: null
+          }
+        };
       }
 
       // ─── 정규화 ───────────────────────────────────────────────
@@ -1337,7 +1354,23 @@
         return {
           status: status,
           syncedAt: source.syncedAt ? safeIso(source.syncedAt) : null,
-          error: source.error ? String(source.error).slice(0, 200) : ""
+          error: source.error ? String(source.error).slice(0, 200) : "",
+          familyId: source.familyId || null,
+          babyId: source.babyId || null
+        };
+      }
+
+      function normalizeCloudContext(cloud) {
+        const source = cloud && typeof cloud === "object" ? cloud : {};
+        return {
+          provider: "supabase",
+          currentFamilyId: source.currentFamilyId || null,
+          currentBabyId: source.currentBabyId || null,
+          currentUserId: source.currentUserId || null,
+          lastSetupAt: source.lastSetupAt ? safeIso(source.lastSetupAt) : null,
+          lastSyncAt: source.lastSyncAt ? safeIso(source.lastSyncAt) : null,
+          lastUpdateSyncAt: source.lastUpdateSyncAt ? safeIso(source.lastUpdateSyncAt) : null,
+          lastDeleteSyncAt: source.lastDeleteSyncAt ? safeIso(source.lastDeleteSyncAt) : null
         };
       }
 
@@ -1404,6 +1437,7 @@
           isSample: record.isSample === true,
           createdAt: createdAt,
           updatedAt: safeIso(record.updatedAt || record.createdAt || record.timestamp || createdAt),
+          deletedAt: record.deletedAt ? safeIso(record.deletedAt) : null,
           cloud: normalizeCloudState(record.cloud)
         };
       }
@@ -1415,6 +1449,7 @@
         const seen = new Set();
         base.profile = normalizeProfile(source.profile || { babyName: source.babyName || (source.settings && source.settings.babyName) });
         base.settings = normalizeSettings(source.settings);
+        base.cloud = normalizeCloudContext(source.cloud);
         base.records = records.map(function (record) {
           return normalizeRecord(record, record.type);
         }).filter(Boolean).filter(function (record) {
@@ -1493,8 +1528,9 @@
 
       // ─── 기록 CRUD ───────────────────────────────────────────
       function sortNewestFirst(a, b) { return new Date(b.createdAt) - new Date(a.createdAt); }
-      function getRecords(type) { return appData.records.filter(function (r) { return !type || r.type === type; }).sort(sortNewestFirst); }
-      function getAllRecords() { return appData.records.slice().sort(sortNewestFirst); }
+      function isActiveRecord(record) { return !!(record && !record.deletedAt); }
+      function getRecords(type) { return appData.records.filter(function (r) { return isActiveRecord(r) && (!type || r.type === type); }).sort(sortNewestFirst); }
+      function getAllRecords() { return appData.records.filter(isActiveRecord).sort(sortNewestFirst); }
       function findRecord(id) { return appData.records.find(function (r) { return r.id === id; }); }
 
       function createRecord(type, subtype, amount, memo) {
@@ -1532,6 +1568,12 @@
         return saveAppData();
       }
 
+      function markRecordCloudPending(record) {
+        record.cloud = shouldAttemptCloudSave()
+          ? { status: "pending", syncedAt: null, error: "", familyId: record.cloud && record.cloud.familyId, babyId: record.cloud && record.cloud.babyId }
+          : { status: "local_only", syncedAt: null, error: "", familyId: record.cloud && record.cloud.familyId, babyId: record.cloud && record.cloud.babyId };
+      }
+
       function trySaveRecordToCloud(recordId) {
         const record = findRecord(recordId);
         if (!record) return Promise.resolve({ ok: false, status: "error", error: "record_not_found" });
@@ -1565,6 +1607,68 @@
         });
       }
 
+      function tryUpdateRecordToCloud(recordId) {
+        const record = findRecord(recordId);
+        if (!record) return Promise.resolve({ ok: false, status: "error", error: "record_not_found" });
+
+        if (!window.BabyCloud || typeof window.BabyCloud.updateRecord !== "function") {
+          updateRecordCloudState(recordId, { status: shouldAttemptCloudSave() ? "pending" : "local_only", syncedAt: null, error: "" });
+          renderCloudStatus();
+          return Promise.resolve({ ok: false, status: "local_only", error: "cloud_module_unavailable" });
+        }
+
+        return window.BabyCloud.updateRecord(record).then(function (result) {
+          if (result && result.ok) {
+            updateRecordCloudState(recordId, { status: "synced", syncedAt: result.syncedAt || nowIso(), error: "" });
+          } else {
+            updateRecordCloudState(recordId, { status: result && result.status === "local_only" ? "local_only" : "error", syncedAt: null, error: (result && result.error) || "" });
+            if (!result || result.status !== "local_only") showToast("서버 반영은 실패했지만, 이 기기의 수정 내용은 저장됐어요.");
+          }
+          renderLogs();
+          renderCloudStatus();
+          return result || { ok: false, status: "error", error: "" };
+        }).catch(function (error) {
+          console.warn("Background cloud update failed", error);
+          updateRecordCloudState(recordId, { status: "error", syncedAt: null, error: error.message || "server_update_failed" });
+          renderLogs();
+          renderCloudStatus();
+          showToast("서버 반영은 실패했지만, 이 기기의 수정 내용은 저장됐어요.");
+          return { ok: false, status: "error", error: error.message || "server_update_failed" };
+        });
+      }
+
+      function trySoftDeleteRecordsToCloud(records) {
+        const targets = (records || []).filter(Boolean);
+        if (!targets.length) return Promise.resolve({ ok: true, count: 0, results: [] });
+        if (!window.BabyCloud || typeof window.BabyCloud.softDeleteRecords !== "function") {
+          targets.forEach(function (record) {
+            updateRecordCloudState(record.id, { status: shouldAttemptCloudSave() ? "pending" : "local_only", syncedAt: null, error: "" });
+          });
+          renderCloudStatus();
+          return Promise.resolve({ ok: false, status: "local_only", error: "cloud_module_unavailable" });
+        }
+        return window.BabyCloud.softDeleteRecords(targets).then(function (summary) {
+          const results = summary && Array.isArray(summary.results) ? summary.results : [];
+          targets.forEach(function (record, index) {
+            const result = results[index];
+            updateRecordCloudState(record.id, result && result.ok
+              ? { status: "synced", syncedAt: result.syncedAt || nowIso(), error: "" }
+              : { status: "error", syncedAt: null, error: (result && result.error) || "server_delete_failed" });
+          });
+          if (!summary || !summary.ok) showToast("서버 삭제 반영은 실패했지만, 이 기기에서는 삭제 처리됐어요.");
+          renderApp();
+          return summary || { ok: false, count: targets.length, results: [] };
+        }).catch(function (error) {
+          console.warn("Background cloud delete failed", error);
+          targets.forEach(function (record) {
+            updateRecordCloudState(record.id, { status: "error", syncedAt: null, error: error.message || "server_delete_failed" });
+          });
+          renderApp();
+          showToast("서버 삭제 반영은 실패했지만, 이 기기에서는 삭제 처리됐어요.");
+          return { ok: false, status: "error", error: error.message || "server_delete_failed" };
+        });
+      }
+
       function retryPendingCloudRecords() {
         const targets = appData.records.filter(function (record) {
           return record && record.cloud && (record.cloud.status === "pending" || record.cloud.status === "error");
@@ -1576,7 +1680,11 @@
         showToast("동기화 대기 기록 " + targets.length + "개를 다시 시도합니다.");
         targets.forEach(function (record, index) {
           setTimeout(function () {
-            trySaveRecordToCloud(record.id);
+            if (record.deletedAt) {
+              trySoftDeleteRecordsToCloud([record]);
+            } else {
+              trySaveRecordToCloud(record.id);
+            }
           }, index * 50);
         });
       }
@@ -1586,31 +1694,47 @@
         appData.records = appData.records.map(function (record) {
           if (record.id !== id) return record;
           updated = true;
-          return normalizeRecord(Object.assign({}, record, patch, { updatedAt: nowIso() }), record.type);
+          const next = normalizeRecord(Object.assign({}, record, patch, { updatedAt: nowIso() }), record.type);
+          next.deletedAt = record.deletedAt || null;
+          markRecordCloudPending(next);
+          return next;
         });
         if (updated && saveAppData()) {
           renderApp();
           showToast("기록을 수정했습니다.");
+          setTimeout(function () { tryUpdateRecordToCloud(id); }, 0);
         }
       }
 
       function deleteRecord(id) {
         const record = findRecord(id);
         if (!record) return;
-        appData.records = appData.records.filter(function (r) { return r.id !== id; });
+        const deletedAt = nowIso();
+        record.deletedAt = deletedAt;
+        record.updatedAt = deletedAt;
+        markRecordCloudPending(record);
         if (saveAppData()) {
           renderApp();
-          showUndoBar([record], "기록 1개를 삭제했습니다.");
+          showUndoBar([Object.assign({}, record)], "기록 1개를 삭제했습니다.");
+          setTimeout(function () { trySoftDeleteRecordsToCloud([record]); }, 0);
         }
       }
 
       function deleteRecords(ids) {
         const idSet = new Set(ids);
-        const deleted = appData.records.filter(function (r) { return idSet.has(r.id); });
-        appData.records = appData.records.filter(function (r) { return !idSet.has(r.id); });
+        const deletedAt = nowIso();
+        const deleted = [];
+        appData.records.forEach(function (record) {
+          if (!record || !idSet.has(record.id)) return;
+          record.deletedAt = deletedAt;
+          record.updatedAt = deletedAt;
+          markRecordCloudPending(record);
+          deleted.push(Object.assign({}, record));
+        });
         if (saveAppData()) {
           renderApp();
           showUndoBar(deleted, "기록 " + deleted.length + "개를 삭제했습니다.");
+          setTimeout(function () { trySoftDeleteRecordsToCloud(deleted); }, 0);
         }
       }
 
@@ -1622,10 +1746,14 @@
         }
         if (window.confirm("직전 " + typeLabels[type] + " 기록을 삭제하시겠습니까?\n기록 시간: " + fullDateTimeText(latest.createdAt))) {
           const record = findRecord(latest.id);
-          appData.records = appData.records.filter(function (r) { return r.id !== latest.id; });
+          const deletedAt = nowIso();
+          record.deletedAt = deletedAt;
+          record.updatedAt = deletedAt;
+          markRecordCloudPending(record);
           if (saveAppData()) {
             renderApp();
-            showUndoBar([record], "기록 1개를 삭제했습니다.");
+            showUndoBar([Object.assign({}, record)], "기록 1개를 삭제했습니다.");
+            setTimeout(function () { trySoftDeleteRecordsToCloud([record]); }, 0);
           }
         }
       }
@@ -1650,7 +1778,19 @@
         undoBuffer = null;
         els.undoBar.classList.remove("active");
         toRestore.forEach(function (record) {
-          if (!findRecord(record.id)) appData.records.push(record);
+          const existing = findRecord(record.id);
+          if (existing) {
+            existing.deletedAt = null;
+            existing.updatedAt = nowIso();
+            markRecordCloudPending(existing);
+            setTimeout(function () { tryUpdateRecordToCloud(existing.id); }, 0);
+          } else {
+            record.deletedAt = null;
+            record.updatedAt = nowIso();
+            markRecordCloudPending(record);
+            appData.records.push(record);
+            setTimeout(function () { tryUpdateRecordToCloud(record.id); }, 0);
+          }
         });
         appData.records.sort(sortNewestFirst);
         if (saveAppData()) {
@@ -1790,6 +1930,7 @@
 
       function getRecordsInDateRange(records, start, end, type) {
         return (records || []).filter(function (record) {
+          if (!isActiveRecord(record)) return false;
           if (type && record.type !== type) return false;
           const date = validRecordDate(record);
           return date && date >= start && date < end;
@@ -1797,6 +1938,7 @@
       }
 
       function calculateDailyFeedingTotals(records, days) {
+        records = (records || []).filter(isActiveRecord);
         const dayList = getLastNDays(days);
         const byDay = dayList.reduce(function (map, day) {
           map[day.dateKey] = Object.assign({}, day, { totalAmount: 0 });
@@ -1814,6 +1956,7 @@
       }
 
       function calculateDailyFeedingCounts(records, days) {
+        records = (records || []).filter(isActiveRecord);
         const dayList = getLastNDays(days);
         const byDay = dayList.reduce(function (map, day) {
           map[day.dateKey] = Object.assign({}, day, { total: 0, formula: 0, breast: 0, pumped: 0 });
@@ -1836,6 +1979,7 @@
       }
 
       function calculateFeedingIntervals(records, days) {
+        records = (records || []).filter(isActiveRecord);
         const dayList = getLastNDays(days);
         const rangeStart = dayList[0].date;
         const rangeEnd = endOfLocalDay(dayList[dayList.length - 1].date);
@@ -1867,6 +2011,7 @@
       }
 
       function calculateSleepSessions(records) {
+        records = (records || []).filter(isActiveRecord);
         const sleepRecords = (records || []).filter(function (record) {
           return record && (record.type === "sleep" || record.type === "wake") && validRecordDate(record);
         }).slice().sort(function (a, b) {
@@ -1929,6 +2074,7 @@
       }
 
       function calculateDailyDiaperCounts(records, days) {
+        records = (records || []).filter(isActiveRecord);
         const dayList = getLastNDays(days);
         const byDay = dayList.reduce(function (map, day) {
           map[day.dateKey] = Object.assign({}, day, { total: 0, pee: 0, poop: 0 });
@@ -1961,6 +2107,7 @@
       }
 
       function calculateAnalysisSummary(records) {
+        records = (records || []).filter(isActiveRecord);
         const days = appData.settings.analysisRangeDays || 7;
         const todayKey = localDateKey(new Date());
         const feedingTotals = calculateDailyFeedingTotals(records, days);
@@ -3160,6 +3307,12 @@
         };
       }
 
+      function countCloudRecords(statusName) {
+        return appData.records.filter(function (record) {
+          return record && record.cloud && record.cloud.status === statusName;
+        }).length;
+      }
+
       function renderCloudStatus() {
         const status = getCloudSafeStatus();
         if (els.cloudStatusMessage) {
@@ -3179,8 +3332,14 @@
           els.cloudStatusGrid.innerHTML = dataItemsHtml([
             { label: "현재 모드", value: cloudModeLabel(status.mode) },
             { label: "서버 연결 상태", value: cloudStatusLabel(status.status) },
+            { label: "Family ID", value: status.currentFamilyId ? "준비됨" : "준비 전" },
+            { label: "Baby ID", value: status.currentBabyId ? "준비됨" : "준비 전" },
             { label: "익명 사용자", value: status.userId ? "확보됨 (" + shortUserId(status.userId) + ")" : "확인 전" },
             { label: "마지막 서버 저장", value: formatCloudCheckedAt(status.lastSavedAt) },
+            { label: "마지막 수정 동기화", value: formatCloudCheckedAt(status.lastUpdatedAt) },
+            { label: "마지막 삭제 동기화", value: formatCloudCheckedAt(status.lastDeletedAt) },
+            { label: "동기화 대기 기록", value: countCloudRecords("pending") + "개" },
+            { label: "서버 오류 기록", value: countCloudRecords("error") + "개" },
             { label: "서버 저장 상태", value: cloudStatusLabel(status.status) }
           ]);
         }
@@ -3188,7 +3347,7 @@
           els.cloudCheckButton.disabled = status.status === "checking";
           els.cloudCheckButton.textContent = status.status === "checking" ? "확인 중" : "서버 연결 확인";
         }
-        [els.cloudTestSaveButton, els.cloudTestFetchButton, els.cloudRetryPendingButton, els.cloudFetchRecordsButton].forEach(function (button) {
+        [els.cloudEnsureFamilyButton, els.cloudTestSaveButton, els.cloudTestFetchButton, els.cloudRetryPendingButton, els.cloudFetchRecordsButton].forEach(function (button) {
           if (button) button.disabled = status.status === "checking";
         });
         renderCloudMergeStatus();
@@ -3601,6 +3760,30 @@
             console.warn("Cloud check failed", error);
             renderCloudStatus();
             showToast("서버 연결을 확인하지 못했어요. 기록은 계속 이 기기에 저장됩니다.");
+          });
+        });
+      }
+      if (els.cloudEnsureFamilyButton) {
+        els.cloudEnsureFamilyButton.addEventListener("click", function () {
+          if (!window.BabyCloud || typeof window.BabyCloud.ensureDefaultFamilyAndBaby !== "function") {
+            renderCloudStatus();
+            showToast("가족/아기 서버 구조를 확인할 수 없어요.");
+            return;
+          }
+          window.BabyCloud.ensureDefaultFamilyAndBaby().then(function (context) {
+            renderCloudStatus();
+            if (context && context.currentFamilyId && context.currentBabyId) {
+              if (els.cloudActionMessage) els.cloudActionMessage.textContent = "가족/아기 서버 구조가 준비됐어요.";
+              showToast("가족/아기 서버 구조가 준비됐어요.");
+            } else {
+              if (els.cloudActionMessage) els.cloudActionMessage.textContent = "가족/아기 서버 구조를 준비하지 못했어요. Supabase SQL과 RLS를 확인해 주세요.";
+              showToast("가족/아기 서버 구조를 준비하지 못했어요.");
+            }
+          }).catch(function (error) {
+            console.warn("Cloud family/baby setup failed", error);
+            renderCloudStatus();
+            if (els.cloudActionMessage) els.cloudActionMessage.textContent = "가족/아기 서버 구조를 준비하지 못했어요. 이 기기의 기록은 그대로 유지됩니다.";
+            showToast("가족/아기 서버 구조를 준비하지 못했어요.");
           });
         });
       }

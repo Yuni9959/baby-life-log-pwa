@@ -1,10 +1,12 @@
-// 아기 생활 기록 앱 - Phase 3.1 Supabase records 저장
-// service_role key, secret key, DB password는 절대 클라이언트에 넣지 않는다.
+// Baby life log - Phase 3.3 Supabase sync helpers.
+// Client-safe only: never put service_role keys, DB passwords, or direct DB URLs here.
 
 (function () {
   "use strict";
 
   const STATUS_EVENT = "baby-cloud-status-change";
+  const CLOUD_CONTEXT_KEY = "babyAppCloudContext";
+  const APP_STORAGE_KEY = "baby_life_log_app_v2";
   const PLACEHOLDER_URL = "https://YOUR_PROJECT_REF.supabase.co";
   const PLACEHOLDER_KEY = "YOUR_SUPABASE_PUBLISHABLE_OR_ANON_KEY";
 
@@ -19,6 +21,9 @@
     userId: null,
     lastCheckedAt: null,
     lastSavedAt: null,
+    lastUpdatedAt: null,
+    lastDeletedAt: null,
+    lastSetupAt: null,
     lastError: null,
 
     init: init,
@@ -28,10 +33,20 @@
     testFetchRecords: testFetchRecords,
     saveRecord: saveRecord,
     fetchRecords: fetchRecords,
-    normalizeServerRecord: normalizeServerRecord,
+    normalizeServerRecord: normalizeServerRowToLocalRecord,
     buildMergePreview: buildMergePreview,
     mergeServerRecordsIntoLocal: mergeServerRecordsIntoLocal,
-    getSafeStatus: getSafeStatus
+    getSafeStatus: getSafeStatus,
+
+    ensureDefaultFamilyAndBaby: ensureDefaultFamilyAndBaby,
+    getCloudContext: getCloudContext,
+    saveCloudContext: saveCloudContext,
+    mapLocalRecordToServerRow: mapLocalRecordToServerRow,
+    normalizeServerRowToLocalRecord: normalizeServerRowToLocalRecord,
+    updateRecord: updateRecord,
+    softDeleteRecord: softDeleteRecord,
+    softDeleteRecords: softDeleteRecords,
+    retryPendingMutations: retryPendingMutations
   };
 
   window.BabyCloud = BabyCloud;
@@ -50,6 +65,10 @@
       String(config.supabaseAnonKey).indexOf("YOUR_SUPABASE") !== -1;
   }
 
+  function isObject(value) {
+    return !!value && typeof value === "object" && !Array.isArray(value);
+  }
+
   function normalizeError(error) {
     if (!error) return null;
     return {
@@ -60,61 +79,15 @@
   }
 
   function errorMessage(error) {
-    return (error && error.message) || String(error || "server_save_failed");
+    return (error && error.message) || String(error || "server_sync_failed");
   }
 
-  function isObject(value) {
-    return !!value && typeof value === "object" && !Array.isArray(value);
+  function nowIso() {
+    return new Date().toISOString();
   }
 
-  function isValidIsoLike(value) {
+  function isValidDate(value) {
     return !!value && !Number.isNaN(new Date(value).getTime());
-  }
-
-  function supportedType(type) {
-    return ["feeding", "burp", "diaper", "sleep", "wake"].indexOf(type) !== -1;
-  }
-
-  function normalizeAmount(value) {
-    if (value === null || value === undefined || value === "") return null;
-    const numberValue = Number(value);
-    return Number.isFinite(numberValue) ? numberValue : null;
-  }
-
-  function normalizeCloudStatus(cloud) {
-    const source = isObject(cloud) ? cloud : {};
-    return {
-      status: source.status || "local_only",
-      syncedAt: source.syncedAt || null,
-      error: source.error || ""
-    };
-  }
-
-  function mainRecordFields(record) {
-    return {
-      type: record && record.type ? String(record.type) : "",
-      subtype: record && record.subtype ? String(record.subtype) : "",
-      amount: normalizeAmount(record && record.amount),
-      memo: record && record.memo ? String(record.memo) : "",
-      isSample: Boolean(record && record.isSample),
-      createdAt: record && record.createdAt ? String(record.createdAt) : "",
-      updatedAt: record && record.updatedAt ? String(record.updatedAt) : ""
-    };
-  }
-
-  function recordsConflict(localRecord, serverRecord) {
-    const localFields = mainRecordFields(localRecord);
-    const serverFields = mainRecordFields(serverRecord);
-    const majorDifferent =
-      localFields.type !== serverFields.type ||
-      localFields.subtype !== serverFields.subtype ||
-      localFields.amount !== serverFields.amount ||
-      localFields.memo !== serverFields.memo ||
-      localFields.isSample !== serverFields.isSample ||
-      localFields.createdAt !== serverFields.createdAt;
-    const localUpdated = localFields.updatedAt;
-    const serverUpdated = serverFields.updatedAt;
-    return majorDifferent && localUpdated && serverUpdated && localUpdated !== serverUpdated;
   }
 
   function emitStatus() {
@@ -131,15 +104,21 @@
   }
 
   function getSafeStatus() {
+    const context = getCloudContext();
     return {
       provider: BabyCloud.provider,
       enabled: BabyCloud.enabled,
       ready: BabyCloud.ready,
       mode: BabyCloud.mode,
       status: BabyCloud.status,
-      userId: BabyCloud.userId,
+      userId: BabyCloud.userId || context.currentUserId || null,
+      currentFamilyId: context.currentFamilyId || null,
+      currentBabyId: context.currentBabyId || null,
       lastCheckedAt: BabyCloud.lastCheckedAt,
       lastSavedAt: BabyCloud.lastSavedAt,
+      lastUpdatedAt: BabyCloud.lastUpdatedAt,
+      lastDeletedAt: BabyCloud.lastDeletedAt,
+      lastSetupAt: BabyCloud.lastSetupAt || context.lastSetupAt || null,
       lastError: BabyCloud.lastError
     };
   }
@@ -163,7 +142,7 @@
         ready: false,
         mode: "local",
         status: "not_configured",
-        lastError: { message: "Supabase 설정을 확인해 주세요.", name: "ConfigError", code: "not_configured" }
+        lastError: { message: "Supabase config is not set.", name: "ConfigError", code: "not_configured" }
       });
       return null;
     }
@@ -176,7 +155,7 @@
         ready: false,
         mode: "local",
         status: "error",
-        lastError: { message: "Supabase 클라이언트를 불러오지 못했습니다.", name: "SupabaseClientError", code: "client_missing" }
+        lastError: { message: "Supabase client is not loaded.", name: "SupabaseClientError", code: "client_missing" }
       });
       return null;
     }
@@ -223,7 +202,7 @@
       const signInResult = await client.auth.signInAnonymously();
       if (signInResult.error) throw signInResult.error;
       const user = signInResult.data && signInResult.data.user;
-      if (!user || !user.id) throw new Error("익명 사용자 ID를 확인하지 못했습니다.");
+      if (!user || !user.id) throw new Error("anonymous_auth_failed");
       setState({ enabled: true, userId: user.id, status: "anonymous_ready", lastError: null });
       return user;
     } catch (error) {
@@ -239,7 +218,7 @@
   }
 
   async function checkConnection() {
-    setState({ status: "checking", ready: false, lastCheckedAt: new Date().toISOString(), lastError: null });
+    setState({ status: "checking", ready: false, lastCheckedAt: nowIso(), lastError: null });
     const client = getClient();
     if (!client) return getSafeStatus();
 
@@ -252,38 +231,359 @@
       mode: "cloud_ready",
       status: "connected",
       userId: user.id,
-      lastCheckedAt: new Date().toISOString(),
+      lastCheckedAt: nowIso(),
       lastError: null
     });
     return getSafeStatus();
   }
 
-  function mapRecordToRow(record, userId) {
+  function readStoredAppData() {
+    try {
+      const raw = window.localStorage.getItem(APP_STORAGE_KEY);
+      return raw ? JSON.parse(raw) : null;
+    } catch (error) {
+      console.warn("BabyCloud app data read failed", error);
+      return null;
+    }
+  }
+
+  function writeStoredAppData(appData) {
+    try {
+      window.localStorage.setItem(APP_STORAGE_KEY, JSON.stringify(appData));
+      return true;
+    } catch (error) {
+      console.warn("BabyCloud app data write failed", error);
+      return false;
+    }
+  }
+
+  function getCloudContext() {
+    let context = {};
+    try {
+      const raw = window.localStorage.getItem(CLOUD_CONTEXT_KEY);
+      context = raw ? JSON.parse(raw) : {};
+    } catch (error) {
+      context = {};
+    }
+    const appData = readStoredAppData();
+    if (appData && isObject(appData.cloud)) {
+      context = Object.assign({}, context, appData.cloud);
+    }
+    return {
+      provider: "supabase",
+      currentFamilyId: context.currentFamilyId || null,
+      currentBabyId: context.currentBabyId || null,
+      currentUserId: context.currentUserId || BabyCloud.userId || null,
+      lastSetupAt: context.lastSetupAt || null,
+      lastSyncAt: context.lastSyncAt || null,
+      lastUpdateSyncAt: context.lastUpdateSyncAt || null,
+      lastDeleteSyncAt: context.lastDeleteSyncAt || null
+    };
+  }
+
+  function saveCloudContext(context) {
+    const source = context || {};
+    const current = getCloudContext();
+    const next = Object.assign({}, getCloudContext(), {
+      provider: "supabase",
+      currentFamilyId: source.currentFamilyId || source.familyId || current.currentFamilyId || null,
+      currentBabyId: source.currentBabyId || source.babyId || current.currentBabyId || null,
+      currentUserId: source.currentUserId || source.userId || BabyCloud.userId || current.currentUserId || null,
+      lastSetupAt: source.lastSetupAt || current.lastSetupAt || nowIso(),
+      lastSyncAt: source.lastSyncAt || current.lastSyncAt || null,
+      lastUpdateSyncAt: source.lastUpdateSyncAt || current.lastUpdateSyncAt || null,
+      lastDeleteSyncAt: source.lastDeleteSyncAt || current.lastDeleteSyncAt || null
+    });
+    try {
+      window.localStorage.setItem(CLOUD_CONTEXT_KEY, JSON.stringify(next));
+    } catch (error) {
+      console.warn("BabyCloud cloud context storage failed", error);
+    }
+    const appData = readStoredAppData();
+    if (appData && isObject(appData)) {
+      appData.cloud = next;
+      writeStoredAppData(appData);
+    }
+    setState({
+      userId: next.currentUserId,
+      lastSetupAt: next.lastSetupAt,
+      lastUpdatedAt: next.lastUpdateSyncAt || BabyCloud.lastUpdatedAt,
+      lastDeletedAt: next.lastDeleteSyncAt || BabyCloud.lastDeletedAt
+    });
+    return next;
+  }
+
+  function profileDefaults() {
+    const appData = readStoredAppData();
+    const profile = appData && isObject(appData.profile) ? appData.profile : {};
+    return {
+      babyName: String(profile.babyName || profile.name || "").trim() || "아기",
+      birthDate: /^\d{4}-\d{2}-\d{2}$/.test(String(profile.birthDate || "")) ? String(profile.birthDate) : null
+    };
+  }
+
+  async function ensureDefaultFamilyAndBaby() {
+    const client = getClient();
+    if (!client) return null;
+
+    try {
+      setState({ status: "checking", lastError: null });
+      const user = await ensureUser();
+      if (!user || !user.id) throw new Error("anonymous_auth_failed");
+
+      let context = getCloudContext();
+      if (context.currentFamilyId && context.currentBabyId) {
+        const babyCheck = await client
+          .from("babies")
+          .select("id,family_id")
+          .eq("id", context.currentBabyId)
+          .eq("family_id", context.currentFamilyId)
+          .maybeSingle();
+        if (!babyCheck.error && babyCheck.data) {
+          context = saveCloudContext(Object.assign({}, context, { currentUserId: user.id, lastSetupAt: nowIso() }));
+          setState({ ready: true, mode: "cloud_ready", status: "family_ready", userId: user.id, lastError: null });
+          return context;
+        }
+      }
+
+      const membershipResult = await client
+        .from("family_members")
+        .select("family_id,role,created_at")
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: true })
+        .limit(1)
+        .maybeSingle();
+      if (membershipResult.error) throw membershipResult.error;
+
+      let familyId = membershipResult.data && membershipResult.data.family_id;
+      if (!familyId) {
+        const familyResult = await client
+          .from("families")
+          .insert({ name: "우리 가족" })
+          .select("id")
+          .single();
+        if (familyResult.error) throw familyResult.error;
+        familyId = familyResult.data && familyResult.data.id;
+        if (!familyId) throw new Error("family_create_failed");
+
+        const memberResult = await client
+          .from("family_members")
+          .insert({ family_id: familyId, user_id: user.id, role: "owner" })
+          .select("id")
+          .single();
+        if (memberResult.error) throw memberResult.error;
+      }
+
+      const babyResult = await client
+        .from("babies")
+        .select("id,family_id")
+        .eq("family_id", familyId)
+        .order("created_at", { ascending: true })
+        .limit(1)
+        .maybeSingle();
+      if (babyResult.error) throw babyResult.error;
+
+      let babyId = babyResult.data && babyResult.data.id;
+      if (!babyId) {
+        const defaults = profileDefaults();
+        const createBabyResult = await client
+          .from("babies")
+          .insert({ family_id: familyId, name: defaults.babyName, birth_date: defaults.birthDate })
+          .select("id")
+          .single();
+        if (createBabyResult.error) throw createBabyResult.error;
+        babyId = createBabyResult.data && createBabyResult.data.id;
+      }
+
+      if (!familyId || !babyId) throw new Error("family_or_baby_missing");
+      context = saveCloudContext({
+        currentFamilyId: familyId,
+        currentBabyId: babyId,
+        currentUserId: user.id,
+        lastSetupAt: nowIso()
+      });
+      setState({
+        enabled: true,
+        ready: true,
+        mode: "cloud_ready",
+        status: "family_ready",
+        userId: user.id,
+        lastCheckedAt: nowIso(),
+        lastError: null
+      });
+      return context;
+    } catch (error) {
+      console.warn("BabyCloud family/baby setup failed", error);
+      setState({
+        ready: false,
+        mode: "local",
+        status: navigator.onLine === false ? "offline" : "error",
+        lastError: normalizeError(error)
+      });
+      return null;
+    }
+  }
+
+  function mapRecordType(type) {
+    const value = String(type || "");
+    const map = {
+      feeding: "feeding",
+      burp: "burp",
+      diaper: "diaper",
+      sleep: "sleep_start",
+      sleep_start: "sleep_start",
+      sleep_end: "sleep_end",
+      wake: "wake",
+      custom: "custom",
+      test: "test"
+    };
+    return map[value] || "custom";
+  }
+
+  function mapServerTypeToLocalType(type) {
+    const value = String(type || "");
+    if (value === "sleep_start") return "sleep";
+    return value || "custom";
+  }
+
+  function mapRecordSubtype(record) {
+    const type = mapRecordType(record && record.type);
+    const subtype = String((record && record.subtype) || "").trim();
+    if (type === "diaper") {
+      const diaperMap = {
+        pee: "pee",
+        poop: "poop",
+        pee_poop: "pee_poop",
+        wet: "pee",
+        dirty: "poop",
+        mixed: "pee_poop",
+        urine: "pee",
+        stool: "poop",
+        both: "pee_poop",
+        "소변": "pee",
+        "대변": "poop",
+        "소변+대변": "pee_poop"
+      };
+      return diaperMap[subtype] || null;
+    }
+    if (type === "feeding") {
+      const feedingMap = {
+        formula: "formula",
+        breast: "breast",
+        pumped: "pumped",
+        "분유": "formula",
+        "모유": "breast",
+        "유축": "pumped"
+      };
+      return feedingMap[subtype] || null;
+    }
+    if (type === "test" && subtype === "connection") return "connection";
+    return null;
+  }
+
+  function mapServerSubtypeToLocalSubtype(type, subtype) {
+    const serverType = String(type || "");
+    const value = String(subtype || "");
+    if (serverType === "diaper") {
+      if (value === "pee") return "urine";
+      if (value === "poop") return "stool";
+      if (value === "pee_poop") return "both";
+    }
+    return value;
+  }
+
+  function getRecordAmountMl(record) {
+    if (!record || mapRecordType(record.type) !== "feeding") return null;
+    if (record.amount === null || record.amount === undefined || record.amount === "") return null;
+    const amount = Math.round(Number(record.amount));
+    return Number.isFinite(amount) && amount >= 0 ? amount : null;
+  }
+
+  function mapLocalRecordToServerRow(record, context) {
     if (!record || typeof record !== "object") throw new Error("record is required");
     if (!record.id) throw new Error("record.id is required");
-    if (!record.type) throw new Error("record.type is required");
-    const createdAt = record.createdAt || new Date().toISOString();
-    const updatedAt = record.updatedAt || createdAt;
-    const hasAmount = record.amount !== null && record.amount !== undefined && record.amount !== "";
-    const amountNumber = hasAmount ? Number(record.amount) : null;
-
+    const ctx = context || getCloudContext();
+    const createdAt = isValidDate(record.createdAt) ? new Date(record.createdAt).toISOString() : nowIso();
+    const updatedAt = isValidDate(record.updatedAt) ? new Date(record.updatedAt).toISOString() : createdAt;
+    const amountMl = getRecordAmountMl(record);
+    const note = record.memo ? String(record.memo) : "";
+    const payload = Object.assign({}, record, {
+      updatedAt: updatedAt,
+      deletedAt: record.deletedAt || null
+    });
     return {
+      family_id: ctx.currentFamilyId || null,
+      baby_id: ctx.currentBabyId || null,
+      user_id: ctx.currentUserId || BabyCloud.userId || null,
+      client_id: String(record.id),
       record_id: String(record.id),
-      user_id: userId,
-      family_id: null,
-      baby_id: null,
-      type: String(record.type),
-      subtype: record.subtype ? String(record.subtype) : null,
-      amount: Number.isFinite(amountNumber) ? amountNumber : null,
-      memo: record.memo ? String(record.memo) : "",
+      type: mapRecordType(record.type),
+      subtype: mapRecordSubtype(record),
+      amount_ml: amountMl,
+      note: note,
+      recorded_at: createdAt,
+      deleted_at: record.deletedAt || null,
+      amount: amountMl,
+      memo: note,
       is_sample: Boolean(record.isSample),
-      app_version: (getConfig() && getConfig().appVersion) || "3.1",
+      app_version: (getConfig() && getConfig().appVersion) || "3.3",
       schema_version: Number((getConfig() && getConfig().schemaVersion) || 2),
-      payload: record,
+      payload: payload,
       record_created_at: createdAt,
-      record_updated_at: updatedAt,
-      deleted_at: null
+      record_updated_at: updatedAt
     };
+  }
+
+  function normalizeAmount(value) {
+    if (value === null || value === undefined || value === "") return null;
+    const numberValue = Number(value);
+    return Number.isFinite(numberValue) ? numberValue : null;
+  }
+
+  function normalizeServerRowToLocalRecord(row) {
+    if (!isObject(row)) return { ok: false, reason: "row_not_object", row: row };
+    const clientId = row.client_id || row.record_id;
+    if (!clientId) return { ok: false, reason: "missing_client_id", row: row };
+    const payload = isObject(row.payload) ? row.payload : {};
+    const createdAt = payload.createdAt || row.recorded_at || row.record_created_at || row.created_at;
+    const updatedAt = payload.updatedAt || row.record_updated_at || row.updated_at || row.recorded_at || row.created_at;
+    if (!isValidDate(createdAt) || !isValidDate(updatedAt)) return { ok: false, reason: "invalid_date", row: row };
+
+    const localType = payload.type || mapServerTypeToLocalType(row.type);
+    const record = {
+      id: String(clientId),
+      type: String(localType || "custom"),
+      subtype: payload.subtype || mapServerSubtypeToLocalSubtype(row.type, row.subtype) || "",
+      amount: normalizeAmount(payload.amount !== undefined ? payload.amount : (row.amount_ml !== undefined ? row.amount_ml : row.amount)),
+      memo: payload.memo !== undefined ? String(payload.memo || "") : String(row.note !== undefined ? row.note || "" : row.memo || ""),
+      isSample: Boolean(payload.isSample !== undefined ? payload.isSample : row.is_sample),
+      createdAt: new Date(createdAt).toISOString(),
+      updatedAt: new Date(updatedAt).toISOString(),
+      deletedAt: row.deleted_at || payload.deletedAt || null,
+      cloud: {
+        status: "synced",
+        syncedAt: row.updated_at || row.created_at || nowIso(),
+        error: "",
+        familyId: row.family_id || null,
+        babyId: row.baby_id || null
+      }
+    };
+    return { ok: true, record: record, row: row };
+  }
+
+  function updateStoredRecordCloud(recordId, cloudPatch) {
+    const appData = readStoredAppData();
+    if (!appData || !Array.isArray(appData.records)) return false;
+    let changed = false;
+    appData.records = appData.records.map(function (record) {
+      if (!record || String(record.id) !== String(recordId)) return record;
+      changed = true;
+      const currentCloud = isObject(record.cloud) ? record.cloud : {};
+      return Object.assign({}, record, {
+        cloud: Object.assign({}, currentCloud, cloudPatch || {})
+      });
+    });
+    return changed ? writeStoredAppData(appData) : false;
   }
 
   async function saveRecord(record) {
@@ -297,28 +597,55 @@
     try {
       const client = getClient();
       if (!client) return { ok: false, status: "local_only", recordId: recordId, error: "supabase_client_unavailable" };
-
-      const user = BabyCloud.userId ? { id: BabyCloud.userId } : await ensureUser();
-      if (!user || !user.id) {
-        return { ok: false, status: "error", recordId: recordId, error: "anonymous_auth_failed" };
+      const context = await ensureDefaultFamilyAndBaby();
+      if (!context || !context.currentFamilyId || !context.currentBabyId) {
+        return { ok: false, status: "error", recordId: recordId, error: "family_baby_setup_failed" };
       }
 
-      const row = mapRecordToRow(record, user.id);
-      const result = await client
+      const row = mapLocalRecordToServerRow(record, context);
+      const updateResult = await client
         .from("records")
-        .upsert(row, { onConflict: "user_id,record_id" })
-        .select("id,record_id,user_id,record_updated_at")
-        .single();
+        .update(row)
+        .eq("family_id", context.currentFamilyId)
+        .eq("client_id", String(record.id))
+        .select("id,client_id,updated_at")
+        .maybeSingle();
+      if (updateResult.error) throw updateResult.error;
 
-      if (result.error) throw result.error;
+      let savedRow = updateResult.data;
+      if (!savedRow) {
+        const insertResult = await client
+          .from("records")
+          .insert(row)
+          .select("id,client_id,updated_at")
+          .single();
+        if (insertResult.error) {
+          if (insertResult.error.code === "23505") {
+            const retryResult = await client
+              .from("records")
+              .update(row)
+              .eq("family_id", context.currentFamilyId)
+              .eq("client_id", String(record.id))
+              .select("id,client_id,updated_at")
+              .single();
+            if (retryResult.error) throw retryResult.error;
+            savedRow = retryResult.data;
+          } else {
+            throw insertResult.error;
+          }
+        } else {
+          savedRow = insertResult.data;
+        }
+      }
 
-      const syncedAt = new Date().toISOString();
+      const syncedAt = (savedRow && savedRow.updated_at) || nowIso();
+      const nextContext = saveCloudContext(Object.assign({}, context, { lastSyncAt: syncedAt }));
       setState({
         enabled: true,
         ready: true,
         mode: "cloud_ready",
         status: "synced",
-        userId: user.id,
+        userId: nextContext.currentUserId,
         lastSavedAt: syncedAt,
         lastError: null
       });
@@ -335,17 +662,105 @@
     }
   }
 
+  async function updateRecord(record) {
+    const recordId = record && record.id ? record.id : null;
+    try {
+      const client = getClient();
+      if (!client) return { ok: false, status: "local_only", recordId: recordId, error: "supabase_client_unavailable" };
+      const context = await ensureDefaultFamilyAndBaby();
+      if (!context || !context.currentFamilyId) return { ok: false, status: "error", recordId: recordId, error: "family_context_missing" };
+      const row = mapLocalRecordToServerRow(record, context);
+      const result = await client
+        .from("records")
+        .update(row)
+        .eq("family_id", context.currentFamilyId)
+        .eq("client_id", String(record.id))
+        .select("id,client_id,updated_at")
+        .maybeSingle();
+      if (result.error) throw result.error;
+      if (!result.data) return saveRecord(record);
+      const syncedAt = result.data.updated_at || nowIso();
+      saveCloudContext(Object.assign({}, context, { lastSyncAt: syncedAt, lastUpdateSyncAt: syncedAt }));
+      setState({ ready: true, mode: "cloud_ready", status: "synced", lastUpdatedAt: syncedAt, lastError: null });
+      return { ok: true, status: "synced", recordId: record.id, syncedAt: syncedAt };
+    } catch (error) {
+      console.warn("BabyCloud record update failed", error);
+      setState({ ready: false, mode: "local", status: navigator.onLine === false ? "offline" : "save_failed", lastError: normalizeError(error) });
+      return { ok: false, status: "error", recordId: recordId, error: errorMessage(error) };
+    }
+  }
+
+  async function softDeleteRecord(record) {
+    const recordId = record && record.id ? record.id : null;
+    try {
+      const client = getClient();
+      if (!client) return { ok: false, status: "local_only", recordId: recordId, error: "supabase_client_unavailable" };
+      const context = await ensureDefaultFamilyAndBaby();
+      if (!context || !context.currentFamilyId) return { ok: false, status: "error", recordId: recordId, error: "family_context_missing" };
+      const deletedAt = record.deletedAt || nowIso();
+      const row = mapLocalRecordToServerRow(Object.assign({}, record, { deletedAt: deletedAt }), context);
+      const result = await client
+        .from("records")
+        .update(row)
+        .eq("family_id", context.currentFamilyId)
+        .eq("client_id", String(record.id))
+        .select("id,client_id,updated_at,deleted_at")
+        .maybeSingle();
+      if (result.error) throw result.error;
+      if (!result.data) {
+        const saveResult = await saveRecord(Object.assign({}, record, { deletedAt: deletedAt }));
+        if (!saveResult.ok) return saveResult;
+      }
+      const syncedAt = (result.data && (result.data.updated_at || result.data.deleted_at)) || nowIso();
+      saveCloudContext(Object.assign({}, context, { lastSyncAt: syncedAt, lastDeleteSyncAt: syncedAt }));
+      setState({ ready: true, mode: "cloud_ready", status: "synced", lastDeletedAt: syncedAt, lastError: null });
+      return { ok: true, status: "synced", recordId: record.id, syncedAt: syncedAt, deletedAt: deletedAt };
+    } catch (error) {
+      console.warn("BabyCloud record soft delete failed", error);
+      setState({ ready: false, mode: "local", status: navigator.onLine === false ? "offline" : "save_failed", lastError: normalizeError(error) });
+      return { ok: false, status: "error", recordId: recordId, error: errorMessage(error) };
+    }
+  }
+
+  async function softDeleteRecords(records) {
+    const list = Array.isArray(records) ? records : [];
+    const results = [];
+    for (let i = 0; i < list.length; i += 1) {
+      results.push(await softDeleteRecord(list[i]));
+    }
+    const okCount = results.filter(function (result) { return result && result.ok; }).length;
+    return { ok: okCount === list.length, count: list.length, okCount: okCount, results: results };
+  }
+
+  async function retryPendingMutations(records) {
+    const list = Array.isArray(records) ? records : ((readStoredAppData() || {}).records || []);
+    const targets = list.filter(function (record) {
+      return record && record.cloud && (record.cloud.status === "pending" || record.cloud.status === "error");
+    });
+    const results = [];
+    for (let i = 0; i < targets.length; i += 1) {
+      const record = targets[i];
+      const result = record.deletedAt ? await softDeleteRecord(record) : await saveRecord(record);
+      results.push(result);
+      updateStoredRecordCloud(record.id, result && result.ok
+        ? { status: "synced", syncedAt: result.syncedAt || nowIso(), error: "" }
+        : { status: "error", syncedAt: null, error: (result && result.error) || "retry_failed" });
+    }
+    return { ok: results.every(function (result) { return result && result.ok; }), count: targets.length, results: results };
+  }
+
   async function testSaveRecord() {
-    const now = new Date().toISOString();
+    const now = nowIso();
     const record = {
       id: "test_record_" + Date.now(),
       type: "test",
       subtype: "connection",
       amount: null,
-      memo: "Phase 3.1 서버 테스트 저장",
+      memo: "Phase 3.3 server test",
       isSample: true,
       createdAt: now,
-      updatedAt: now
+      updatedAt: now,
+      deletedAt: null
     };
     const result = await saveRecord(record);
     if (result.ok) setState({ status: "test_saved", lastSavedAt: result.syncedAt, lastError: null });
@@ -357,19 +772,18 @@
     if (!client) return { ok: false, status: "local_only", count: 0, records: [], error: "supabase_client_unavailable" };
 
     try {
-      const user = BabyCloud.userId ? { id: BabyCloud.userId } : await ensureUser();
-      if (!user || !user.id) return { ok: false, status: "error", count: 0, records: [], error: "anonymous_auth_failed" };
-
+      const context = await ensureDefaultFamilyAndBaby();
+      if (!context || !context.currentFamilyId) return { ok: false, status: "error", count: 0, records: [], error: "family_context_missing" };
       const result = await client
         .from("records")
-        .select("record_id,type,subtype,memo,is_sample,record_created_at")
-        .eq("user_id", user.id)
+        .select("client_id,record_id,type,subtype,note,memo,is_sample,recorded_at,record_created_at,deleted_at")
+        .eq("family_id", context.currentFamilyId)
         .eq("type", "test")
-        .order("record_created_at", { ascending: false })
+        .order("recorded_at", { ascending: false })
         .limit(5);
 
       if (result.error) throw result.error;
-      setState({ ready: true, mode: "cloud_ready", status: "test_fetched", userId: user.id, lastError: null });
+      setState({ ready: true, mode: "cloud_ready", status: "test_fetched", userId: context.currentUserId, lastError: null });
       return { ok: true, status: "test_fetched", count: result.data.length, records: result.data };
     } catch (error) {
       console.warn("BabyCloud test fetch failed", error);
@@ -386,25 +800,27 @@
 
     try {
       setState({ status: "fetching", lastError: null });
-      const user = BabyCloud.userId ? { id: BabyCloud.userId } : await ensureUser();
-      if (!user || !user.id) {
-        return { ok: false, status: "error", count: 0, records: [], fetchedAt: null, error: "anonymous_auth_failed" };
+      const context = await ensureDefaultFamilyAndBaby();
+      if (!context || !context.currentFamilyId) {
+        return { ok: false, status: "error", count: 0, records: [], fetchedAt: null, error: "family_context_missing" };
       }
 
       const result = await client
         .from("records")
         .select("*")
-        .eq("user_id", user.id)
-        .is("deleted_at", null)
-        .order("record_created_at", { ascending: true });
+        .eq("family_id", context.currentFamilyId)
+        .order("recorded_at", { ascending: true });
 
       if (result.error) throw result.error;
 
-      const fetchedAt = new Date().toISOString();
+      const fetchedAt = nowIso();
       const rows = Array.isArray(result.data) ? result.data : [];
-      const summary = { fetchedAt: fetchedAt, serverCount: rows.length, status: "success" };
       try {
-        window.localStorage.setItem("babyAppLastServerFetch", JSON.stringify(summary));
+        window.localStorage.setItem("babyAppLastServerFetch", JSON.stringify({
+          fetchedAt: fetchedAt,
+          serverCount: rows.length,
+          status: "success"
+        }));
       } catch (storageError) {
         console.warn("BabyCloud fetch status storage failed", storageError);
       }
@@ -412,7 +828,7 @@
         ready: true,
         mode: "cloud_ready",
         status: "records_fetched",
-        userId: user.id,
+        userId: context.currentUserId,
         lastCheckedAt: fetchedAt,
         lastError: null
       });
@@ -427,7 +843,7 @@
       });
       try {
         window.localStorage.setItem("babyAppLastServerFetch", JSON.stringify({
-          fetchedAt: new Date().toISOString(),
+          fetchedAt: nowIso(),
           serverCount: 0,
           status: "failed",
           error: errorMessage(error)
@@ -439,40 +855,31 @@
     }
   }
 
-  function normalizeServerRecord(row) {
-    if (!isObject(row)) return { ok: false, reason: "row_not_object", row: row };
-    if (row.deleted_at) return { ok: false, reason: "deleted_server_record", row: row };
-    if (!row.record_id) return { ok: false, reason: "missing_record_id", row: row };
-
-    const payload = row.payload === null || row.payload === undefined ? {} : row.payload;
-    if (!isObject(payload)) return { ok: false, reason: "payload_not_object", row: row };
-
-    const type = payload.type || row.type;
-    const createdAt = payload.createdAt || row.record_created_at;
-    const updatedAt = payload.updatedAt || row.record_updated_at || row.record_created_at || createdAt;
-
-    if (!type) return { ok: false, reason: "missing_type", row: row };
-    if (!supportedType(String(type))) return { ok: false, reason: "unsupported_type", row: row };
-    if (!createdAt) return { ok: false, reason: "missing_created_at", row: row };
-    if (!isValidIsoLike(createdAt) || !isValidIsoLike(updatedAt)) return { ok: false, reason: "invalid_date", row: row };
-
-    const record = {
-      id: String(row.record_id),
-      type: String(type),
-      subtype: payload.subtype || row.subtype || "",
-      amount: normalizeAmount(payload.amount !== undefined ? payload.amount : row.amount),
-      memo: payload.memo || row.memo || "",
-      isSample: Boolean(payload.isSample !== undefined ? payload.isSample : row.is_sample),
-      createdAt: new Date(createdAt).toISOString(),
-      updatedAt: new Date(updatedAt).toISOString(),
-      cloud: {
-        status: "synced",
-        syncedAt: row.updated_at || row.created_at || new Date().toISOString(),
-        error: ""
-      }
+  function mainRecordFields(record) {
+    return {
+      type: record && record.type ? String(record.type) : "",
+      subtype: record && record.subtype ? String(record.subtype) : "",
+      amount: normalizeAmount(record && record.amount),
+      memo: record && record.memo ? String(record.memo) : "",
+      isSample: Boolean(record && record.isSample),
+      createdAt: record && record.createdAt ? String(record.createdAt) : "",
+      updatedAt: record && record.updatedAt ? String(record.updatedAt) : "",
+      deletedAt: record && record.deletedAt ? String(record.deletedAt) : ""
     };
+  }
 
-    return { ok: true, record: record, row: row };
+  function recordsConflict(localRecord, serverRecord) {
+    const localFields = mainRecordFields(localRecord);
+    const serverFields = mainRecordFields(serverRecord);
+    const majorDifferent =
+      localFields.type !== serverFields.type ||
+      localFields.subtype !== serverFields.subtype ||
+      localFields.amount !== serverFields.amount ||
+      localFields.memo !== serverFields.memo ||
+      localFields.isSample !== serverFields.isSample ||
+      localFields.createdAt !== serverFields.createdAt ||
+      localFields.deletedAt !== serverFields.deletedAt;
+    return majorDifferent && localFields.updatedAt && serverFields.updatedAt && localFields.updatedAt !== serverFields.updatedAt;
   }
 
   function buildMergePreview(localRecords, serverRows) {
@@ -492,20 +899,17 @@
     });
 
     rows.forEach(function (row) {
-      if (row && row.deleted_at) {
-        deletedServerRows.push(row);
-        return;
-      }
-      const normalized = normalizeServerRecord(row);
+      const normalized = normalizeServerRowToLocalRecord(row);
       if (!normalized.ok) {
         invalidServerRows.push(normalized);
         return;
       }
       const record = normalized.record;
+      if (record.deletedAt) deletedServerRows.push(row);
       serverValidById.set(record.id, record);
       const localRecord = localById.get(record.id);
       if (!localRecord) {
-        serverOnlyRecords.push(record);
+        if (!record.deletedAt) serverOnlyRecords.push(record);
         return;
       }
       bothRecords.push(record);
@@ -537,7 +941,7 @@
 
     try {
       window.localStorage.setItem("babyAppLastServerMergePreview", JSON.stringify({
-        createdAt: new Date().toISOString(),
+        createdAt: nowIso(),
         localCount: preview.localCount,
         serverCount: preview.serverCount,
         serverOnlyCount: preview.serverOnlyCount,
@@ -557,16 +961,16 @@
   function mergeServerRecordsIntoLocal(appData, serverRows, options) {
     const target = appData && typeof appData === "object" ? appData : null;
     const opts = options || {};
-    const mergedAt = new Date().toISOString();
+    const mergedAt = nowIso();
     if (!target || !Array.isArray(target.records)) {
       return { ok: false, addedCount: 0, skippedExistingCount: 0, conflictCount: 0, invalidCount: 0, mergedAt: mergedAt, error: "invalid_app_data" };
     }
 
     const preview = opts.preview || buildMergePreview(target.records, serverRows);
     const backup = {
-      reason: "before_server_merge_phase3_2",
+      reason: "before_server_merge_phase3_3",
       createdAt: mergedAt,
-      appVersion: "3.2",
+      appVersion: "3.3",
       appData: JSON.parse(JSON.stringify(target))
     };
 
@@ -590,7 +994,7 @@
     }));
     let addedCount = 0;
     preview.serverOnlyRecords.forEach(function (record) {
-      if (!record || !record.id || existingIds.has(String(record.id))) return;
+      if (!record || !record.id || record.deletedAt || existingIds.has(String(record.id))) return;
       target.records.push(record);
       existingIds.add(String(record.id));
       addedCount += 1;
@@ -605,6 +1009,7 @@
       skippedExistingCount: preview.bothCount || 0,
       conflictCount: preview.conflictCount || 0,
       invalidCount: preview.invalidServerCount || 0,
+      deletedServerCount: preview.deletedServerCount || 0,
       mergedAt: mergedAt
     };
     try {
