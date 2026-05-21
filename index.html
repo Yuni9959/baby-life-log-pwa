@@ -744,7 +744,7 @@
   <main class="app">
     <header class="topbar">
       <div>
-        <div class="version-badge" id="versionBadge">v3.5 · 가족/아기 구조</div>
+        <div class="version-badge" id="versionBadge">v3.6 · 서버 연결 검증</div>
         <h1 id="babyTitle">우리 아기</h1>
         <div class="baby-days" id="babyDays">생년월일을 입력해 주세요</div>
         <div class="today-line" id="todayLine"></div>
@@ -970,6 +970,18 @@
             <p class="sync-offline-note" id="syncOfflineNote">현재 오프라인이에요. 기록은 이 기기에 저장되고, 나중에 다시 동기화할 수 있어요.</p>
           </div>
           <div class="data-grid" id="cloudStatusGrid"></div>
+          <div class="data-subsection" aria-labelledby="fullConnectionDiagnosticTitle">
+            <h3 id="fullConnectionDiagnosticTitle">Supabase 실제 연결 진단</h3>
+            <p class="cloud-message">버튼 동작만으로는 서버 연결을 확정할 수 없어요. Auth와 DB에 실제 데이터가 생성되는지 확인합니다.</p>
+            <div class="data-grid" id="fullConnectionDiagnosticGrid"></div>
+            <div class="data-tool-actions">
+              <button type="button" class="small-action" id="runFullConnectionDiagnosticButton">전체 서버 연결 진단 실행</button>
+              <button type="button" class="small-action" id="refreshFullConnectionDiagnosticButton">진단 결과 새로고침</button>
+              <button type="button" class="small-action" id="copyFullConnectionDiagnosticButton">진단 결과 복사</button>
+              <button type="button" class="small-action" id="runRecordConnectionDiagnosticButton">테스트 record 생성 확인</button>
+            </div>
+            <p class="cloud-message" id="fullConnectionDiagnosticMessage">아직 전체 서버 연결 진단을 실행하지 않았어요.</p>
+          </div>
           <div class="data-subsection" aria-labelledby="familyBabyStructureTitle">
             <h3 id="familyBabyStructureTitle">가족/아기 서버 구조</h3>
             <p class="cloud-message">가족/아기 구조는 Phase 4 로그인 기능으로 넘어가기 위한 준비 단계예요. 현재는 익명 사용자 기준으로 안전하게 연결해 둡니다.</p>
@@ -1152,8 +1164,8 @@
       const PRE_REPAIR_BACKUP_KEY = "baby_life_log_app_backup_before_repair";
       const BACKUP_FORMAT_VERSION = 2;
       const APP_NAME = "baby-life-log";
-      const APP_VERSION = "3.5";
-      const APP_PHASE_LABEL = "가족/아기 구조";
+      const APP_VERSION = "3.6";
+      const APP_PHASE_LABEL = "서버 연결 검증";
       const TYPES = ["feeding", "burp", "diaper", "sleep", "wake"];
       const LONG_PRESS_MS = 700;
       const MAX_FEED_AMOUNT = 500;
@@ -1238,6 +1250,12 @@
         cloudStatusMessage: document.getElementById("cloudStatusMessage"),
         syncOfflineNote: document.getElementById("syncOfflineNote"),
         cloudStatusGrid: document.getElementById("cloudStatusGrid"),
+        fullConnectionDiagnosticGrid: document.getElementById("fullConnectionDiagnosticGrid"),
+        fullConnectionDiagnosticMessage: document.getElementById("fullConnectionDiagnosticMessage"),
+        runFullConnectionDiagnosticButton: document.getElementById("runFullConnectionDiagnosticButton"),
+        refreshFullConnectionDiagnosticButton: document.getElementById("refreshFullConnectionDiagnosticButton"),
+        copyFullConnectionDiagnosticButton: document.getElementById("copyFullConnectionDiagnosticButton"),
+        runRecordConnectionDiagnosticButton: document.getElementById("runRecordConnectionDiagnosticButton"),
         familyBabyStructureGrid: document.getElementById("familyBabyStructureGrid"),
         familyBabyStructureMessage: document.getElementById("familyBabyStructureMessage"),
         cloudCheckButton: document.getElementById("cloudCheckButton"),
@@ -3275,6 +3293,72 @@
         }).join("");
       }
 
+      function yesNo(value) {
+        return value ? "성공" : "확인 필요";
+      }
+
+      function getFullConnectionDiagnostic() {
+        if (window.BabyCloud && typeof window.BabyCloud.getLastDiagnosticResult === "function") {
+          return window.BabyCloud.getLastDiagnosticResult();
+        }
+        try {
+          const raw = localStorage.getItem("babyAppLastFullConnectionDiagnostic");
+          return raw ? JSON.parse(raw) : null;
+        } catch (error) {
+          return null;
+        }
+      }
+
+      function renderFullConnectionDiagnosticStatus(result) {
+        const diagnostic = result || getFullConnectionDiagnostic();
+        const checks = diagnostic && diagnostic.checks ? diagnostic.checks : {};
+        const errors = diagnostic && Array.isArray(diagnostic.errors) ? diagnostic.errors : [];
+        const lastError = errors.length ? errors[errors.length - 1] : null;
+        const configVersion = diagnostic && diagnostic.configAppVersion
+          ? diagnostic.configAppVersion
+          : ((window.BABY_APP_CLOUD_CONFIG && window.BABY_APP_CLOUD_CONFIG.appVersion) || "-");
+        const babyCloudVersion = diagnostic && diagnostic.babyCloudAppVersion ? diagnostic.babyCloudAppVersion : "3.6";
+        const versionMismatch = configVersion !== "-" && (String(configVersion) !== APP_VERSION || String(babyCloudVersion) !== APP_VERSION);
+
+        if (els.fullConnectionDiagnosticGrid) {
+          els.fullConnectionDiagnosticGrid.innerHTML = dataItemsHtml([
+            { label: "앱 표시 버전", value: "v" + APP_VERSION },
+            { label: "cloud-config 버전", value: configVersion },
+            { label: "BabyCloud 버전", value: babyCloudVersion },
+            { label: "cloud-config 로드", value: yesNo(checks.configExists) },
+            { label: "enabled 상태", value: checks.enabled ? "true" : "false 또는 확인 필요" },
+            { label: "Supabase 라이브러리 로드", value: yesNo(checks.supabaseLibraryLoaded) },
+            { label: "Supabase client 생성", value: yesNo(checks.clientCreated) },
+            { label: "네트워크 상태", value: checks.online === false ? "오프라인" : "온라인" },
+            { label: "익명 userId", value: checks.userId ? "생성됨" : "확인 필요" },
+            { label: "cloud_diagnostics insert/select", value: checks.diagnosticsInsert && checks.diagnosticsSelect ? "성공" : "확인 필요" },
+            { label: "family 준비", value: yesNo(checks.familyReady) },
+            { label: "family_members 연결", value: yesNo(checks.familyMemberReady) },
+            { label: "baby 준비", value: yesNo(checks.babyReady) },
+            { label: "records insert", value: yesNo(checks.recordsInsert) },
+            { label: "records select", value: yesNo(checks.recordsSelect) },
+            { label: "records update", value: yesNo(checks.recordsUpdate) },
+            { label: "records soft delete", value: yesNo(checks.recordsSoftDelete) },
+            { label: "마지막 진단 시각", value: formatCloudCheckedAt(diagnostic && diagnostic.checkedAt) },
+            { label: "마지막 오류", value: lastError ? (lastError.userMessage || lastError.message || "-") : "-" }
+          ]);
+        }
+
+        if (els.fullConnectionDiagnosticMessage) {
+          if (!diagnostic) {
+            els.fullConnectionDiagnosticMessage.textContent = "아직 전체 서버 연결 진단을 실행하지 않았어요.";
+          } else if (versionMismatch) {
+            els.fullConnectionDiagnosticMessage.textContent = "앱 파일 버전이 서로 달라요. PWA 캐시가 남아 있을 수 있어요.";
+          } else if (diagnostic.ok) {
+            els.fullConnectionDiagnosticMessage.textContent = "서버 연결이 실제로 확인됐어요. Supabase Table Editor에서도 row를 확인해 보세요.";
+          } else if (lastError) {
+            els.fullConnectionDiagnosticMessage.textContent = lastError.userMessage || lastError.message || "서버 연결 진단 중 실패 단계가 있어요.";
+          } else {
+            els.fullConnectionDiagnosticMessage.textContent = "서버 연결 진단 중 확인이 필요한 단계가 있어요.";
+          }
+        }
+      }
+
       function renderDataManagementStatus() {
         const diagnostics = diagnoseAppData(appData);
         if (els.diagnosticsSummary) {
@@ -3306,6 +3390,7 @@
         renderStorageStatus();
         renderPhase3Readiness(diagnostics);
         renderCloudStatus();
+        renderFullConnectionDiagnosticStatus();
       }
 
       function formatBytes(bytes) {
@@ -3944,6 +4029,78 @@
       els.repairDataButton.addEventListener("click", repairAppData);
       els.createSampleButton.addEventListener("click", createSampleData);
       els.deleteSampleButton.addEventListener("click", deleteSampleData);
+      if (els.runFullConnectionDiagnosticButton) {
+        els.runFullConnectionDiagnosticButton.addEventListener("click", function () {
+          if (!window.BabyCloud || typeof window.BabyCloud.runFullConnectionDiagnostic !== "function") {
+            renderFullConnectionDiagnosticStatus();
+            showToast("전체 서버 연결 진단을 실행할 수 없어요.");
+            return;
+          }
+          els.runFullConnectionDiagnosticButton.disabled = true;
+          if (els.fullConnectionDiagnosticMessage) els.fullConnectionDiagnosticMessage.textContent = "전체 서버 연결 진단을 실행하는 중입니다.";
+          window.BabyCloud.runFullConnectionDiagnostic().then(function (result) {
+            renderFullConnectionDiagnosticStatus(result);
+            renderCloudStatus();
+            if (result && result.ok) {
+              showToast("서버 연결이 실제 DB row 기준으로 확인됐어요.");
+            } else {
+              showToast("서버 연결 진단에서 확인이 필요한 단계가 있어요.");
+            }
+          }).catch(function (error) {
+            console.warn("Full connection diagnostic failed", error);
+            renderFullConnectionDiagnosticStatus();
+            if (els.fullConnectionDiagnosticMessage) els.fullConnectionDiagnosticMessage.textContent = "서버 연결 진단 실행 중 문제가 있었어요. 기록은 이 기기에 계속 저장됩니다.";
+            showToast("서버 연결 진단을 완료하지 못했어요.");
+          }).finally(function () {
+            els.runFullConnectionDiagnosticButton.disabled = false;
+          });
+        });
+      }
+      if (els.refreshFullConnectionDiagnosticButton) {
+        els.refreshFullConnectionDiagnosticButton.addEventListener("click", function () {
+          renderFullConnectionDiagnosticStatus();
+          showToast("진단 결과를 새로고침했어요.");
+        });
+      }
+      if (els.copyFullConnectionDiagnosticButton) {
+        els.copyFullConnectionDiagnosticButton.addEventListener("click", function () {
+          const text = window.BabyCloud && typeof window.BabyCloud.renderDiagnosticResult === "function"
+            ? window.BabyCloud.renderDiagnosticResult()
+            : JSON.stringify(getFullConnectionDiagnostic() || {}, null, 2);
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(text).then(function () {
+              showToast("진단 결과를 복사했어요.");
+            }).catch(function () {
+              showToast("진단 결과 복사에 실패했어요.");
+            });
+          } else {
+            window.prompt("진단 결과", text);
+          }
+        });
+      }
+      if (els.runRecordConnectionDiagnosticButton) {
+        els.runRecordConnectionDiagnosticButton.addEventListener("click", function () {
+          if (!window.BabyCloud || typeof window.BabyCloud.testRecordInsertSelectUpdateDelete !== "function") {
+            showToast("테스트 record 진단을 실행할 수 없어요.");
+            return;
+          }
+          if (els.fullConnectionDiagnosticMessage) els.fullConnectionDiagnosticMessage.textContent = "records insert/select/update/soft delete 테스트를 실행하는 중입니다.";
+          window.BabyCloud.testRecordInsertSelectUpdateDelete().then(function (result) {
+            renderFullConnectionDiagnosticStatus();
+            if (result && result.ok) {
+              if (els.fullConnectionDiagnosticMessage) els.fullConnectionDiagnosticMessage.textContent = "테스트 record 생성, 조회, 수정, soft delete가 완료됐어요. Supabase records 테이블을 확인해 주세요.";
+              showToast("테스트 record 진단이 완료됐어요.");
+            } else {
+              if (els.fullConnectionDiagnosticMessage) els.fullConnectionDiagnosticMessage.textContent = (result && result.error) || "테스트 record 진단에 실패했어요.";
+              showToast("테스트 record 진단에 실패했어요.");
+            }
+          }).catch(function (error) {
+            console.warn("Record diagnostic failed", error);
+            if (els.fullConnectionDiagnosticMessage) els.fullConnectionDiagnosticMessage.textContent = "테스트 record 진단에 실패했어요. 기록은 이 기기에 계속 저장됩니다.";
+            showToast("테스트 record 진단에 실패했어요.");
+          });
+        });
+      }
       if (els.cloudCheckButton) {
         els.cloudCheckButton.addEventListener("click", function () {
           if (!window.BabyCloud || typeof window.BabyCloud.diagnoseConnection !== "function") {

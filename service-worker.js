@@ -1,6 +1,6 @@
-const CACHE_NAME = "baby-life-log-v3.5";
+const CACHE_NAME = "baby-life-log-v3.6";
 const CACHE_PREFIX = "baby-life-log-";
-const LEGACY_CACHE_NAME = "baby-life-log-v3.5-legacy";
+const LEGACY_CACHE_NAME = "baby-life-log-v3.6-legacy";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -8,6 +8,8 @@ const APP_SHELL = [
   "./service-worker.js",
   "./cloud-config.js",
   "./cloud-supabase.js",
+  "./supabase_phase3_6_connection_diagnostics.sql",
+  "./PHASE3_6_SUPABASE_CONNECTION_CHECKLIST.md",
   "./supabase_phase3_5_family_baby_hardening.sql",
   "./supabase_phase3_3_family_baby_sync.sql",
   "./supabase_phase3_1_records.sql",

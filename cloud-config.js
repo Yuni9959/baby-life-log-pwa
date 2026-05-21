@@ -1,4 +1,4 @@
-// 아기 생활 기록 앱 - Phase 3.5 Supabase 설정
+// 아기 생활 기록 앱 - Phase 3.6 Supabase 설정
 // 이 파일에는 service_role key, secret key, DB password를 절대 넣지 않는다.
 // Publishable Key는 브라우저에서 사용할 수 있지만, 반드시 RLS와 함께 사용해야 한다.
 
@@ -15,6 +15,7 @@ window.BABY_APP_CLOUD_CONFIG = {
   // service_role key 또는 secret key가 아니다.
   supabaseAnonKey: "sb_publishable_o1NUthUHmVjaH4f-j186ng_AbspdQwa",
 
-  appVersion: "3.5",
-  schemaVersion: 2
+  appVersion: "3.6",
+  schemaVersion: 2,
+  debug: true
 };

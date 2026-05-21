@@ -1,4 +1,4 @@
-// Baby life log - Phase 3.5 Supabase sync helpers.
+// Baby life log - Phase 3.6 Supabase sync helpers.
 // Client-safe only: never put service_role keys, DB passwords, or direct DB URLs here.
 
 (function () {
@@ -9,8 +9,10 @@
   const DEVICE_ID_KEY = "babyAppDeviceId";
   const APP_STORAGE_KEY = "baby_life_log_app_v2";
   const LAST_SYNC_DIAGNOSIS_KEY = "babyAppLastSyncDiagnosis";
+  const LAST_FULL_CONNECTION_DIAGNOSTIC_KEY = "babyAppLastFullConnectionDiagnostic";
   const LAST_SYNC_SUMMARY_KEY = "babyAppLastSyncSummary";
   const LAST_RETRY_RESULT_KEY = "babyAppLastRetryResult";
+  const BABY_CLOUD_APP_VERSION = "3.6";
   const PLACEHOLDER_URL = "https://YOUR_PROJECT_REF.supabase.co";
   const PLACEHOLDER_KEY = "YOUR_SUPABASE_PUBLISHABLE_OR_ANON_KEY";
   const CLOUD_STATUSES = [
@@ -72,6 +74,13 @@
     getSyncSummary: getSyncSummary,
     updateRecordCloudStatus: updateRecordCloudStatus,
     diagnoseConnection: diagnoseConnection,
+    runFullConnectionDiagnostic: runFullConnectionDiagnostic,
+    testAuthConnection: testAuthConnection,
+    testDiagnosticsInsertSelect: testDiagnosticsInsertSelect,
+    testFamilyBabyInsertSelect: testFamilyBabyInsertSelect,
+    testRecordInsertSelectUpdateDelete: testRecordInsertSelectUpdateDelete,
+    getLastDiagnosticResult: getLastDiagnosticResult,
+    renderDiagnosticResult: renderDiagnosticResult,
     retryPendingRecords: retryPendingRecords,
     retryRecordSync: retryRecordSync,
     getHumanStatusMessage: getHumanStatusMessage
@@ -195,6 +204,34 @@
 
   function errorMessage(error) {
     return (error && error.message) || String(error || "server_sync_failed");
+  }
+
+  function classifyCloudError(error) {
+    const message = errorMessage(error);
+    const code = error && (error.code || error.status || error.name);
+    const lower = String(message || "").toLowerCase();
+    let kind = "unknown";
+    let userMessage = message;
+
+    if (code === "42501" || lower.indexOf("row-level security") !== -1 || lower.indexOf("permission denied") !== -1 || lower.indexOf("policy") !== -1) {
+      kind = "rls";
+      userMessage = "DB 보안 정책 때문에 요청이 거부된 것 같아요. RLS 정책을 확인해 주세요.";
+    } else if (lower.indexOf("relation") !== -1 && lower.indexOf("does not exist") !== -1) {
+      kind = "missing_table";
+      userMessage = "필요한 테이블을 찾지 못했어요. SQL Editor에서 Phase 3.3~3.6 SQL을 실행했는지 확인해 주세요.";
+    } else if (lower.indexOf("failed to fetch") !== -1 || lower.indexOf("network") !== -1 || lower.indexOf("load failed") !== -1) {
+      kind = "network";
+      userMessage = "네트워크 또는 Supabase CDN 연결을 확인해 주세요.";
+    } else if (lower.indexOf("anonymous") !== -1 || lower.indexOf("signup") !== -1 || lower.indexOf("auth") !== -1) {
+      kind = "auth";
+      userMessage = "익명 사용자 연결에 실패했어요. Supabase Dashboard에서 Anonymous sign-ins가 켜져 있는지 확인해 주세요.";
+    }
+
+    return { kind: kind, code: code || null, message: message, userMessage: userMessage };
+  }
+
+  function getConfigAppVersion() {
+    return (getConfig() && getConfig().appVersion) || BABY_CLOUD_APP_VERSION;
   }
 
   function nowIso() {
@@ -923,7 +960,7 @@
       amount: amountMl,
       memo: note,
       is_sample: Boolean(record.isSample),
-      app_version: (getConfig() && getConfig().appVersion) || "3.5",
+      app_version: getConfigAppVersion(),
       schema_version: Number((getConfig() && getConfig().schemaVersion) || 2),
       payload: payload
     };
@@ -987,6 +1024,7 @@
 
   async function saveRecord(record) {
     const recordId = record && record.id ? record.id : null;
+    if (getConfig() && getConfig().debug) console.log("[BabyCloud] saveRecord start", recordId, record && record.type);
     const config = getConfig();
     if (!config || !config.enabled) {
       setState({ enabled: false, ready: false, mode: "local", status: "local_mode", lastError: null });
@@ -1050,8 +1088,10 @@
         lastSavedAt: syncedAt,
         lastError: null
       });
+      if (getConfig() && getConfig().debug) console.log("[BabyCloud] saveRecord success", { recordId: record.id, syncedAt: syncedAt });
       return { ok: true, status: "synced", recordId: record.id, syncedAt: syncedAt };
     } catch (error) {
+      if (getConfig() && getConfig().debug) console.warn("[BabyCloud] saveRecord failed", error);
       console.warn("BabyCloud record save failed", error);
       setState({
         ready: false,
@@ -1065,6 +1105,7 @@
 
   async function updateRecord(record) {
     const recordId = record && record.id ? record.id : null;
+    if (getConfig() && getConfig().debug) console.log("[BabyCloud] updateRecord start", recordId, record && record.type);
     try {
       const client = getClient();
       if (!client) return { ok: false, status: "local_only", recordId: recordId, error: "supabase_client_unavailable" };
@@ -1084,8 +1125,10 @@
       const syncedAt = result.data.updated_at || nowIso();
       saveCloudContext(Object.assign({}, context, { lastSyncAt: syncedAt, lastUpdateSyncAt: syncedAt }));
       setState({ ready: true, mode: "cloud_ready", status: "synced", lastUpdatedAt: syncedAt, lastError: null });
+      if (getConfig() && getConfig().debug) console.log("[BabyCloud] updateRecord success", { recordId: record.id, syncedAt: syncedAt });
       return { ok: true, status: "synced", recordId: record.id, syncedAt: syncedAt };
     } catch (error) {
+      if (getConfig() && getConfig().debug) console.warn("[BabyCloud] updateRecord failed", error);
       console.warn("BabyCloud record update failed", error);
       setState({ ready: false, mode: "local", status: navigator.onLine === false ? "offline" : "save_failed", lastError: normalizeError(error) });
       return { ok: false, status: "error", recordId: recordId, error: errorMessage(error) };
@@ -1094,6 +1137,7 @@
 
   async function softDeleteRecord(record) {
     const recordId = record && record.id ? record.id : null;
+    if (getConfig() && getConfig().debug) console.log("[BabyCloud] softDeleteRecord start", recordId, record && record.type);
     try {
       const client = getClient();
       if (!client) return { ok: false, status: "local_only", recordId: recordId, error: "supabase_client_unavailable" };
@@ -1117,8 +1161,10 @@
       const syncedAt = (result.data && (result.data.updated_at || result.data.deleted_at)) || nowIso();
       saveCloudContext(Object.assign({}, context, { lastSyncAt: syncedAt, lastDeleteSyncAt: syncedAt }));
       setState({ ready: true, mode: "cloud_ready", status: "synced", lastDeletedAt: syncedAt, lastError: null });
+      if (getConfig() && getConfig().debug) console.log("[BabyCloud] softDeleteRecord success", { recordId: record.id, syncedAt: syncedAt, deletedAt: deletedAt });
       return { ok: true, status: "synced", recordId: record.id, syncedAt: syncedAt, deletedAt: deletedAt };
     } catch (error) {
+      if (getConfig() && getConfig().debug) console.warn("[BabyCloud] softDeleteRecord failed", error);
       console.warn("BabyCloud record soft delete failed", error);
       setState({ ready: false, mode: "local", status: navigator.onLine === false ? "offline" : "save_failed", lastError: normalizeError(error) });
       return { ok: false, status: "error", recordId: recordId, error: errorMessage(error) };
@@ -1226,6 +1272,339 @@
       console.warn("BabyCloud retry result storage failed", error);
     }
     return summary;
+  }
+
+  function createFullDiagnosticSkeleton() {
+    return {
+      ok: false,
+      checkedAt: nowIso(),
+      appVersion: BABY_CLOUD_APP_VERSION,
+      configAppVersion: getConfigAppVersion(),
+      babyCloudAppVersion: BABY_CLOUD_APP_VERSION,
+      checks: {
+        configExists: false,
+        enabled: false,
+        supabaseLibraryLoaded: false,
+        clientCreated: false,
+        online: typeof navigator === "undefined" ? true : navigator.onLine !== false,
+        authSession: false,
+        userId: false,
+        diagnosticsInsert: false,
+        diagnosticsSelect: false,
+        familyReady: false,
+        babyReady: false,
+        familyMemberReady: false,
+        recordsInsert: false,
+        recordsSelect: false,
+        recordsUpdate: false,
+        recordsSoftDelete: false
+      },
+      ids: {},
+      errors: []
+    };
+  }
+
+  function addDiagnosticError(result, step, error) {
+    const classified = classifyCloudError(error);
+    result.errors.push({
+      step: step,
+      kind: classified.kind,
+      code: classified.code,
+      message: classified.message,
+      userMessage: classified.userMessage
+    });
+  }
+
+  function failDiagnosticStep(result, step, message) {
+    addDiagnosticError(result, step, new Error(message));
+    const error = new Error(message);
+    error.__babyCloudDiagnosticRecorded = true;
+    throw error;
+  }
+
+  function storeFullDiagnostic(result) {
+    try {
+      window.localStorage.setItem(LAST_FULL_CONNECTION_DIAGNOSTIC_KEY, JSON.stringify(result));
+    } catch (error) {
+      console.warn("BabyCloud full diagnostic storage failed", error);
+    }
+    return result;
+  }
+
+  function getLastDiagnosticResult() {
+    try {
+      const raw = window.localStorage.getItem(LAST_FULL_CONNECTION_DIAGNOSTIC_KEY);
+      return raw ? JSON.parse(raw) : null;
+    } catch (error) {
+      return null;
+    }
+  }
+
+  function renderDiagnosticResult(result) {
+    const source = result || getLastDiagnosticResult();
+    if (!source) return "아직 전체 서버 연결 진단을 실행하지 않았어요.";
+    const labels = {
+      configExists: "cloud-config 로드",
+      enabled: "enabled 상태",
+      supabaseLibraryLoaded: "Supabase 라이브러리 로드",
+      clientCreated: "Supabase client 생성",
+      online: "네트워크 상태",
+      authSession: "익명 Auth session",
+      userId: "익명 userId",
+      diagnosticsInsert: "cloud_diagnostics insert",
+      diagnosticsSelect: "cloud_diagnostics select",
+      familyReady: "family 준비",
+      familyMemberReady: "family_members 연결",
+      babyReady: "baby 준비",
+      recordsInsert: "records insert",
+      recordsSelect: "records select",
+      recordsUpdate: "records update",
+      recordsSoftDelete: "records soft delete"
+    };
+    const lines = ["Supabase 실제 연결 진단"];
+    Object.keys(labels).forEach(function (key) {
+      lines.push((source.checks && source.checks[key] ? "OK " : "FAIL ") + labels[key]);
+    });
+    lines.push("마지막 진단 시각: " + (source.checkedAt || "-"));
+    if (source.errors && source.errors.length) {
+      lines.push("마지막 오류: " + (source.errors[source.errors.length - 1].userMessage || source.errors[source.errors.length - 1].message));
+    } else if (source.ok) {
+      lines.push("서버 연결이 실제로 확인됐어요. Supabase Table Editor에서도 row를 확인해 보세요.");
+    }
+    return lines.join("\n");
+  }
+
+  async function testAuthConnection() {
+    const client = getClient();
+    if (!client) return { ok: false, userId: null, error: "supabase_client_unavailable" };
+    try {
+      const sessionResult = await client.auth.getSession();
+      if (sessionResult.error) throw sessionResult.error;
+      let user = sessionResult.data && sessionResult.data.session && sessionResult.data.session.user;
+      if (!user || !user.id) {
+        const signInResult = await client.auth.signInAnonymously();
+        if (signInResult.error) throw signInResult.error;
+        user = signInResult.data && signInResult.data.user;
+      }
+      if (!user || !user.id) throw new Error("anonymous_auth_failed");
+      setState({ enabled: true, userId: user.id, status: "anonymous_ready", lastError: null });
+      saveCloudContext(Object.assign({}, getCloudContext(), { currentUserId: user.id, deviceId: getOrCreateDeviceId() }));
+      return { ok: true, userId: user.id, user: user };
+    } catch (error) {
+      const classified = classifyCloudError(error);
+      setState({ ready: false, mode: "local", status: navigator.onLine === false ? "offline" : "error", lastError: normalizeError(error) });
+      return { ok: false, userId: null, error: classified.userMessage, rawError: errorMessage(error), kind: classified.kind };
+    }
+  }
+
+  async function testDiagnosticsInsertSelect() {
+    const client = getClient();
+    if (!client) return { ok: false, error: "supabase_client_unavailable" };
+    try {
+      const auth = await testAuthConnection();
+      if (!auth.ok || !auth.userId) throw new Error(auth.error || "anonymous_auth_failed");
+      const deviceId = getOrCreateDeviceId();
+      const row = {
+        user_id: auth.userId,
+        device_id: deviceId,
+        check_type: "phase3_6_manual",
+        status: "ok",
+        message: "Phase 3.6 diagnostic insert/select test",
+        app_version: BABY_CLOUD_APP_VERSION,
+        client_created_at: nowIso()
+      };
+      const insertResult = await client
+        .from("cloud_diagnostics")
+        .insert(row)
+        .select("id,user_id,device_id,status,app_version,created_at")
+        .single();
+      if (insertResult.error) throw insertResult.error;
+      const inserted = insertResult.data;
+      if (!inserted || !inserted.id) throw new Error("diagnostics_insert_missing_row");
+      const selectResult = await client
+        .from("cloud_diagnostics")
+        .select("id,user_id,device_id,status,app_version,created_at")
+        .eq("id", inserted.id)
+        .maybeSingle();
+      if (selectResult.error) throw selectResult.error;
+      if (!selectResult.data || selectResult.data.user_id !== auth.userId) throw new Error("diagnostics_select_user_mismatch");
+      return { ok: true, diagnosticId: inserted.id, userId: auth.userId, deviceId: deviceId, row: selectResult.data };
+    } catch (error) {
+      const classified = classifyCloudError(error);
+      return { ok: false, error: classified.userMessage, rawError: errorMessage(error), kind: classified.kind };
+    }
+  }
+
+  async function testFamilyBabyInsertSelect() {
+    const client = getClient();
+    if (!client) return { ok: false, error: "supabase_client_unavailable" };
+    try {
+      const context = await ensureDefaultFamilyAndBaby();
+      if (!context || !context.currentUserId || !context.currentFamilyId || !context.currentBabyId) {
+        throw new Error("family_baby_context_missing");
+      }
+      const familyResult = await client.from("families").select("id,name,created_at").eq("id", context.currentFamilyId).maybeSingle();
+      if (familyResult.error) throw familyResult.error;
+      if (!familyResult.data) throw new Error("family_select_missing");
+      const memberResult = await client
+        .from("family_members")
+        .select("id,family_id,user_id,role")
+        .eq("family_id", context.currentFamilyId)
+        .eq("user_id", context.currentUserId)
+        .maybeSingle();
+      if (memberResult.error) throw memberResult.error;
+      if (!memberResult.data) throw new Error("family_member_select_missing");
+      const babyResult = await client.from("babies").select("id,family_id,name,birth_date,gender").eq("id", context.currentBabyId).maybeSingle();
+      if (babyResult.error) throw babyResult.error;
+      if (!babyResult.data) throw new Error("baby_select_missing");
+      return {
+        ok: true,
+        userId: context.currentUserId,
+        familyId: context.currentFamilyId,
+        babyId: context.currentBabyId,
+        family: familyResult.data,
+        member: memberResult.data,
+        baby: babyResult.data
+      };
+    } catch (error) {
+      const classified = classifyCloudError(error);
+      return { ok: false, error: classified.userMessage, rawError: errorMessage(error), kind: classified.kind };
+    }
+  }
+
+  async function testRecordInsertSelectUpdateDelete() {
+    const client = getClient();
+    if (!client) return { ok: false, error: "supabase_client_unavailable" };
+    try {
+      const context = await ensureDefaultFamilyAndBaby();
+      if (!context || !context.currentUserId || !context.currentFamilyId || !context.currentBabyId) {
+        throw new Error("family_baby_context_missing");
+      }
+      const now = nowIso();
+      const testRecord = {
+        id: "diagnostic_record_" + Date.now(),
+        type: "test",
+        subtype: "connection",
+        amount: null,
+        memo: "Phase 3.6 records insert/select/update/soft-delete test",
+        isSample: true,
+        createdAt: now,
+        updatedAt: now
+      };
+      const row = mapLocalRecordToServerRow(testRecord, context);
+      const insertResult = await client
+        .from("records")
+        .insert(row)
+        .select("id,client_id,note,deleted_at,updated_at")
+        .single();
+      if (insertResult.error) throw insertResult.error;
+      if (!insertResult.data || !insertResult.data.id) throw new Error("records_insert_missing_row");
+
+      const selectResult = await client
+        .from("records")
+        .select("id,client_id,note,deleted_at,updated_at")
+        .eq("client_id", testRecord.id)
+        .maybeSingle();
+      if (selectResult.error) throw selectResult.error;
+      if (!selectResult.data) throw new Error("records_select_missing_row");
+
+      const updateNote = "Phase 3.6 update test completed";
+      const updateResult = await client
+        .from("records")
+        .update({
+          note: updateNote,
+          memo: updateNote,
+          updated_at: nowIso(),
+          payload: Object.assign({}, testRecord, { memo: updateNote, updatedAt: nowIso() })
+        })
+        .eq("client_id", testRecord.id)
+        .select("id,client_id,note,updated_at")
+        .maybeSingle();
+      if (updateResult.error) throw updateResult.error;
+      if (!updateResult.data || updateResult.data.note !== updateNote) throw new Error("records_update_not_applied");
+
+      const deletedAt = nowIso();
+      const deleteResult = await client
+        .from("records")
+        .update({ deleted_at: deletedAt, updated_at: deletedAt })
+        .eq("client_id", testRecord.id)
+        .select("id,client_id,deleted_at,updated_at")
+        .maybeSingle();
+      if (deleteResult.error) throw deleteResult.error;
+      if (!deleteResult.data || !deleteResult.data.deleted_at) throw new Error("records_soft_delete_not_applied");
+
+      return {
+        ok: true,
+        testRecordId: testRecord.id,
+        serverRecordId: insertResult.data.id,
+        inserted: insertResult.data,
+        selected: selectResult.data,
+        updated: updateResult.data,
+        deleted: deleteResult.data
+      };
+    } catch (error) {
+      const classified = classifyCloudError(error);
+      return { ok: false, error: classified.userMessage, rawError: errorMessage(error), kind: classified.kind };
+    }
+  }
+
+  async function runFullConnectionDiagnostic() {
+    const result = createFullDiagnosticSkeleton();
+    const config = getConfig();
+    result.checks.configExists = !!(config && config.provider === "supabase");
+    result.checks.enabled = !!(config && config.enabled);
+    result.checks.supabaseLibraryLoaded = !!getSupabaseFactory();
+    result.checks.online = typeof navigator === "undefined" ? true : navigator.onLine !== false;
+    result.configAppVersion = config && config.appVersion ? config.appVersion : null;
+
+    try {
+      if (!result.checks.configExists) failDiagnosticStep(result, "configExists", "cloud-config.js를 찾지 못했어요.");
+      if (!result.checks.enabled) failDiagnosticStep(result, "enabled", "서버 저장이 비활성화되어 있어요. cloud-config.js의 enabled 값을 확인해 주세요.");
+      if (!result.checks.supabaseLibraryLoaded) failDiagnosticStep(result, "supabaseLibraryLoaded", "Supabase 라이브러리가 로드되지 않았어요. CDN 로드 또는 네트워크 상태를 확인해 주세요.");
+      const client = getClient();
+      result.checks.clientCreated = !!client;
+      if (!client) failDiagnosticStep(result, "clientCreated", "Supabase client is not available");
+
+      const auth = await testAuthConnection();
+      result.checks.authSession = !!(auth && auth.ok);
+      result.checks.userId = !!(auth && auth.userId);
+      if (!auth.ok) failDiagnosticStep(result, "authSession", auth.error || "anonymous_auth_failed");
+      result.ids.userId = auth.userId;
+
+      const diagnostics = await testDiagnosticsInsertSelect();
+      result.checks.diagnosticsInsert = !!(diagnostics && diagnostics.ok && diagnostics.diagnosticId);
+      result.checks.diagnosticsSelect = !!(diagnostics && diagnostics.ok);
+      if (!diagnostics.ok) failDiagnosticStep(result, "diagnosticsInsert", diagnostics.error || "diagnostics_insert_select_failed");
+      result.ids.diagnosticId = diagnostics.diagnosticId;
+
+      const familyBaby = await testFamilyBabyInsertSelect();
+      result.checks.familyReady = !!(familyBaby && familyBaby.ok && familyBaby.familyId);
+      result.checks.babyReady = !!(familyBaby && familyBaby.ok && familyBaby.babyId);
+      result.checks.familyMemberReady = !!(familyBaby && familyBaby.ok && familyBaby.member);
+      if (!familyBaby.ok) failDiagnosticStep(result, "familyReady", familyBaby.error || "family_baby_insert_select_failed");
+      result.ids.familyId = familyBaby.familyId;
+      result.ids.babyId = familyBaby.babyId;
+
+      const recordTest = await testRecordInsertSelectUpdateDelete();
+      result.checks.recordsInsert = !!(recordTest && recordTest.ok && recordTest.inserted);
+      result.checks.recordsSelect = !!(recordTest && recordTest.ok && recordTest.selected);
+      result.checks.recordsUpdate = !!(recordTest && recordTest.ok && recordTest.updated);
+      result.checks.recordsSoftDelete = !!(recordTest && recordTest.ok && recordTest.deleted);
+      if (!recordTest.ok) failDiagnosticStep(result, "recordsInsert", recordTest.error || "records_crud_test_failed");
+      result.ids.testRecordId = recordTest.testRecordId;
+      result.ids.serverRecordId = recordTest.serverRecordId;
+
+      result.ok = Object.keys(result.checks).every(function (key) { return !!result.checks[key]; });
+      setState({ ready: result.ok, mode: result.ok ? "cloud_ready" : "local", status: result.ok ? "connected" : "error", lastCheckedAt: result.checkedAt, lastError: null });
+    } catch (error) {
+      if (!error || !error.__babyCloudDiagnosticRecorded) {
+        addDiagnosticError(result, "runFullConnectionDiagnostic", error);
+      }
+      result.ok = false;
+      setState({ ready: false, mode: "local", status: result.checks.online ? "error" : "offline", lastCheckedAt: result.checkedAt, lastError: normalizeError(error) });
+    }
+
+    return storeFullDiagnostic(result);
   }
 
   async function diagnoseConnection() {
@@ -1350,7 +1729,7 @@
       type: "test",
       subtype: "connection",
       amount: null,
-      memo: "Phase 3.5 server test",
+      memo: "Phase 3.6 server test",
       isSample: true,
       createdAt: now,
       updatedAt: now,
@@ -1566,7 +1945,7 @@
     const backup = {
       reason: "before_server_merge_phase3_5",
       createdAt: mergedAt,
-      appVersion: "3.5",
+      appVersion: BABY_CLOUD_APP_VERSION,
       appData: JSON.parse(JSON.stringify(target))
     };
 
