@@ -489,6 +489,48 @@
     .data-tools { display: grid; gap: 10px; }
     .data-note { margin: 0; color: var(--muted); font-size: 0.86rem; }
     .data-tool-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+    .data-subsection {
+      display: grid;
+      gap: 8px;
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--panel);
+    }
+    .data-subsection h3 {
+      margin: 0;
+      font-size: 0.96rem;
+    }
+    .data-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 6px;
+    }
+    .data-item {
+      min-width: 0;
+      padding: 8px;
+      border-radius: 8px;
+      background: #fff;
+      border: 1px solid rgba(80, 74, 66, 0.08);
+      font-size: 0.82rem;
+    }
+    .data-item strong { display: block; margin-bottom: 2px; color: var(--muted); font-size: 0.74rem; }
+    .health-badge {
+      display: inline-flex;
+      width: fit-content;
+      align-items: center;
+      min-height: 26px;
+      padding: 0 9px;
+      border-radius: 999px;
+      color: #fff;
+      background: var(--brand);
+      font-size: 0.78rem;
+      font-weight: 900;
+    }
+    .health-badge.need-check { background: #b9862f; }
+    .health-badge.warning { background: #c86838; }
+    .health-badge.repair { background: var(--danger); }
+    .data-message { margin: 0; color: var(--muted); font-size: 0.84rem; line-height: 1.45; }
 
     .collapsible-head {
       width: 100%;
@@ -874,6 +916,31 @@
           <button type="button" class="small-action" id="csvDataButton">CSV 내보내기</button>
         </div>
         <input class="hidden" id="jsonImportInput" type="file" accept=".json,application/json">
+        <div class="data-subsection" aria-labelledby="diagnosticsTitle">
+          <h3 id="diagnosticsTitle">데이터 진단</h3>
+          <p class="data-message" id="diagnosticsSummary">현재 데이터를 확인하는 중입니다.</p>
+          <div class="data-grid" id="diagnosticsGrid"></div>
+          <div class="data-tool-actions">
+            <button type="button" class="small-action" id="repairDataButton">데이터 보정 실행</button>
+          </div>
+        </div>
+        <div class="data-subsection" aria-labelledby="storageStatusTitle">
+          <h3 id="storageStatusTitle">저장소 상태</h3>
+          <div class="data-grid" id="storageStatusGrid"></div>
+        </div>
+        <div class="data-subsection" aria-labelledby="phase3Title">
+          <h3 id="phase3Title">Phase 3 준비 상태</h3>
+          <p class="data-message" id="phase3Summary">서버 저장 준비 상태를 확인하는 중입니다.</p>
+          <div class="data-grid" id="phase3Grid"></div>
+        </div>
+        <div class="data-subsection" aria-labelledby="sampleToolsTitle">
+          <h3 id="sampleToolsTitle">테스트 도구</h3>
+          <p class="data-message">샘플 기록은 <strong>isSample: true</strong>로만 추가되며, 삭제 버튼은 샘플 기록만 삭제합니다.</p>
+          <div class="data-tool-actions">
+            <button type="button" class="small-action" id="createSampleButton">샘플 데이터 생성</button>
+            <button type="button" class="danger-action" id="deleteSampleButton">샘플 데이터만 삭제</button>
+          </div>
+        </div>
       </div>
     </section>
   </main>
@@ -1013,10 +1080,11 @@
       const LEGACY_STORAGE_KEY = "baby_life_records_v1";
       const LEGACY_BACKUP_KEY = "baby_life_log_app_legacy_backup_before_v2";
       const PRE_RESTORE_BACKUP_KEY = "baby_life_log_app_backup_before_restore";
+      const PRE_REPAIR_BACKUP_KEY = "baby_life_log_app_backup_before_repair";
       const BACKUP_FORMAT_VERSION = 2;
       const APP_NAME = "baby-life-log";
-      const APP_VERSION = "2.8";
-      const APP_PHASE_LABEL = "UI 정리";
+      const APP_VERSION = "2.9";
+      const APP_PHASE_LABEL = "안정화";
       const TYPES = ["feeding", "burp", "diaper", "sleep", "wake"];
       const LONG_PRESS_MS = 700;
       const MAX_FEED_AMOUNT = 500;
@@ -1093,6 +1161,14 @@
         jsonImportButton: document.getElementById("jsonImportButton"),
         jsonImportInput: document.getElementById("jsonImportInput"),
         csvDataButton: document.getElementById("csvDataButton"),
+        diagnosticsSummary: document.getElementById("diagnosticsSummary"),
+        diagnosticsGrid: document.getElementById("diagnosticsGrid"),
+        storageStatusGrid: document.getElementById("storageStatusGrid"),
+        phase3Summary: document.getElementById("phase3Summary"),
+        phase3Grid: document.getElementById("phase3Grid"),
+        repairDataButton: document.getElementById("repairDataButton"),
+        createSampleButton: document.getElementById("createSampleButton"),
+        deleteSampleButton: document.getElementById("deleteSampleButton"),
         toast: document.getElementById("toast"),
         undoBar: document.getElementById("undoBar"),
         undoMessage: document.getElementById("undoMessage"),
@@ -1140,6 +1216,22 @@
         return { babyName: "", birthDate: "", gender: "", createdAt: now, updatedAt: now };
       }
 
+      function defaultNotifications() {
+        return {
+          enabled: false,
+          feedingReminderEnabled: false,
+          feedingReminderMinutes: 180,
+          diaperReminderEnabled: false,
+          diaperReminderMinutes: 180,
+          sleepRoutineEnabled: false,
+          sleepRoutineStartTime: "21:00",
+          sleepRoutineMessage: "수면 루틴을 시작할 시간이에요.",
+          quietHoursEnabled: false,
+          quietHoursStart: "22:00",
+          quietHoursEnd: "07:00"
+        };
+      }
+
       function defaultSettings() {
         return {
           defaultFeedingAmount: 100,
@@ -1152,6 +1244,7 @@
           lastDiaperType: "",
           analysisRangeDays: 7,
           defaultAnalysisTab: "summary",
+          notifications: defaultNotifications(),
           ui: {
             lifeReportExpandedByDefault: false,
             analysisExpandedByDefault: false
@@ -1206,6 +1299,8 @@
         const defaultAmount = normalizeAmount(source.defaultFeedingAmount) || base.defaultFeedingAmount;
         const lastAmount = normalizeAmount(source.lastFeedingAmount);
         const sourceUi = source.ui && typeof source.ui === "object" ? source.ui : {};
+        const sourceNotifications = source.notifications && typeof source.notifications === "object" ? source.notifications : {};
+        const baseNotifications = base.notifications;
         return {
           defaultFeedingAmount: defaultAmount,
           quickFeedingAmounts: quick,
@@ -1217,6 +1312,19 @@
           lastDiaperType: normalizeDiaperSubtype(source.lastDiaperType) || "",
           analysisRangeDays: [3, 7, 14].includes(Number(source.analysisRangeDays)) ? Number(source.analysisRangeDays) : base.analysisRangeDays,
           defaultAnalysisTab: ["summary", "feeding", "sleep", "diaper"].includes(source.defaultAnalysisTab) ? source.defaultAnalysisTab : base.defaultAnalysisTab,
+          notifications: Object.assign({}, baseNotifications, {
+            enabled: sourceNotifications.enabled === true,
+            feedingReminderEnabled: sourceNotifications.feedingReminderEnabled === true,
+            feedingReminderMinutes: Math.max(30, Math.min(720, Math.round(Number(sourceNotifications.feedingReminderMinutes) || baseNotifications.feedingReminderMinutes))),
+            diaperReminderEnabled: sourceNotifications.diaperReminderEnabled === true,
+            diaperReminderMinutes: Math.max(30, Math.min(720, Math.round(Number(sourceNotifications.diaperReminderMinutes) || baseNotifications.diaperReminderMinutes))),
+            sleepRoutineEnabled: sourceNotifications.sleepRoutineEnabled === true,
+            sleepRoutineStartTime: /^\d{2}:\d{2}$/.test(String(sourceNotifications.sleepRoutineStartTime || "")) ? String(sourceNotifications.sleepRoutineStartTime) : baseNotifications.sleepRoutineStartTime,
+            sleepRoutineMessage: String(sourceNotifications.sleepRoutineMessage || baseNotifications.sleepRoutineMessage).slice(0, 80),
+            quietHoursEnabled: sourceNotifications.quietHoursEnabled === true,
+            quietHoursStart: /^\d{2}:\d{2}$/.test(String(sourceNotifications.quietHoursStart || "")) ? String(sourceNotifications.quietHoursStart) : baseNotifications.quietHoursStart,
+            quietHoursEnd: /^\d{2}:\d{2}$/.test(String(sourceNotifications.quietHoursEnd || "")) ? String(sourceNotifications.quietHoursEnd) : baseNotifications.quietHoursEnd
+          }),
           ui: {
             lifeReportExpandedByDefault: sourceUi.lifeReportExpandedByDefault === true,
             analysisExpandedByDefault: sourceUi.analysisExpandedByDefault === true
@@ -1240,6 +1348,7 @@
           subtype: subtype,
           amount: amount && amount > 0 ? amount : null,
           memo: String(record.memo !== undefined ? record.memo : (record.note || "")).slice(0, 100),
+          isSample: record.isSample === true,
           createdAt: createdAt,
           updatedAt: safeIso(record.updatedAt || record.createdAt || record.timestamp || createdAt)
         };
@@ -1289,11 +1398,11 @@
 
       // ─── 저장/불러오기 ────────────────────────────────────────
       function loadAppData() {
-        const v2Raw = localStorage.getItem(STORAGE_KEY);
-        const legacyRaw = localStorage.getItem(LEGACY_STORAGE_KEY);
-        const raw = v2Raw || legacyRaw;
-        if (!raw) return createDefaultAppData();
         try {
+          const v2Raw = localStorage.getItem(STORAGE_KEY);
+          const legacyRaw = localStorage.getItem(LEGACY_STORAGE_KEY);
+          const raw = v2Raw || legacyRaw;
+          if (!raw) return createDefaultAppData();
           const parsed = JSON.parse(raw);
           const data = parsed && parsed.schemaVersion === 2 ? normalizeV2Data(parsed) : migrateToV2(parsed);
           if (!v2Raw && legacyRaw) {
@@ -1303,7 +1412,15 @@
           return data;
         } catch (error) {
           console.error("Failed to load app data", error);
-          if (raw) localStorage.setItem(LEGACY_BACKUP_KEY, raw);
+          try {
+            const raw = localStorage.getItem(STORAGE_KEY) || localStorage.getItem(LEGACY_STORAGE_KEY);
+            if (raw) localStorage.setItem(LEGACY_BACKUP_KEY, raw);
+          } catch (backupError) {
+            console.error("Failed to create load-error backup", backupError);
+          }
+          setTimeout(function () {
+            showToast("데이터를 불러오는 중 문제가 있었어요. 기존 백업이 있다면 복원할 수 있어요.");
+          }, 0);
           return createDefaultAppData();
         }
       }
@@ -2267,6 +2384,7 @@
         renderStats();
         renderAnalysisDashboard();
         renderLogs();
+        renderDataManagementStatus();
         renderQuickFeedAmounts();
         TYPES.forEach(setLastRecord);
         updateSelectedFeedAmount();
@@ -2463,7 +2581,7 @@
 
       function buildLocalStorageSnapshot() {
         const snapshot = {};
-        [STORAGE_KEY, LEGACY_STORAGE_KEY].forEach(function (key) {
+        [STORAGE_KEY, LEGACY_STORAGE_KEY, LEGACY_BACKUP_KEY, PRE_RESTORE_BACKUP_KEY, PRE_REPAIR_BACKUP_KEY].forEach(function (key) {
           const value = localStorage.getItem(key);
           if (value !== null) snapshot[key] = value;
         });
@@ -2471,12 +2589,12 @@
       }
 
       function exportJsonBackup() {
-        downloadBlob(JSON.stringify(buildBackupPayload(), null, 2), "application/json;charset=utf-8", "baby-life-log-backup_" + backupFileTimestamp(new Date()) + ".json");
+        downloadBlob(JSON.stringify(buildBackupPayload(), null, 2), "application/json;charset=utf-8", "baby-life-log-v" + APP_VERSION + "-backup-" + backupFileTimestamp(new Date()) + ".json");
         showToast("JSON 백업 파일을 만들었습니다.");
       }
 
       function backupFileTimestamp(date) {
-        return date.getFullYear() + pad(date.getMonth() + 1) + pad(date.getDate()) + "_" + pad(date.getHours()) + pad(date.getMinutes());
+        return date.getFullYear() + pad(date.getMonth() + 1) + pad(date.getDate()) + "-" + pad(date.getHours()) + pad(date.getMinutes());
       }
 
       function downloadBlob(content, type, fileName) {
@@ -2574,8 +2692,10 @@
         const birthDate = (data.profile && data.profile.birthDate) || "없음";
         const version = data.schemaVersion || 1;
         const hasSettings = !!(data.settings);
+        const hasNotifications = !!(data.settings && data.settings.notifications);
+        const sampleCount = records.filter(isSampleRecord).length;
         const dupCount = countDuplicates(records);
-        return { count: count, firstDate: firstDate, lastDate: lastDate, babyName: babyName, birthDate: birthDate, version: version, hasSettings: hasSettings, dupCount: dupCount };
+        return { count: count, firstDate: firstDate, lastDate: lastDate, babyName: babyName, birthDate: birthDate, version: version, hasSettings: hasSettings, hasNotifications: hasNotifications, sampleCount: sampleCount, dupCount: dupCount };
       }
 
       function showRestorePreview(data) {
@@ -2591,6 +2711,8 @@
           '<div class="restore-info-item"><span class="restore-info-label">기간: </span>' + escapeHtml(info.firstDate) + ' ~ ' + escapeHtml(info.lastDate) + '</div>',
           '<div class="restore-info-item"><span class="restore-info-label">데이터 버전: </span>' + info.version + '</div>',
           '<div class="restore-info-item"><span class="restore-info-label">설정 포함: </span>' + (info.hasSettings ? '예' : '아니오') + '</div>',
+          '<div class="restore-info-item"><span class="restore-info-label">알림 설정 포함: </span>' + (info.hasNotifications ? '예' : '아니오') + '</div>',
+          '<div class="restore-info-item"><span class="restore-info-label">샘플 데이터: </span>' + (info.sampleCount ? info.sampleCount + '개 포함' : '없음') + '</div>',
           dupNote
         ].join("");
         openSheet("restorePreview");
@@ -2615,6 +2737,7 @@
             showToast("백업 파일로 복원했습니다.");
           }
         } catch (error) {
+          console.error("Restore failed", error);
           showToast("복원에 실패했습니다. 기존 데이터는 유지됩니다.");
         }
       }
@@ -2634,15 +2757,327 @@
             }
             showRestorePreview(validation.data);
           } catch (error) {
+            console.error("Backup parse failed", error);
             showToast("올바른 백업 파일이 아닙니다.");
           }
         };
-        reader.onerror = function () { showToast("파일을 읽지 못했습니다."); };
+        reader.onerror = function (error) {
+          console.error("Backup file read failed", error);
+          showToast("파일을 읽지 못했습니다. 다시 선택해 주세요.");
+        };
         reader.readAsText(file, "utf-8");
       }
 
       function createPreRestoreSafetyBackup() {
         localStorage.setItem(PRE_RESTORE_BACKUP_KEY, JSON.stringify(buildBackupPayload()));
+      }
+
+      // ─── 데이터 진단 / 보정 / 샘플 데이터 ─────────────────────
+      function isSampleRecord(record) {
+        return !!(record && record.isSample === true);
+      }
+
+      function detectDuplicateRecords(records) {
+        const idSeen = new Set();
+        const contentSeen = new Set();
+        const looseSeen = new Set();
+        let count = 0;
+        (records || []).forEach(function (record) {
+          if (!record || typeof record !== "object") {
+            count += 1;
+            return;
+          }
+          const id = record.id ? String(record.id) : "";
+          const content = recordContentKey(record);
+          const loose = [record.type || "", record.createdAt || "", record.subtype || "", record.amount || ""].join("|");
+          if ((id && idSeen.has(id)) || contentSeen.has(content) || looseSeen.has(loose)) count += 1;
+          if (id) idSeen.add(id);
+          contentSeen.add(content);
+          looseSeen.add(loose);
+        });
+        return count;
+      }
+
+      function getDataHealthLevel(diagnostics) {
+        if (diagnostics.parseFailed || diagnostics.recordsNotArray || diagnostics.profileBroken || diagnostics.settingsBroken) {
+          return "복구 권장";
+        }
+        if (diagnostics.missingCreatedAtCount > 0 || diagnostics.missingTypeCount > 0 || diagnostics.invalidRecordCount > 0 || diagnostics.missingIdCount > 5 || diagnostics.duplicateSuspectCount > 5) {
+          return "주의";
+        }
+        if (diagnostics.schemaVersion !== 2 || diagnostics.missingUpdatedAtCount > 0 || !diagnostics.hasNotifications || !diagnostics.hasUiSettings || !diagnostics.hasProfile || !diagnostics.hasSettings) {
+          return "점검 필요";
+        }
+        return "양호";
+      }
+
+      function checkPhase3Readiness(diagnostics) {
+        const ok = diagnostics.schemaVersion === 2 &&
+          diagnostics.recordsIsArray &&
+          diagnostics.missingIdCount === 0 &&
+          diagnostics.missingCreatedAtCount === 0 &&
+          diagnostics.missingUpdatedAtCount === 0 &&
+          diagnostics.missingTypeCount === 0 &&
+          diagnostics.invalidTypeCount === 0 &&
+          diagnostics.hasProfile &&
+          diagnostics.hasSettings;
+        return {
+          ready: ok,
+          items: [
+            { label: "서버 저장 준비", value: ok ? "가능" : "점검 필요" },
+            { label: "records ID", value: diagnostics.missingIdCount === 0 ? "정상" : diagnostics.missingIdCount + "개 누락" },
+            { label: "createdAt/updatedAt", value: diagnostics.missingCreatedAtCount === 0 && diagnostics.missingUpdatedAtCount === 0 ? "정상" : "누락 있음" },
+            { label: "type 유효성", value: diagnostics.missingTypeCount === 0 && diagnostics.invalidTypeCount === 0 ? "정상" : "점검 필요" },
+            { label: "profile/settings 분리", value: diagnostics.hasProfile && diagnostics.hasSettings ? "정상" : "점검 필요" },
+            { label: "샘플 구분", value: diagnostics.sampleRecordCount ? "샘플 " + diagnostics.sampleRecordCount + "개 구분됨" : "샘플 없음" },
+            { label: "백업 JSON 구조", value: diagnostics.recordsIsArray ? "마이그레이션 원본 사용 가능" : "점검 필요" }
+          ]
+        };
+      }
+
+      function diagnoseAppData(data) {
+        const target = data || appData || {};
+        const records = Array.isArray(target.records) ? target.records : [];
+        const sorted = records.filter(function (record) {
+          return record && record.createdAt && !Number.isNaN(new Date(record.createdAt).getTime());
+        }).slice().sort(function (a, b) { return new Date(a.createdAt) - new Date(b.createdAt); });
+        const diagnostics = {
+          schemaVersion: target.schemaVersion,
+          recordsIsArray: Array.isArray(target.records),
+          recordsNotArray: !Array.isArray(target.records),
+          totalRecords: records.length,
+          firstRecordDate: sorted.length ? localDateKey(new Date(sorted[0].createdAt)) : "없음",
+          lastRecordDate: sorted.length ? localDateKey(new Date(sorted[sorted.length - 1].createdAt)) : "없음",
+          feedingCount: records.filter(function (record) { return record && record.type === "feeding"; }).length,
+          diaperCount: records.filter(function (record) { return record && record.type === "diaper"; }).length,
+          sleepRelatedCount: records.filter(function (record) { return record && (record.type === "sleep" || record.type === "wake"); }).length,
+          memoCount: records.filter(function (record) { return record && String(record.memo || "").trim(); }).length,
+          missingIdCount: records.filter(function (record) { return !record || !record.id; }).length,
+          missingCreatedAtCount: records.filter(function (record) { return !record || !record.createdAt; }).length,
+          missingUpdatedAtCount: records.filter(function (record) { return !record || !record.updatedAt; }).length,
+          missingTypeCount: records.filter(function (record) { return !record || !record.type; }).length,
+          invalidTypeCount: records.filter(function (record) { return record && record.type && !TYPES.includes(record.type); }).length,
+          invalidRecordCount: records.filter(function (record) { return !record || typeof record !== "object"; }).length,
+          duplicateSuspectCount: detectDuplicateRecords(records),
+          hasProfile: !!(target.profile && typeof target.profile === "object"),
+          hasSettings: !!(target.settings && typeof target.settings === "object"),
+          hasNotifications: !!(target.settings && target.settings.notifications && typeof target.settings.notifications === "object"),
+          hasUiSettings: !!(target.settings && target.settings.ui && typeof target.settings.ui === "object"),
+          sampleRecordCount: records.filter(isSampleRecord).length,
+          localStorageAvailable: getLocalStorageStatus().available
+        };
+        diagnostics.healthLevel = getDataHealthLevel(diagnostics);
+        diagnostics.phase3 = checkPhase3Readiness(diagnostics);
+        diagnostics.phase3Ready = diagnostics.phase3.ready;
+        diagnostics.backupRecommended = diagnostics.healthLevel !== "양호" || diagnostics.totalRecords > 0;
+        return diagnostics;
+      }
+
+      function healthClass(level) {
+        if (level === "점검 필요") return "need-check";
+        if (level === "주의") return "warning";
+        if (level === "복구 권장") return "repair";
+        return "";
+      }
+
+      function dataItemsHtml(items) {
+        return items.map(function (item) {
+          return '<div class="data-item"><strong>' + escapeHtml(item.label) + '</strong>' + escapeHtml(item.value) + '</div>';
+        }).join("");
+      }
+
+      function renderDataManagementStatus() {
+        const diagnostics = diagnoseAppData(appData);
+        if (els.diagnosticsSummary) {
+          const readyText = diagnostics.phase3Ready ? "서버 저장으로 넘어갈 준비가 되어 있어요." : "서버 저장 전 데이터 보정을 먼저 권장합니다.";
+          els.diagnosticsSummary.innerHTML = '<span class="health-badge ' + healthClass(diagnostics.healthLevel) + '">' + escapeHtml(diagnostics.healthLevel) + '</span> ' + escapeHtml(readyText);
+        }
+        if (els.diagnosticsGrid) {
+          els.diagnosticsGrid.innerHTML = dataItemsHtml([
+            { label: "데이터 버전", value: "schemaVersion " + (diagnostics.schemaVersion || "없음") },
+            { label: "전체 기록", value: diagnostics.totalRecords + "개" },
+            { label: "기록 기간", value: diagnostics.firstRecordDate + " ~ " + diagnostics.lastRecordDate },
+            { label: "수유", value: diagnostics.feedingCount + "개" },
+            { label: "기저귀", value: diagnostics.diaperCount + "개" },
+            { label: "수면 관련", value: diagnostics.sleepRelatedCount + "개" },
+            { label: "메모 포함", value: diagnostics.memoCount + "개" },
+            { label: "id 누락", value: diagnostics.missingIdCount + "개" },
+            { label: "createdAt 누락", value: diagnostics.missingCreatedAtCount + "개" },
+            { label: "updatedAt 누락", value: diagnostics.missingUpdatedAtCount + "개" },
+            { label: "type 누락", value: diagnostics.missingTypeCount + "개" },
+            { label: "중복 의심", value: diagnostics.duplicateSuspectCount + "개" },
+            { label: "profile", value: diagnostics.hasProfile ? "있음" : "없음" },
+            { label: "settings", value: diagnostics.hasSettings ? "있음" : "없음" },
+            { label: "notifications", value: diagnostics.hasNotifications ? "있음" : "없음" },
+            { label: "settings.ui", value: diagnostics.hasUiSettings ? "있음" : "없음" },
+            { label: "샘플 데이터", value: diagnostics.sampleRecordCount + "개" },
+            { label: "백업 권장", value: diagnostics.backupRecommended ? "권장" : "선택" }
+          ]);
+        }
+        renderStorageStatus();
+        renderPhase3Readiness(diagnostics);
+      }
+
+      function formatBytes(bytes) {
+        const value = Math.max(0, Number(bytes) || 0);
+        if (value < 1024) return value + "B";
+        return "약 " + Math.round(value / 1024) + "KB";
+      }
+
+      function getLocalStorageStatus() {
+        const status = {
+          available: false,
+          storageKey: STORAGE_KEY,
+          hasCurrentData: false,
+          hasLegacyBackup: false,
+          hasPreRestoreBackup: false,
+          hasPreRepairBackup: false,
+          dataSize: 0,
+          recordCount: Array.isArray(appData && appData.records) ? appData.records.length : 0
+        };
+        try {
+          const testKey = STORAGE_KEY + "_test";
+          localStorage.setItem(testKey, "1");
+          localStorage.removeItem(testKey);
+          const raw = localStorage.getItem(STORAGE_KEY) || "";
+          status.available = true;
+          status.hasCurrentData = !!raw;
+          status.hasLegacyBackup = localStorage.getItem(LEGACY_BACKUP_KEY) !== null;
+          status.hasPreRestoreBackup = localStorage.getItem(PRE_RESTORE_BACKUP_KEY) !== null;
+          status.hasPreRepairBackup = localStorage.getItem(PRE_REPAIR_BACKUP_KEY) !== null;
+          status.dataSize = raw.length || JSON.stringify(appData || {}).length;
+        } catch (error) {
+          console.error("localStorage status failed", error);
+        }
+        return status;
+      }
+
+      function renderStorageStatus() {
+        if (!els.storageStatusGrid) return;
+        const status = getLocalStorageStatus();
+        els.storageStatusGrid.innerHTML = dataItemsHtml([
+          { label: "localStorage", value: status.available ? "사용 가능" : "사용 불가" },
+          { label: "현재 저장 키", value: status.storageKey },
+          { label: "현재 데이터", value: status.hasCurrentData ? "있음" : "없음" },
+          { label: "현재 데이터 크기", value: formatBytes(status.dataSize) },
+          { label: "기록 수", value: status.recordCount + "개" },
+          { label: "마이그레이션 백업", value: status.hasLegacyBackup ? "있음" : "없음" },
+          { label: "복원 전 백업", value: status.hasPreRestoreBackup ? "있음" : "없음" },
+          { label: "보정 전 백업", value: status.hasPreRepairBackup ? "있음" : "없음" }
+        ]);
+      }
+
+      function renderPhase3Readiness(diagnostics) {
+        const phase3 = diagnostics.phase3 || checkPhase3Readiness(diagnostics);
+        if (els.phase3Summary) {
+          els.phase3Summary.textContent = phase3.ready
+            ? "서버 저장 준비가 가능합니다. 백업 JSON을 Phase 3 마이그레이션 원본으로 사용할 수 있어요."
+            : "일부 필드가 부족해 서버 동기화 전 데이터 보정을 권장합니다.";
+        }
+        if (els.phase3Grid) els.phase3Grid.innerHTML = dataItemsHtml(phase3.items);
+      }
+
+      function backupBeforeRepair() {
+        localStorage.setItem(PRE_REPAIR_BACKUP_KEY, JSON.stringify(buildBackupPayload()));
+      }
+
+      function repairAppData() {
+        if (!window.confirm("데이터 보정 전 현재 데이터를 안전 백업합니다.\n계속 진행할까요?")) return;
+        try {
+          backupBeforeRepair();
+          const beforeCount = appData.records.length;
+          let addedIds = 0;
+          let addedCreatedAt = 0;
+          let addedUpdatedAt = 0;
+          let addedMemo = 0;
+          let fixedSubtype = 0;
+          let fixedProfile = appData.profile && typeof appData.profile === "object" ? 0 : 1;
+          let fixedSettings = appData.settings && typeof appData.settings === "object" ? 0 : 1;
+          let fixedNotifications = appData.settings && appData.settings.notifications ? 0 : 1;
+          let fixedUi = appData.settings && appData.settings.ui ? 0 : 1;
+
+          if (!appData.profile || typeof appData.profile !== "object") appData.profile = defaultProfile();
+          if (!appData.settings || typeof appData.settings !== "object") appData.settings = defaultSettings();
+          if (!Array.isArray(appData.records)) appData.records = [];
+
+          appData.records = appData.records.filter(function (record) {
+            return record && typeof record === "object";
+          }).map(function (record) {
+            const patched = Object.assign({}, record);
+            if (!patched.id) { patched.id = generateId("record"); addedIds += 1; }
+            if (!patched.createdAt) { patched.createdAt = nowIso(); addedCreatedAt += 1; }
+            if (!patched.updatedAt) { patched.updatedAt = patched.createdAt || nowIso(); addedUpdatedAt += 1; }
+            if (patched.memo === undefined || patched.memo === null) { patched.memo = ""; addedMemo += 1; }
+            if (patched.type === "feeding" && !patched.subtype) { patched.subtype = "formula"; fixedSubtype += 1; }
+            return patched;
+          });
+
+          appData = normalizeV2Data(appData);
+          if (saveAppData()) {
+            renderApp();
+            const fixedSettingsTotal = fixedProfile + fixedSettings + fixedNotifications + fixedUi;
+            showToast("데이터 보정이 완료됐어요. ID " + addedIds + "개, 날짜/설정 " + (addedCreatedAt + addedUpdatedAt + fixedSettingsTotal) + "개를 보정했어요.");
+            console.info("Repair completed", { beforeCount: beforeCount, afterCount: appData.records.length, addedIds: addedIds, addedCreatedAt: addedCreatedAt, addedUpdatedAt: addedUpdatedAt, addedMemo: addedMemo, fixedSubtype: fixedSubtype });
+          }
+        } catch (error) {
+          console.error("Repair failed", error);
+          showToast("데이터 보정에 실패했어요. 기존 데이터는 유지됩니다.");
+        }
+      }
+
+      function sampleTime(daysAgo, hour, minute) {
+        const date = new Date();
+        date.setDate(date.getDate() - daysAgo);
+        date.setHours(hour, minute, 0, 0);
+        return date.toISOString();
+      }
+
+      function sampleRecord(type, daysAgo, hour, minute, subtype, amount, memo) {
+        const createdAt = sampleTime(daysAgo, hour, minute);
+        return {
+          id: generateId("sample_record"),
+          type: type,
+          subtype: subtype || "",
+          amount: amount || null,
+          memo: memo || "",
+          isSample: true,
+          createdAt: createdAt,
+          updatedAt: createdAt
+        };
+      }
+
+      function createSampleData() {
+        if (!window.confirm("최근 3일 샘플 데이터를 추가할까요?\n기존 실제 데이터는 삭제하지 않습니다.")) return;
+        const samples = [
+          sampleRecord("feeding", 0, 7, 20, "formula", 100, "샘플 데이터"),
+          sampleRecord("diaper", 0, 8, 5, "urine", null, ""),
+          sampleRecord("burp", 0, 8, 15, "", null, ""),
+          sampleRecord("sleep", 0, 10, 0, "", null, "오전 낮잠 샘플"),
+          sampleRecord("wake", 0, 11, 25, "", null, ""),
+          sampleRecord("feeding", 1, 9, 10, "pumped", 80, ""),
+          sampleRecord("diaper", 1, 10, 15, "both", null, "샘플 데이터"),
+          sampleRecord("sleep", 1, 13, 30, "", null, ""),
+          sampleRecord("wake", 1, 15, 0, "", null, ""),
+          sampleRecord("feeding", 2, 6, 50, "formula", 120, ""),
+          sampleRecord("diaper", 2, 7, 30, "stool", null, ""),
+          sampleRecord("burp", 2, 7, 42, "", null, "")
+        ];
+        appData.records = appData.records.concat(samples);
+        if (saveAppData()) {
+          renderApp();
+          showToast("샘플 데이터 " + samples.length + "개를 추가했어요.");
+        }
+      }
+
+      function deleteSampleData() {
+        const count = appData.records.filter(isSampleRecord).length;
+        if (!count) { showToast("삭제할 샘플 데이터가 없습니다."); return; }
+        if (!window.confirm("샘플 데이터 " + count + "개만 삭제할까요?\n실제 기록은 삭제하지 않습니다.")) return;
+        appData.records = appData.records.filter(function (record) { return !isSampleRecord(record); });
+        if (saveAppData()) {
+          renderApp();
+          showToast("샘플 데이터만 삭제했어요.");
+        }
       }
 
       // ─── Toast ───────────────────────────────────────────────
@@ -2872,6 +3307,9 @@
       els.jsonBackupButton.addEventListener("click", exportJsonBackup);
       els.jsonImportButton.addEventListener("click", function () { els.jsonImportInput.click(); });
       els.jsonImportInput.addEventListener("change", handleBackupFileSelected);
+      els.repairDataButton.addEventListener("click", repairAppData);
+      els.createSampleButton.addEventListener("click", createSampleData);
+      els.deleteSampleButton.addEventListener("click", deleteSampleData);
 
       // Undo
       els.undoButton.addEventListener("click", undoDelete);

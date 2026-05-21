@@ -1,4 +1,4 @@
-const CACHE_NAME = 'baby-log-v2.5.0';
+const CACHE_NAME = 'baby-life-log-v2.9-legacy';
 const ASSETS_TO_CACHE = [
   './index.html',
   './manifest.json',
