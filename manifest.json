@@ -2,7 +2,7 @@
   "id": "baby-life-log-pwa-v2-9",
   "version": "2.9",
   "name": "아기 생활 기록",
-  "short_name": "생활기록",
+  "short_name": "챙겨조",
   "description": "아기의 수유, 수면, 기저귀 패턴을 기록하는 간단한 앱",
   "start_url": "./index.html",
   "scope": "./",
