@@ -83,3 +83,14 @@ Supabase Dashboard > Authentication 설정에서 Anonymous sign-ins를 켭니다
 - 실제 수유 기록이 records에 저장되는지 확인
 - 수정 시 records row update 확인
 - 삭제 시 `deleted_at` update 확인
+# Phase 3.6 Live Connection Verification - 2026-05-22
+
+Verified from Codex using only the project URL and publishable key.
+
+- `cloud-config.js`: `enabled: true`, `appVersion: "3.6"`.
+- `index.html`: Supabase CDN is loaded before `cloud-config.js`, and `cloud-config.js` is loaded before `cloud-supabase.js`.
+- Supabase CDN: HTTP 200 from `https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2`.
+- Anonymous Auth: direct REST signup succeeded and created anonymous users.
+- DB REST tables: `families`, `family_members`, `babies`, `records`, and `cloud_diagnostics` returned 404.
+
+Conclusion: the URL/key and Anonymous Auth are valid. The current blocker is that the required public tables are missing from the Supabase API schema, or the Phase 3.3-3.6 SQL has not been applied/refreshed in this Supabase project. Run `deliverables/supabase_phase3_6_connection_diagnostics.sql` in the Supabase SQL Editor, then reload the app and run "전체 서버 연결 진단 실행" again.

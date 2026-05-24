@@ -1,4 +1,4 @@
-<!doctype html>
+﻿<!doctype html>
 <html lang="ko">
 <head>
   <meta charset="utf-8">
@@ -744,7 +744,7 @@
   <main class="app">
     <header class="topbar">
       <div>
-        <div class="version-badge" id="versionBadge">v3.6 · 서버 연결 검증</div>
+        <div class="version-badge" id="versionBadge">v3.7.1 · 동기화 검증</div>
         <h1 id="babyTitle">우리 아기</h1>
         <div class="baby-days" id="babyDays">생년월일을 입력해 주세요</div>
         <div class="today-line" id="todayLine"></div>
@@ -962,6 +962,17 @@
           <p class="data-message" id="phase3Summary">서버 저장 준비 상태를 확인하는 중입니다.</p>
           <div class="data-grid" id="phase3Grid"></div>
         </div>
+        <div class="data-subsection" aria-labelledby="typeSyncVerificationTitle">
+          <h3 id="typeSyncVerificationTitle">기록 타입 서버 저장 검증</h3>
+          <div class="data-grid">
+            <div class="data-item"><span>feeding 저장</span><strong>수동 검증 필요</strong></div>
+            <div class="data-item"><span>diaper 저장</span><strong>수동 검증 필요</strong></div>
+            <div class="data-item"><span>burp 저장</span><strong>수동 검증 필요</strong></div>
+            <div class="data-item"><span>sleep_start 저장</span><strong>수동 검증 필요</strong></div>
+            <div class="data-item"><span>wake 저장</span><strong>수동 검증 필요</strong></div>
+            <div class="data-item"><span>마지막 오류</span><strong>Console 확인</strong></div>
+          </div>
+        </div>
         <div class="data-subsection" aria-labelledby="cloudBackupTitle">
           <h3 id="cloudBackupTitle">동기화 상태</h3>
           <div class="cloud-status-line">
@@ -970,8 +981,9 @@
             <p class="sync-offline-note" id="syncOfflineNote">현재 오프라인이에요. 기록은 이 기기에 저장되고, 나중에 다시 동기화할 수 있어요.</p>
           </div>
           <div class="data-grid" id="cloudStatusGrid"></div>
-          <div class="data-subsection" aria-labelledby="fullConnectionDiagnosticTitle">
-            <h3 id="fullConnectionDiagnosticTitle">Supabase 실제 연결 진단</h3>
+          <details class="data-subsection" aria-labelledby="fullConnectionDiagnosticTitle">
+            <summary id="fullConnectionDiagnosticTitle">개발자 진단</summary>
+            <h3>Supabase 실제 연결 진단</h3>
             <p class="cloud-message">버튼 동작만으로는 서버 연결을 확정할 수 없어요. Auth와 DB에 실제 데이터가 생성되는지 확인합니다.</p>
             <div class="data-grid" id="fullConnectionDiagnosticGrid"></div>
             <div class="data-tool-actions">
@@ -981,7 +993,7 @@
               <button type="button" class="small-action" id="runRecordConnectionDiagnosticButton">테스트 record 생성 확인</button>
             </div>
             <p class="cloud-message" id="fullConnectionDiagnosticMessage">아직 전체 서버 연결 진단을 실행하지 않았어요.</p>
-          </div>
+          </details>
           <div class="data-subsection" aria-labelledby="familyBabyStructureTitle">
             <h3 id="familyBabyStructureTitle">가족/아기 서버 구조</h3>
             <p class="cloud-message">가족/아기 구조는 Phase 4 로그인 기능으로 넘어가기 위한 준비 단계예요. 현재는 익명 사용자 기준으로 안전하게 연결해 둡니다.</p>
@@ -1002,9 +1014,9 @@
             <button type="button" class="small-action" id="cloudTestFetchButton">서버 테스트 조회</button>
             <button type="button" class="small-action" id="cloudRetryPendingButton">동기화 대기 재시도</button>
             <button type="button" class="small-action" id="cloudRetryErrorButton">서버 오류 재시도</button>
-            <button type="button" class="small-action" id="cloudFetchRecordsButton">서버 기록 불러오기</button>
-            <button type="button" class="small-action" id="cloudPreviewMergeButton">병합 미리보기</button>
-            <button type="button" class="small-action" id="cloudMergeRecordsButton" disabled>서버 기록 병합하기</button>
+            <button type="button" class="small-action" id="cloudFetchRecordsButton">서버 기록 새로고침</button>
+            <button type="button" class="small-action" id="cloudPreviewMergeButton">안전 병합 미리보기</button>
+            <button type="button" class="small-action" id="cloudMergeRecordsButton" disabled>안전 병합 실행</button>
           </div>
           <p class="cloud-message">서버에 저장된 기록을 불러와 이 기기의 기록과 비교할 수 있어요. 병합 전에는 현재 기기 데이터가 자동 백업됩니다.</p>
           <div class="data-grid" id="cloudMergeGrid"></div>
@@ -1164,8 +1176,8 @@
       const PRE_REPAIR_BACKUP_KEY = "baby_life_log_app_backup_before_repair";
       const BACKUP_FORMAT_VERSION = 2;
       const APP_NAME = "baby-life-log";
-      const APP_VERSION = "3.6";
-      const APP_PHASE_LABEL = "서버 연결 검증";
+      const APP_VERSION = "3.7.1";
+      const APP_PHASE_LABEL = "동기화 검증";
       const TYPES = ["feeding", "burp", "diaper", "sleep", "wake"];
       const LONG_PRESS_MS = 700;
       const MAX_FEED_AMOUNT = 500;
@@ -1429,7 +1441,8 @@
           familyId: source.familyId || null,
           babyId: source.babyId || null,
           lastAttemptAt: source.lastAttemptAt ? safeIso(source.lastAttemptAt) : null,
-          retryCount: Math.max(0, Math.round(Number(source.retryCount) || 0))
+          retryCount: Math.max(0, Math.round(Number(source.retryCount) || 0)),
+          operation: ["create", "update", "delete", "unknown"].includes(source.operation) ? source.operation : "unknown"
         };
       }
 
@@ -1601,7 +1614,14 @@
 
       // ─── 기록 CRUD ───────────────────────────────────────────
       function sortNewestFirst(a, b) { return new Date(b.createdAt) - new Date(a.createdAt); }
-      function isActiveRecord(record) { return !!(record && !record.deletedAt); }
+      function isDiagnosticTestRecord(record) {
+        if (window.BabyCloud && typeof window.BabyCloud.isTestRecord === "function") return window.BabyCloud.isTestRecord(record);
+        if (!record || typeof record !== "object") return false;
+        const id = String(record.id || record.client_id || "").trim();
+        return record.type === "test" || record.isSample === true || record.is_sample === true || record.subtype === "connection" || id.indexOf("diagnostic_record_") === 0 || id.indexOf("test_record_") === 0;
+      }
+
+      function isActiveRecord(record) { return !!(record && !record.deletedAt && !isDiagnosticTestRecord(record)); }
       function getRecords(type) { return appData.records.filter(function (r) { return isActiveRecord(r) && (!type || r.type === type); }).sort(sortNewestFirst); }
       function getAllRecords() { return appData.records.filter(isActiveRecord).sort(sortNewestFirst); }
       function findRecord(id) { return appData.records.find(function (r) { return r.id === id; }); }
@@ -1746,7 +1766,7 @@
       }
 
       function retryPendingCloudRecords() {
-        retryCloudRecords({ statuses: ["pending", "error", "deleted_pending", "deleted_error"] });
+        retryCloudRecords({ statuses: ["local_only", "pending", "error", "deleted_pending", "deleted_error"] });
       }
 
       function retryErrorCloudRecords() {
@@ -1757,7 +1777,7 @@
         const opts = options || {};
         const statuses = opts.statuses || ["pending", "error", "deleted_pending", "deleted_error"];
         const targets = appData.records.filter(function (record) {
-          return record && statuses.includes(getRecordCloudStatus(record).status);
+          return record && !isDiagnosticTestRecord(record) && statuses.includes(getRecordCloudStatus(record).status);
         });
         if (!targets.length) {
           showToast("재시도할 동기화 대기 기록이 없습니다.");
@@ -3181,7 +3201,7 @@
 
       // ─── 데이터 진단 / 보정 / 샘플 데이터 ─────────────────────
       function isSampleRecord(record) {
-        return !!(record && record.isSample === true);
+        return !!(record && (record.isSample === true || isDiagnosticTestRecord(record)));
       }
 
       function detectDuplicateRecords(records) {
@@ -3317,7 +3337,7 @@
         const configVersion = diagnostic && diagnostic.configAppVersion
           ? diagnostic.configAppVersion
           : ((window.BABY_APP_CLOUD_CONFIG && window.BABY_APP_CLOUD_CONFIG.appVersion) || "-");
-        const babyCloudVersion = diagnostic && diagnostic.babyCloudAppVersion ? diagnostic.babyCloudAppVersion : "3.6";
+        const babyCloudVersion = diagnostic && diagnostic.babyCloudAppVersion ? diagnostic.babyCloudAppVersion : "3.7.1";
         const versionMismatch = configVersion !== "-" && (String(configVersion) !== APP_VERSION || String(babyCloudVersion) !== APP_VERSION);
 
         if (els.fullConnectionDiagnosticGrid) {
@@ -3553,6 +3573,9 @@
         const status = getCloudSafeStatus();
         const summary = getSyncSummary();
         const diagnosis = getLastSyncDiagnosis();
+        const friendlyCloudStatus = window.BabyCloud && typeof window.BabyCloud.getUserFriendlyCloudStatus === "function"
+          ? window.BabyCloud.getUserFriendlyCloudStatus({ status: status.status, summary: summary })
+          : null;
         const checks = diagnosis && diagnosis.checks ? diagnosis.checks : {};
         const online = typeof navigator === "undefined" ? true : navigator.onLine !== false;
         if (els.syncOfflineNote) {
@@ -3562,7 +3585,9 @@
             : "현재 오프라인이에요. 기록은 이 기기에 저장되고, 나중에 다시 동기화할 수 있어요.";
         }
         if (els.cloudStatusMessage) {
-          if (!online || status.status === "offline") {
+          if (friendlyCloudStatus) {
+            els.cloudStatusMessage.textContent = friendlyCloudStatus.title + " " + friendlyCloudStatus.message;
+          } else if (!online || status.status === "offline") {
             els.cloudStatusMessage.textContent = "현재 오프라인이에요. 기록은 이 기기에 먼저 저장되고 있어요.";
           } else if (status.ready || status.status === "connected" || status.status === "synced" || status.status === "test_saved" || status.status === "test_fetched" || status.status === "records_fetched") {
             els.cloudStatusMessage.textContent = "서버 저장이 준비됐어요. 새 기록은 이 기기에 먼저 저장되고, 가능하면 서버에도 함께 저장됩니다.";
@@ -3657,20 +3682,25 @@
         const fetchedAt = cloudLastFetchResult && cloudLastFetchResult.fetchedAt;
         const preview = cloudMergePreview;
         const result = cloudLastMergeResult;
-        const canMerge = !!(cloudLastFetchResult && cloudLastFetchResult.ok && preview && preview.serverOnlyCount > 0 && canWriteServerMergeBackup());
+        const serverDeletedCount = preview ? (preview.serverDeletedCount !== undefined ? preview.serverDeletedCount : (preview.deletedServerCount || 0)) : 0;
+        const invalidRowCount = preview ? (preview.invalidRowCount !== undefined ? preview.invalidRowCount : (preview.invalidServerCount || 0)) : 0;
+        const deleteApplyCount = preview ? (preview.deleteApplyCount || 0) : 0;
+        const canMerge = !!(cloudLastFetchResult && cloudLastFetchResult.ok && preview && ((preview.serverOnlyCount || 0) > 0 || (preview.deleteApplyCount || 0) > 0) && canWriteServerMergeBackup());
 
         if (els.cloudMergeGrid) {
           els.cloudMergeGrid.innerHTML = dataItemsHtml([
-            { label: "서버 기록 불러오기", value: cloudLastFetchResult ? (cloudLastFetchResult.ok ? "성공" : "실패") : "아직 안 함" },
+            { label: "서버 기록 새로고침", value: cloudLastFetchResult ? (cloudLastFetchResult.ok ? "성공" : "실패") : "아직 안 함" },
             { label: "마지막 서버 조회", value: formatCloudCheckedAt(fetchedAt) },
             { label: "불러온 서버 기록", value: (cloudLastFetchResult && cloudLastFetchResult.count !== undefined ? cloudLastFetchResult.count : 0) + "개" },
+            { label: "진단용 서버 기록", value: (preview ? preview.testRowCount : (cloudLastFetchResult && cloudLastFetchResult.testRows) || 0) + "개" },
             { label: "로컬 기록", value: (preview ? preview.localCount : appData.records.length) + "개" },
             { label: "서버에만 있는 기록", value: (preview ? preview.serverOnlyCount : 0) + "개" },
             { label: "로컬에만 있는 기록", value: (preview ? preview.localOnlyCount : 0) + "개" },
             { label: "양쪽 모두에 있는 기록", value: (preview ? preview.bothCount : 0) + "개" },
             { label: "충돌 의심 기록", value: (preview ? preview.conflictCount : 0) + "개" },
-            { label: "삭제된 서버 기록", value: (preview ? preview.deletedServerCount : 0) + "개" },
-            { label: "손상된 서버 기록", value: (preview ? preview.invalidServerCount : 0) + "개" },
+            { label: "삭제된 서버 기록", value: serverDeletedCount + "개" },
+            { label: "삭제 반영 대상", value: deleteApplyCount + "개" },
+            { label: "손상된 서버 기록", value: invalidRowCount + "개" },
             { label: "마지막 병합", value: formatCloudCheckedAt(result && result.mergedAt) }
           ]);
         }
@@ -3688,10 +3718,12 @@
             els.cloudMergeMessage.textContent = "서버 기록을 불러오지 못했어요. 이 기기의 기록은 그대로 유지됩니다.";
           } else if (!preview) {
             els.cloudMergeMessage.textContent = "병합 미리보기를 눌러 로컬 기록과 서버 기록을 비교해 주세요.";
-          } else if (preview.serverOnlyCount < 1) {
+          } else if ((preview.serverOnlyCount || 0) < 1 && deleteApplyCount < 1) {
             els.cloudMergeMessage.textContent = "새로 병합할 서버 기록이 없어요.";
+          } else if ((preview.serverOnlyCount || 0) < 1 && deleteApplyCount > 0) {
+            els.cloudMergeMessage.textContent = "서버에서 삭제된 기록 " + deleteApplyCount + "개를 이 기기에도 삭제 상태로 반영할 수 있어요.";
           } else {
-            els.cloudMergeMessage.textContent = "서버에만 있는 기록 " + preview.serverOnlyCount + "개를 이 기기에 추가할 수 있어요. 이미 이 기기에 있는 기록은 덮어쓰지 않습니다. 충돌 의심 기록은 자동으로 변경하지 않습니다.";
+            els.cloudMergeMessage.textContent = "서버에만 있는 기록 " + preview.serverOnlyCount + "개를 이 기기에 추가하고, 서버 삭제 기록 " + deleteApplyCount + "개를 반영할 수 있어요. 이미 이 기기에 있는 기록은 덮어쓰지 않습니다. 충돌 의심 기록은 자동으로 변경하지 않습니다.";
           }
         }
       }
@@ -4301,7 +4333,7 @@
       }
       if (els.cloudFetchRecordsButton) {
         els.cloudFetchRecordsButton.addEventListener("click", function () {
-          if (!window.BabyCloud || typeof window.BabyCloud.fetchRecords !== "function") {
+          if (!window.BabyCloud || (typeof window.BabyCloud.fetchServerRecordsForCurrentBaby !== "function" && typeof window.BabyCloud.fetchRecords !== "function")) {
             renderCloudStatus();
             showToast("서버 기록을 불러올 수 없어요.");
             return;
@@ -4310,7 +4342,8 @@
           cloudMergePreview = null;
           cloudLastFetchResult = { ok: false, count: 0, fetchedAt: null };
           renderCloudMergeStatus();
-          window.BabyCloud.fetchRecords().then(function (result) {
+          const fetchServerRecords = window.BabyCloud.fetchServerRecordsForCurrentBaby || window.BabyCloud.fetchRecords;
+          fetchServerRecords().then(function (result) {
             cloudLastFetchResult = result || { ok: false, count: 0, fetchedAt: null };
             cloudFetchedRows = result && result.ok && Array.isArray(result.records) ? result.records : [];
             cloudMergePreview = null;
@@ -4341,11 +4374,13 @@
             renderCloudMergeStatus();
             return;
           }
-          if (!window.BabyCloud || typeof window.BabyCloud.buildMergePreview !== "function") {
+          if (!window.BabyCloud || (typeof window.BabyCloud.buildSafeMergePreview !== "function" && typeof window.BabyCloud.buildMergePreview !== "function")) {
             showToast("병합 미리보기를 만들 수 없어요.");
             return;
           }
-          cloudMergePreview = window.BabyCloud.buildMergePreview(appData.records, cloudFetchedRows);
+          cloudMergePreview = typeof window.BabyCloud.buildSafeMergePreview === "function"
+            ? window.BabyCloud.buildSafeMergePreview(appData, cloudFetchedRows)
+            : window.BabyCloud.buildMergePreview(appData.records, cloudFetchedRows);
           renderCloudMergeStatus();
           if (els.cloudActionMessage) {
             els.cloudActionMessage.textContent = "병합 미리보기를 만들었어요. 서버에만 있는 기록 " + cloudMergePreview.serverOnlyCount + "개를 추가할 수 있어요.";
@@ -4355,7 +4390,7 @@
       }
       if (els.cloudMergeRecordsButton) {
         els.cloudMergeRecordsButton.addEventListener("click", function () {
-          if (!cloudMergePreview || cloudMergePreview.serverOnlyCount < 1) {
+          if (!cloudMergePreview || ((cloudMergePreview.serverOnlyCount || 0) < 1 && (cloudMergePreview.deleteApplyCount || 0) < 1)) {
             renderCloudMergeStatus();
             showToast("새로 병합할 서버 기록이 없어요.");
             return;
@@ -4364,14 +4399,16 @@
             showToast("현재 데이터를 안전 백업하지 못해 병합을 중단했어요.");
             return;
           }
-          const confirmed = window.confirm("서버에만 있는 기록을 이 기기에 추가할까요?\n현재 기기의 데이터는 병합 전에 자동 백업됩니다.");
+          const confirmed = window.confirm("서버 기록을 이 기기의 기록과 안전하게 병합할까요?\n서버에만 있는 정상 기록은 추가하고, 서버 삭제 기록은 삭제 상태로 반영합니다.\n현재 기기의 데이터는 병합 전에 자동 백업됩니다.");
           if (!confirmed) return;
-          if (!window.BabyCloud || typeof window.BabyCloud.mergeServerRecordsIntoLocal !== "function") {
+          if (!window.BabyCloud || (typeof window.BabyCloud.applySafeMerge !== "function" && typeof window.BabyCloud.mergeServerRecordsIntoLocal !== "function")) {
             showToast("서버 기록 병합을 실행할 수 없어요.");
             return;
           }
           const appDataBeforeMerge = JSON.stringify(appData);
-          const result = window.BabyCloud.mergeServerRecordsIntoLocal(appData, cloudFetchedRows, { preview: cloudMergePreview });
+          const result = typeof window.BabyCloud.applySafeMerge === "function"
+            ? window.BabyCloud.applySafeMerge(appData, cloudMergePreview, { serverRows: cloudFetchedRows })
+            : window.BabyCloud.mergeServerRecordsIntoLocal(appData, cloudFetchedRows, { preview: cloudMergePreview });
           cloudLastMergeResult = result;
           if (!result || !result.ok) {
             if (els.cloudActionMessage) els.cloudActionMessage.textContent = "현재 데이터를 안전 백업하지 못해 병합을 중단했어요.";
@@ -4380,12 +4417,14 @@
             return;
           }
           if (saveAppData()) {
-            cloudMergePreview = window.BabyCloud.buildMergePreview(appData.records, cloudFetchedRows);
+            cloudMergePreview = typeof window.BabyCloud.buildSafeMergePreview === "function"
+              ? window.BabyCloud.buildSafeMergePreview(appData, cloudFetchedRows)
+              : window.BabyCloud.buildMergePreview(appData.records, cloudFetchedRows);
             renderApp();
             if (els.cloudActionMessage) {
-              els.cloudActionMessage.textContent = "병합 전 현재 기기의 데이터를 안전 백업했어요. 서버 기록 " + result.addedCount + "개를 이 기기에 추가했어요.";
+              els.cloudActionMessage.textContent = "병합 전 현재 기기의 데이터를 안전 백업했어요. 서버 기록 " + (result.addedCount || result.added || 0) + "개를 이 기기에 추가했고, 삭제 기록 " + (result.deletedApplied || 0) + "개를 반영했어요.";
             }
-            showToast("서버 기록 " + result.addedCount + "개를 병합했어요.");
+            showToast("안전 병합을 실행했어요.");
           } else {
             try {
               appData = normalizeV2Data(JSON.parse(appDataBeforeMerge));

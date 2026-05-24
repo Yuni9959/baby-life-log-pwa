@@ -1,4 +1,4 @@
-// Baby life log - Phase 3.6 Supabase sync helpers.
+﻿// Baby life log - Phase 3.7.1 Supabase type sync helpers.
 // Client-safe only: never put service_role keys, DB passwords, or direct DB URLs here.
 
 (function () {
@@ -12,7 +12,10 @@
   const LAST_FULL_CONNECTION_DIAGNOSTIC_KEY = "babyAppLastFullConnectionDiagnostic";
   const LAST_SYNC_SUMMARY_KEY = "babyAppLastSyncSummary";
   const LAST_RETRY_RESULT_KEY = "babyAppLastRetryResult";
-  const BABY_CLOUD_APP_VERSION = "3.6";
+  const LAST_SAFE_MERGE_PREVIEW_KEY = "babyAppLastSafeMergePreview";
+  const LAST_SAFE_MERGE_RESULT_KEY = "babyAppLastSafeMergeResult";
+  const BACKUP_BEFORE_SERVER_MERGE_KEY = "babyAppBackupBeforeServerMerge";
+  const BABY_CLOUD_APP_VERSION = "3.7.1";
   const PLACEHOLDER_URL = "https://YOUR_PROJECT_REF.supabase.co";
   const PLACEHOLDER_KEY = "YOUR_SUPABASE_PUBLISHABLE_OR_ANON_KEY";
   const CLOUD_STATUSES = [
@@ -24,7 +27,7 @@
     "deleted_synced",
     "deleted_error"
   ];
-  const RETRY_STATUSES = ["pending", "error", "deleted_pending", "deleted_error"];
+  const RETRY_STATUSES = ["local_only", "pending", "error", "deleted_pending", "deleted_error"];
 
   let supabaseClient = null;
 
@@ -49,9 +52,15 @@
     testFetchRecords: testFetchRecords,
     saveRecord: saveRecord,
     fetchRecords: fetchRecords,
+    fetchServerRecordsForCurrentBaby: fetchServerRecordsForCurrentBaby,
     normalizeServerRecord: normalizeServerRowToLocalRecord,
     buildMergePreview: buildMergePreview,
+    buildSafeMergePreview: buildSafeMergePreview,
     mergeServerRecordsIntoLocal: mergeServerRecordsIntoLocal,
+    applySafeMerge: applySafeMerge,
+    isTestRecord: isTestRecord,
+    isDeletedRecord: isDeletedRecord,
+    compareRecordFreshness: compareRecordFreshness,
     getSafeStatus: getSafeStatus,
 
     getOrCreateDeviceId: getOrCreateDeviceId,
@@ -83,7 +92,9 @@
     renderDiagnosticResult: renderDiagnosticResult,
     retryPendingRecords: retryPendingRecords,
     retryRecordSync: retryRecordSync,
-    getHumanStatusMessage: getHumanStatusMessage
+    getHumanStatusMessage: getHumanStatusMessage,
+    ensureUserFamilyContextRpc: ensureUserFamilyContextRpc,
+    getUserFriendlyCloudStatus: getUserFriendlyCloudStatus
   };
 
   window.BabyCloud = BabyCloud;
@@ -130,7 +141,8 @@
       familyId: cloud.familyId || null,
       babyId: cloud.babyId || null,
       lastAttemptAt: safeIso(cloud.lastAttemptAt),
-      retryCount: Math.max(0, Math.round(Number(cloud.retryCount) || 0))
+      retryCount: Math.max(0, Math.round(Number(cloud.retryCount) || 0)),
+      operation: ["create", "update", "delete", "unknown"].includes(cloud.operation) ? cloud.operation : "unknown"
     };
   }
 
@@ -149,9 +161,11 @@
   }
 
   function getSyncSummary(records) {
-    const list = Array.isArray(records) ? records : [];
+    const sourceList = Array.isArray(records) ? records : [];
+    const list = sourceList.filter(function (record) { return !isTestRecord(record); });
     const summary = {
       total: list.length,
+      testTotal: sourceList.length - list.length,
       visibleTotal: 0,
       deletedTotal: 0,
       synced: 0,
@@ -216,9 +230,17 @@
     if (code === "42501" || lower.indexOf("row-level security") !== -1 || lower.indexOf("permission denied") !== -1 || lower.indexOf("policy") !== -1) {
       kind = "rls";
       userMessage = "DB 보안 정책 때문에 요청이 거부된 것 같아요. RLS 정책을 확인해 주세요.";
-    } else if (lower.indexOf("relation") !== -1 && lower.indexOf("does not exist") !== -1) {
+    } else if (
+      code === "404" ||
+      code === 404 ||
+      code === "PGRST205" ||
+      lower.indexOf("404") !== -1 ||
+      lower.indexOf("not found") !== -1 ||
+      lower.indexOf("could not find the table") !== -1 ||
+      (lower.indexOf("relation") !== -1 && lower.indexOf("does not exist") !== -1)
+    ) {
       kind = "missing_table";
-      userMessage = "필요한 테이블을 찾지 못했어요. SQL Editor에서 Phase 3.3~3.6 SQL을 실행했는지 확인해 주세요.";
+      userMessage = "Required Supabase tables are missing or not exposed through PostgREST. Run deliverables/supabase_phase3_6_connection_diagnostics.sql in the Supabase SQL Editor, then reload the app.";
     } else if (lower.indexOf("failed to fetch") !== -1 || lower.indexOf("network") !== -1 || lower.indexOf("load failed") !== -1) {
       kind = "network";
       userMessage = "네트워크 또는 Supabase CDN 연결을 확인해 주세요.";
@@ -236,6 +258,44 @@
 
   function nowIso() {
     return new Date().toISOString();
+  }
+
+  function getRecordClientId(recordOrRow) {
+    if (!recordOrRow || typeof recordOrRow !== "object") return "";
+    return String(recordOrRow.client_id || recordOrRow.record_id || recordOrRow.id || "").trim();
+  }
+
+  function isTestRecord(recordOrRow) {
+    if (!recordOrRow || typeof recordOrRow !== "object") return false;
+    const type = String(recordOrRow.type || "").toLowerCase();
+    const subtype = String(recordOrRow.subtype || "").toLowerCase();
+    const clientId = getRecordClientId(recordOrRow);
+    const id = String(recordOrRow.id || "").trim();
+    return type === "test" ||
+      recordOrRow.isSample === true ||
+      recordOrRow.is_sample === true ||
+      subtype === "connection" ||
+      clientId.indexOf("diagnostic_record_") === 0 ||
+      clientId.indexOf("test_record_") === 0 ||
+      id.indexOf("diagnostic_record_") === 0 ||
+      id.indexOf("test_record_") === 0;
+  }
+
+  function isDeletedRecord(recordOrRow) {
+    return !!(recordOrRow && (recordOrRow.deletedAt || recordOrRow.deleted_at));
+  }
+
+  function compareRecordFreshness(localRecord, serverRecord) {
+    const localUpdated = safeIso(localRecord && (localRecord.updatedAt || localRecord.updated_at || localRecord.createdAt || localRecord.recorded_at));
+    const serverUpdated = safeIso(serverRecord && (serverRecord.updatedAt || serverRecord.updated_at || serverRecord.createdAt || serverRecord.recorded_at));
+    if (!localUpdated && !serverUpdated) return "unknown";
+    if (localUpdated && !serverUpdated) return "local_newer";
+    if (!localUpdated && serverUpdated) return "server_newer";
+    const localTime = new Date(localUpdated).getTime();
+    const serverTime = new Date(serverUpdated).getTime();
+    if (localTime > serverTime) return "local_newer";
+    if (serverTime > localTime) return "server_newer";
+    return "same";
   }
 
   function getOrCreateDeviceId() {
@@ -856,21 +916,42 @@
   }
 
   function mapRecordType(type) {
-    const value = String(type || "");
+    const raw = String(type || "").trim();
     const map = {
       feeding: "feeding",
-      burp: "burp",
+      feed: "feeding",
+      milk: "feeding",
+      "수유": "feeding",
+
       diaper: "diaper",
+      nappy: "diaper",
+      "기저귀": "diaper",
+
+      burp: "burp",
+      burping: "burp",
+      belch: "burp",
+      "트림": "burp",
+      "트름": "burp",
+
       sleep: "sleep_start",
       sleep_start: "sleep_start",
+      asleep: "sleep_start",
+      "잠듦": "sleep_start",
+      "잠": "sleep_start",
+
       sleep_end: "sleep_end",
+
       wake: "wake",
+      awake: "wake",
+      wakeup: "wake",
+      wake_up: "wake",
+      "깨어남": "wake",
+
       custom: "custom",
       test: "test"
     };
-    return map[value] || "custom";
+    return map[raw] || raw || "custom";
   }
-
   function mapServerTypeToLocalType(type) {
     const value = String(type || "");
     if (value === "sleep_start") return "sleep";
@@ -878,40 +959,50 @@
   }
 
   function mapRecordSubtype(record) {
-    const type = mapRecordType(record && record.type);
-    const subtype = String((record && record.subtype) || "").trim();
+    record = record || {};
+    const type = mapRecordType(record.type);
+    const raw = String(record.subtype || record.diaperType || record.feedingType || "").trim();
+
     if (type === "diaper") {
       const diaperMap = {
         pee: "pee",
-        poop: "poop",
-        pee_poop: "pee_poop",
         wet: "pee",
-        dirty: "poop",
-        mixed: "pee_poop",
         urine: "pee",
-        stool: "poop",
-        both: "pee_poop",
         "소변": "pee",
+
+        poop: "poop",
+        dirty: "poop",
+        stool: "poop",
         "대변": "poop",
-        "소변+대변": "pee_poop"
+
+        pee_poop: "pee_poop",
+        both: "pee_poop",
+        mixed: "pee_poop",
+        "소변+대변": "pee_poop",
+        "소변 대변": "pee_poop"
       };
-      return diaperMap[subtype] || null;
+      return diaperMap[raw] || null;
     }
+
     if (type === "feeding") {
       const feedingMap = {
         formula: "formula",
-        breast: "breast",
-        pumped: "pumped",
         "분유": "formula",
+
+        breast: "breast",
+        breastfeeding: "breast",
         "모유": "breast",
+
+        pumped: "pumped",
         "유축": "pumped"
       };
-      return feedingMap[subtype] || null;
+      return feedingMap[raw] || null;
     }
-    if (type === "test" && subtype === "connection") return "connection";
+
+    if (type === "test") return raw || "connection";
+
     return null;
   }
-
   function mapServerSubtypeToLocalSubtype(type, subtype) {
     const serverType = String(type || "");
     const value = String(subtype || "");
@@ -924,48 +1015,75 @@
   }
 
   function getRecordAmountMl(record) {
-    if (!record || mapRecordType(record.type) !== "feeding") return null;
-    if (record.amount === null || record.amount === undefined || record.amount === "") return null;
-    const amount = Math.round(Number(record.amount));
-    return Number.isFinite(amount) && amount >= 0 ? amount : null;
-  }
+    const type = mapRecordType(record && record.type);
 
+    if (type !== "feeding") {
+      return null;
+    }
+
+    const value = record.amount_ml ?? record.amount ?? record.ml ?? null;
+    const number = Number(value);
+
+    if (!Number.isFinite(number) || number < 0) {
+      return null;
+    }
+
+    return Math.round(number);
+  }
   function mapLocalRecordToServerRow(record, context) {
     if (!record || typeof record !== "object") throw new Error("record is required");
     if (!record.id) throw new Error("record.id is required");
     const ctx = context || getCloudContext();
     if (!ctx.currentFamilyId) throw new Error("family_id is required");
     if (!ctx.currentBabyId) throw new Error("baby_id is required");
-    const createdAt = isValidDate(record.createdAt) ? new Date(record.createdAt).toISOString() : nowIso();
-    const updatedAt = isValidDate(record.updatedAt) ? new Date(record.updatedAt).toISOString() : createdAt;
+
+    const serverType = mapRecordType(record.type);
+    const serverSubtype = mapRecordSubtype(record);
     const amountMl = getRecordAmountMl(record);
-    const note = record.memo ? String(record.memo) : "";
+    const recordedAtValue = record.createdAt || record.recordedAt || null;
+    const recordedAt = isValidDate(recordedAtValue) ? new Date(recordedAtValue).toISOString() : nowIso();
+    const updatedAt = isValidDate(record.updatedAt) ? new Date(record.updatedAt).toISOString() : recordedAt;
+    const note = record.memo || record.note || "";
     const payload = Object.assign({}, record, {
       updatedAt: updatedAt,
       deletedAt: record.deletedAt || null
     });
-    return {
-      family_id: ctx.currentFamilyId || null,
-      baby_id: ctx.currentBabyId || null,
+    const row = {
+      family_id: ctx.currentFamilyId,
+      baby_id: ctx.currentBabyId,
       user_id: ctx.currentUserId || BabyCloud.userId || null,
+
       client_id: String(record.id),
       record_id: String(record.id),
-      device_id: ctx.deviceId || getOrCreateDeviceId(),
-      type: mapRecordType(record.type),
-      subtype: mapRecordSubtype(record),
+      device_id: ctx.deviceId || getOrCreateDeviceId() || null,
+
+      type: serverType,
+      subtype: serverSubtype,
       amount_ml: amountMl,
       note: note,
-      recorded_at: createdAt,
+      recorded_at: recordedAt,
       deleted_at: record.deletedAt || null,
+
       amount: amountMl,
       memo: note,
       is_sample: Boolean(record.isSample),
-      app_version: getConfigAppVersion(),
-      schema_version: Number((getConfig() && getConfig().schemaVersion) || 2),
+
+      app_version: "3.7.1",
+      schema_version: 2,
       payload: payload
     };
-  }
 
+    console.log("[BabyCloud] mapLocalRecordToServerRow", {
+      localType: record.type,
+      serverType: serverType,
+      localSubtype: record.subtype,
+      serverSubtype: serverSubtype,
+      amountMl: amountMl,
+      row: row
+    });
+
+    return row;
+  }
   function normalizeAmount(value) {
     if (value === null || value === undefined || value === "") return null;
     const numberValue = Number(value);
@@ -1024,7 +1142,14 @@
 
   async function saveRecord(record) {
     const recordId = record && record.id ? record.id : null;
-    if (getConfig() && getConfig().debug) console.log("[BabyCloud] saveRecord start", recordId, record && record.type);
+    let row = null;
+    console.log("[BabyCloud] saveRecord:start", {
+      id: recordId,
+      type: record && record.type,
+      subtype: record && record.subtype,
+      amount: record && record.amount,
+      createdAt: record && record.createdAt
+    });
     const config = getConfig();
     if (!config || !config.enabled) {
       setState({ enabled: false, ready: false, mode: "local", status: "local_mode", lastError: null });
@@ -1039,7 +1164,8 @@
         return { ok: false, status: "error", recordId: recordId, error: "family_baby_setup_failed" };
       }
 
-      const row = mapLocalRecordToServerRow(record, context);
+      row = mapLocalRecordToServerRow(record, context);
+      console.log("[BabyCloud] saveRecord:row", row);
       const updateResult = await client
         .from("records")
         .update(row)
@@ -1088,10 +1214,20 @@
         lastSavedAt: syncedAt,
         lastError: null
       });
-      if (getConfig() && getConfig().debug) console.log("[BabyCloud] saveRecord success", { recordId: record.id, syncedAt: syncedAt });
+      console.log("[BabyCloud] saveRecord:success", {
+        id: record.id,
+        type: row.type,
+        client_id: row.client_id
+      });
       return { ok: true, status: "synced", recordId: record.id, syncedAt: syncedAt };
     } catch (error) {
-      if (getConfig() && getConfig().debug) console.warn("[BabyCloud] saveRecord failed", error);
+      console.error("[BabyCloud] saveRecord:error", {
+        id: recordId,
+        localType: record && record.type,
+        rowType: row && row.type,
+        rowSubtype: row && row.subtype,
+        error: error
+      });
       console.warn("BabyCloud record save failed", error);
       setState({
         ready: false,
@@ -1102,7 +1238,6 @@
       return { ok: false, status: "error", recordId: recordId, error: errorMessage(error) };
     }
   }
-
   async function updateRecord(record) {
     const recordId = record && record.id ? record.id : null;
     if (getConfig() && getConfig().debug) console.log("[BabyCloud] updateRecord start", recordId, record && record.type);
@@ -1181,6 +1316,38 @@
     return { ok: okCount === list.length, count: list.length, okCount: okCount, results: results };
   }
 
+  async function ensureUserFamilyContextRpc(profile) {
+    const client = getClient();
+    if (!client) return { ok: false, status: "local_only", error: "supabase_client_unavailable" };
+    try {
+      const user = await ensureUser();
+      const source = profile && typeof profile === "object" ? profile : {};
+      const result = await client.rpc("ensure_user_family_context", {
+        p_family_name: source.familyName || "우리 가족",
+        p_baby_name: source.babyName || source.name || "아기",
+        p_birth_date: source.birthDate || null,
+        p_gender: source.gender || "unknown"
+      });
+      if (result.error) throw result.error;
+      const row = Array.isArray(result.data) ? result.data[0] : result.data;
+      if (!row || !row.family_id || !row.baby_id) throw new Error("rpc_context_missing");
+      const saved = saveCloudContext(Object.assign({}, getCloudContext(), {
+        currentUserId: user && user.id ? user.id : BabyCloud.userId,
+        currentFamilyId: row.family_id,
+        currentBabyId: row.baby_id,
+        currentMemberId: row.member_id || null,
+        deviceId: getOrCreateDeviceId(),
+        lastSetupAt: nowIso()
+      }));
+      setState({ ready: true, mode: "cloud_ready", status: "context_ready", userId: saved.currentUserId, lastError: null });
+      return { ok: true, status: "context_ready", context: saved, familyId: row.family_id, babyId: row.baby_id, memberId: row.member_id || null };
+    } catch (error) {
+      console.warn("BabyCloud RPC context setup failed", error);
+      setState({ ready: false, mode: "local", status: "error", lastError: normalizeError(error) });
+      return { ok: false, status: "error", error: errorMessage(error) };
+    }
+  }
+
   async function retryPendingMutations(records) {
     return retryPendingRecords({ records: Array.isArray(records) ? records : ((readStoredAppData() || {}).records || []) });
   }
@@ -1188,16 +1355,22 @@
   async function retryRecordSync(record) {
     const startedAt = nowIso();
     const state = getRecordCloudStatus(record);
+    if (isTestRecord(record)) {
+      return { ok: true, status: "skipped_test_row", recordId: record && record.id, skipped: true };
+    }
+    const operation = (record && record.cloud && record.cloud.operation) ||
+      (record && record.deletedAt ? "delete" : (state.status === "local_only" ? "create" : "update"));
     updateStoredRecordCloud(record && record.id, {
       status: state.status,
       lastAttemptAt: startedAt,
-      retryCount: state.retryCount
+      retryCount: (state.retryCount || 0) + 1,
+      operation: operation
     });
     try {
       let result;
-      if (record && record.deletedAt) {
+      if (operation === "delete" || (record && record.deletedAt)) {
         result = await softDeleteRecord(record);
-      } else if (state.status === "local_only") {
+      } else if (operation === "create" || state.status === "local_only") {
         result = await saveRecord(record);
       } else if (state.status === "pending" || state.status === "error") {
         result = await updateRecord(record);
@@ -1213,6 +1386,7 @@
           syncedAt: syncedAt,
           error: "",
           lastAttemptAt: startedAt,
+          operation: operation,
           familyId: (getCloudContext() || {}).currentFamilyId || state.familyId || null,
           babyId: (getCloudContext() || {}).currentBabyId || state.babyId || null
         });
@@ -1228,7 +1402,8 @@
         syncedAt: null,
         error: errorMessage(error),
         lastAttemptAt: startedAt,
-        retryCount: retryCount
+        retryCount: retryCount,
+        operation: operation
       });
       return { ok: false, status: nextStatus, recordId: record && record.id, error: errorMessage(error) };
     }
@@ -1240,8 +1415,14 @@
     const records = target && Array.isArray(target.records) ? target.records : [];
     const statuses = Array.isArray(opts.statuses) && opts.statuses.length ? opts.statuses : RETRY_STATUSES.slice();
     if (opts.includeLocalOnly && !statuses.includes("local_only")) statuses.push("local_only");
+    let skippedTestRows = 0;
     const targets = records.filter(function (record) {
-      return record && statuses.includes(getRecordCloudStatus(record).status);
+      if (!record || !statuses.includes(getRecordCloudStatus(record).status)) return false;
+      if (isTestRecord(record)) {
+        skippedTestRows += 1;
+        return false;
+      }
+      return true;
     });
     const summary = {
       ok: true,
@@ -1249,6 +1430,7 @@
       succeeded: 0,
       failed: 0,
       skipped: records.length - targets.length,
+      skippedTestRows: skippedTestRows,
       finishedAt: null,
       results: []
     };
@@ -1407,9 +1589,9 @@
       const row = {
         user_id: auth.userId,
         device_id: deviceId,
-        check_type: "phase3_6_manual",
+        check_type: "phase3_7_manual",
         status: "ok",
-        message: "Phase 3.6 diagnostic insert/select test",
+        message: "Phase 3.7.1 diagnostic insert/select test",
         app_version: BABY_CLOUD_APP_VERSION,
         client_created_at: nowIso()
       };
@@ -1486,7 +1668,7 @@
         type: "test",
         subtype: "connection",
         amount: null,
-        memo: "Phase 3.6 records insert/select/update/soft-delete test",
+        memo: "Phase 3.7.1 records insert/select/update/soft-delete test",
         isSample: true,
         createdAt: now,
         updatedAt: now
@@ -1508,7 +1690,7 @@
       if (selectResult.error) throw selectResult.error;
       if (!selectResult.data) throw new Error("records_select_missing_row");
 
-      const updateNote = "Phase 3.6 update test completed";
+      const updateNote = "Phase 3.7.1 update test completed";
       const updateResult = await client
         .from("records")
         .update({
@@ -1568,31 +1750,31 @@
       const auth = await testAuthConnection();
       result.checks.authSession = !!(auth && auth.ok);
       result.checks.userId = !!(auth && auth.userId);
-      if (!auth.ok) failDiagnosticStep(result, "authSession", auth.error || "anonymous_auth_failed");
-      result.ids.userId = auth.userId;
+      if (!auth.ok) addDiagnosticError(result, "authSession", new Error(auth.error || "anonymous_auth_failed"));
+      result.ids.userId = auth && auth.userId;
 
       const diagnostics = await testDiagnosticsInsertSelect();
       result.checks.diagnosticsInsert = !!(diagnostics && diagnostics.ok && diagnostics.diagnosticId);
       result.checks.diagnosticsSelect = !!(diagnostics && diagnostics.ok);
-      if (!diagnostics.ok) failDiagnosticStep(result, "diagnosticsInsert", diagnostics.error || "diagnostics_insert_select_failed");
-      result.ids.diagnosticId = diagnostics.diagnosticId;
+      if (!diagnostics.ok) addDiagnosticError(result, "diagnosticsInsert", new Error(diagnostics.error || diagnostics.rawError || "diagnostics_insert_select_failed"));
+      result.ids.diagnosticId = diagnostics && diagnostics.diagnosticId;
 
       const familyBaby = await testFamilyBabyInsertSelect();
       result.checks.familyReady = !!(familyBaby && familyBaby.ok && familyBaby.familyId);
       result.checks.babyReady = !!(familyBaby && familyBaby.ok && familyBaby.babyId);
       result.checks.familyMemberReady = !!(familyBaby && familyBaby.ok && familyBaby.member);
-      if (!familyBaby.ok) failDiagnosticStep(result, "familyReady", familyBaby.error || "family_baby_insert_select_failed");
-      result.ids.familyId = familyBaby.familyId;
-      result.ids.babyId = familyBaby.babyId;
+      if (!familyBaby.ok) addDiagnosticError(result, "familyReady", new Error(familyBaby.error || familyBaby.rawError || "family_baby_insert_select_failed"));
+      result.ids.familyId = familyBaby && familyBaby.familyId;
+      result.ids.babyId = familyBaby && familyBaby.babyId;
 
       const recordTest = await testRecordInsertSelectUpdateDelete();
       result.checks.recordsInsert = !!(recordTest && recordTest.ok && recordTest.inserted);
       result.checks.recordsSelect = !!(recordTest && recordTest.ok && recordTest.selected);
       result.checks.recordsUpdate = !!(recordTest && recordTest.ok && recordTest.updated);
       result.checks.recordsSoftDelete = !!(recordTest && recordTest.ok && recordTest.deleted);
-      if (!recordTest.ok) failDiagnosticStep(result, "recordsInsert", recordTest.error || "records_crud_test_failed");
-      result.ids.testRecordId = recordTest.testRecordId;
-      result.ids.serverRecordId = recordTest.serverRecordId;
+      if (!recordTest.ok) addDiagnosticError(result, "recordsInsert", new Error(recordTest.error || recordTest.rawError || "records_crud_test_failed"));
+      result.ids.testRecordId = recordTest && recordTest.testRecordId;
+      result.ids.serverRecordId = recordTest && recordTest.serverRecordId;
 
       result.ok = Object.keys(result.checks).every(function (key) { return !!result.checks[key]; });
       setState({ ready: result.ok, mode: result.ok ? "cloud_ready" : "local", status: result.ok ? "connected" : "error", lastCheckedAt: result.checkedAt, lastError: null });
@@ -1722,6 +1904,29 @@
     return "이 기록은 아직 서버에 저장되지 않았어요. 이 기기에는 안전하게 저장되어 있어요.";
   }
 
+  function getUserFriendlyCloudStatus(input) {
+    const status = typeof input === "string" ? input : ((input && input.status) || BabyCloud.status);
+    const summary = input && input.summary ? input.summary : null;
+    const pendingCount = summary ? (summary.pending || 0) + (summary.localOnly || 0) + (summary.deletedPending || 0) : 0;
+    const errorCount = summary ? (summary.error || 0) + (summary.deletedError || 0) : 0;
+    if (typeof navigator !== "undefined" && navigator.onLine === false) {
+      return { key: "offline", title: "현재 오프라인이에요.", message: "기록은 이 기기에 저장되고, 나중에 다시 동기화할 수 있어요." };
+    }
+    if (status === "fetching" || status === "checking") {
+      return { key: "syncing", title: "서버와 기록을 맞추는 중이에요.", message: "기록 입력은 계속 이 기기에 먼저 저장됩니다." };
+    }
+    if (errorCount > 0 || status === "error" || status === "save_failed" || status === "fetch_failed") {
+      return { key: "error", title: "서버 저장이 원활하지 않아요.", message: "기록은 이 기기에 안전하게 저장되어 있어요." };
+    }
+    if (pendingCount > 0 || status === "pending") {
+      return { key: "pending", title: "서버에 아직 반영되지 않은 기록이 있어요.", message: "기록은 이 기기에 먼저 저장되어 있고 다시 동기화할 수 있어요." };
+    }
+    if (status === "not_configured" || status === "local_mode" || BabyCloud.enabled === false) {
+      return { key: "local_only", title: "현재는 이 기기에만 저장 중이에요.", message: "서버 저장 설정을 확인하면 백업 동기화를 사용할 수 있어요." };
+    }
+    return { key: "cloud_ready", title: "서버 저장이 준비됐어요.", message: "기록은 이 기기에 먼저 저장되고, 서버에도 함께 보관됩니다." };
+  }
+
   async function testSaveRecord() {
     const now = nowIso();
     const record = {
@@ -1729,7 +1934,7 @@
       type: "test",
       subtype: "connection",
       amount: null,
-      memo: "Phase 3.6 server test",
+      memo: "Phase 3.7.1 server test",
       isSample: true,
       createdAt: now,
       updatedAt: now,
@@ -1766,17 +1971,22 @@
     }
   }
 
-  async function fetchRecords() {
+  async function fetchServerRecordsForCurrentBaby(options) {
+    const opts = options || {};
     const client = getClient();
     if (!client) {
-      return { ok: false, status: "local_only", count: 0, records: [], fetchedAt: null, error: "supabase_client_unavailable" };
+      return { ok: false, status: "local_only", rows: [], records: [], fetchedAt: null, familyId: null, babyId: null, total: 0, testRows: 0, deletedRows: 0, error: "supabase_client_unavailable" };
     }
 
     try {
       setState({ status: "fetching", lastError: null });
-      const context = await ensureDefaultFamilyAndBaby();
+      let contextResult = null;
+      if (opts.useRpc === true) {
+        contextResult = await ensureUserFamilyContextRpc(opts.profile || {});
+      }
+      const context = contextResult && contextResult.ok ? getCloudContext() : await ensureDefaultFamilyAndBaby();
       if (!context || !context.currentFamilyId || !context.currentBabyId) {
-        return { ok: false, status: "error", count: 0, records: [], fetchedAt: null, error: "family_baby_context_missing" };
+        return { ok: false, status: "error", rows: [], records: [], fetchedAt: null, familyId: null, babyId: null, total: 0, testRows: 0, deletedRows: 0, error: "family_baby_context_missing" };
       }
 
       const result = await client
@@ -1790,10 +2000,27 @@
 
       const fetchedAt = nowIso();
       const rows = Array.isArray(result.data) ? result.data : [];
+      const payload = {
+        ok: true,
+        status: "records_fetched",
+        rows: rows,
+        records: rows,
+        fetchedAt: fetchedAt,
+        familyId: context.currentFamilyId,
+        babyId: context.currentBabyId,
+        total: rows.length,
+        count: rows.length,
+        testRows: rows.filter(isTestRecord).length,
+        deletedRows: rows.filter(isDeletedRecord).length
+      };
       try {
         window.localStorage.setItem("babyAppLastServerFetch", JSON.stringify({
           fetchedAt: fetchedAt,
-          serverCount: rows.length,
+          familyId: payload.familyId,
+          babyId: payload.babyId,
+          total: payload.total,
+          testRows: payload.testRows,
+          deletedRows: payload.deletedRows,
           status: "success"
         }));
       } catch (storageError) {
@@ -1807,7 +2034,7 @@
         lastCheckedAt: fetchedAt,
         lastError: null
       });
-      return { ok: true, status: "records_fetched", count: rows.length, records: rows, fetchedAt: fetchedAt };
+      return payload;
     } catch (error) {
       console.warn("BabyCloud records fetch failed", error);
       setState({
@@ -1819,15 +2046,21 @@
       try {
         window.localStorage.setItem("babyAppLastServerFetch", JSON.stringify({
           fetchedAt: nowIso(),
-          serverCount: 0,
+          total: 0,
+          testRows: 0,
+          deletedRows: 0,
           status: "failed",
           error: errorMessage(error)
         }));
       } catch (storageError) {
         console.warn("BabyCloud fetch failure storage failed", storageError);
       }
-      return { ok: false, status: "error", count: 0, records: [], fetchedAt: null, error: errorMessage(error) };
+      return { ok: false, status: "error", rows: [], records: [], fetchedAt: null, familyId: null, babyId: null, total: 0, count: 0, testRows: 0, deletedRows: 0, error: errorMessage(error) };
     }
+  }
+
+  async function fetchRecords() {
+    return fetchServerRecordsForCurrentBaby();
   }
 
   function mainRecordFields(record) {
@@ -1933,6 +2166,177 @@
     return preview;
   }
 
+  function buildSafeMergePreview(appData, serverRows) {
+    const locals = appData && Array.isArray(appData.records)
+      ? appData.records
+      : (Array.isArray(appData) ? appData : []);
+    const rows = Array.isArray(serverRows) ? serverRows : [];
+    const localById = new Map();
+    const serverValidById = new Map();
+    const serverOnlyRecords = [];
+    const localOnlyRecords = [];
+    const bothRecords = [];
+    const deleteApplyRecords = [];
+    const conflicts = [];
+    const testRows = [];
+    const invalidRows = [];
+    let serverDeletedCount = 0;
+    let localDeletedCount = 0;
+
+    locals.forEach(function (record) {
+      if (!record || !record.id) return;
+      localById.set(String(record.id), record);
+      if (record.deletedAt) localDeletedCount += 1;
+    });
+
+    rows.forEach(function (row) {
+      if (isTestRecord(row)) {
+        testRows.push(row);
+        return;
+      }
+      const normalized = normalizeServerRowToLocalRecord(row);
+      if (!normalized.ok) {
+        invalidRows.push(normalized);
+        return;
+      }
+      const record = normalized.record;
+      const recordId = String(record.id);
+      const localRecord = localById.get(recordId);
+      serverValidById.set(recordId, record);
+
+      if (record.deletedAt) serverDeletedCount += 1;
+
+      if (!localRecord) {
+        if (!record.deletedAt) serverOnlyRecords.push(record);
+        return;
+      }
+
+      bothRecords.push(record);
+      if (record.deletedAt && !localRecord.deletedAt) {
+        deleteApplyRecords.push({ id: recordId, localRecord: localRecord, serverRecord: record, deletedAt: record.deletedAt });
+        return;
+      }
+      if (!record.deletedAt && localRecord.deletedAt) return;
+      if (recordsConflict(localRecord, record)) {
+        conflicts.push({
+          id: recordId,
+          localRecord: localRecord,
+          serverRecord: record,
+          freshness: compareRecordFreshness(localRecord, record)
+        });
+      }
+    });
+
+    locals.forEach(function (record) {
+      if (record && record.id && !serverValidById.has(String(record.id))) localOnlyRecords.push(record);
+    });
+
+    const preview = {
+      ok: true,
+      localCount: locals.length,
+      serverCount: rows.length,
+      serverOnlyCount: serverOnlyRecords.length,
+      localOnlyCount: localOnlyRecords.length,
+      bothCount: bothRecords.length,
+      serverDeletedCount: serverDeletedCount,
+      localDeletedCount: localDeletedCount,
+      deleteApplyCount: deleteApplyRecords.length,
+      conflictCount: conflicts.length,
+      testRowCount: testRows.length,
+      invalidRowCount: invalidRows.length,
+      serverOnlyRecords: serverOnlyRecords,
+      localOnlyRecords: localOnlyRecords,
+      bothRecords: bothRecords,
+      deleteApplyRecords: deleteApplyRecords,
+      conflicts: conflicts,
+      testRows: testRows,
+      invalidRows: invalidRows
+    };
+
+    return preview;
+  }
+
+  function applySafeMerge(appData, mergePreview, options) {
+    const target = appData && typeof appData === "object" ? appData : null;
+    const opts = options || {};
+    const mergedAt = nowIso();
+    if (!target || !Array.isArray(target.records)) {
+      return { ok: false, added: 0, deletedApplied: 0, skippedExisting: 0, skippedTestRows: 0, conflicts: 0, mergedAt: mergedAt, error: "invalid_app_data" };
+    }
+    const preview = mergePreview && mergePreview.ok ? mergePreview : buildSafeMergePreview(target, opts.serverRows || []);
+    const backup = {
+      reason: "before_server_merge_phase3_7",
+      createdAt: mergedAt,
+      appVersion: BABY_CLOUD_APP_VERSION,
+      appData: JSON.parse(JSON.stringify(target))
+    };
+
+    try {
+      window.localStorage.setItem(BACKUP_BEFORE_SERVER_MERGE_KEY, JSON.stringify(backup));
+    } catch (error) {
+      console.warn("BabyCloud safe merge backup failed", error);
+      return { ok: false, added: 0, deletedApplied: 0, skippedExisting: preview.bothCount || 0, skippedTestRows: preview.testRowCount || 0, conflicts: preview.conflictCount || 0, mergedAt: mergedAt, error: "backup_failed" };
+    }
+
+    const existingIds = new Set(target.records.map(function (record) {
+      return record && record.id ? String(record.id) : "";
+    }));
+    let added = 0;
+    let deletedApplied = 0;
+
+    (preview.serverOnlyRecords || []).forEach(function (record) {
+      if (!record || !record.id || record.deletedAt || isTestRecord(record) || existingIds.has(String(record.id))) return;
+      target.records.push(record);
+      existingIds.add(String(record.id));
+      added += 1;
+    });
+
+    const deleteById = new Map();
+    (preview.deleteApplyRecords || []).forEach(function (item) {
+      if (item && item.id && item.deletedAt) deleteById.set(String(item.id), item.deletedAt);
+    });
+    if (deleteById.size) {
+      target.records.forEach(function (record) {
+        if (!record || !record.id || record.deletedAt) return;
+        const deletedAt = deleteById.get(String(record.id));
+        if (!deletedAt) return;
+        record.deletedAt = safeIso(deletedAt) || deletedAt;
+        record.updatedAt = safeIso(deletedAt) || record.updatedAt || nowIso();
+        record.cloud = normalizeRecordCloud(Object.assign({}, record, {
+          cloud: Object.assign({}, record.cloud || {}, {
+            status: "deleted_synced",
+            syncedAt: record.updatedAt,
+            error: ""
+          })
+        }));
+        deletedApplied += 1;
+      });
+    }
+
+    target.records.sort(function (a, b) {
+      return new Date(b.createdAt) - new Date(a.createdAt);
+    });
+
+    const result = {
+      ok: true,
+      added: added,
+      addedCount: added,
+      deletedApplied: deletedApplied,
+      skippedExisting: preview.bothCount || 0,
+      skippedTestRows: preview.testRowCount || 0,
+      conflicts: preview.conflictCount || 0,
+      invalidRows: preview.invalidRowCount || 0,
+      mergedAt: mergedAt
+    };
+    try {
+      window.localStorage.setItem(LAST_SAFE_MERGE_RESULT_KEY, JSON.stringify(result));
+      window.localStorage.setItem("babyAppLastServerMergeResult", JSON.stringify(result));
+    } catch (storageError) {
+      console.warn("BabyCloud safe merge result storage failed", storageError);
+    }
+    return result;
+  }
+
   function mergeServerRecordsIntoLocal(appData, serverRows, options) {
     const target = appData && typeof appData === "object" ? appData : null;
     const opts = options || {};
@@ -1941,16 +2345,16 @@
       return { ok: false, addedCount: 0, skippedExistingCount: 0, conflictCount: 0, invalidCount: 0, mergedAt: mergedAt, error: "invalid_app_data" };
     }
 
-    const preview = opts.preview || buildMergePreview(target.records, serverRows);
+    const preview = opts.preview || buildSafeMergePreview(target, serverRows);
     const backup = {
-      reason: "before_server_merge_phase3_5",
+      reason: "before_server_merge_phase3_7",
       createdAt: mergedAt,
       appVersion: BABY_CLOUD_APP_VERSION,
       appData: JSON.parse(JSON.stringify(target))
     };
 
     try {
-      window.localStorage.setItem("babyAppBackupBeforeServerMerge", JSON.stringify(backup));
+      window.localStorage.setItem(BACKUP_BEFORE_SERVER_MERGE_KEY, JSON.stringify(backup));
     } catch (error) {
       console.warn("BabyCloud merge backup failed", error);
       return {
@@ -1968,8 +2372,8 @@
       return record && record.id ? String(record.id) : "";
     }));
     let addedCount = 0;
-    preview.serverOnlyRecords.forEach(function (record) {
-      if (!record || !record.id || record.deletedAt || existingIds.has(String(record.id))) return;
+    (preview.serverOnlyRecords || []).forEach(function (record) {
+      if (!record || !record.id || record.deletedAt || isTestRecord(record) || existingIds.has(String(record.id))) return;
       target.records.push(record);
       existingIds.add(String(record.id));
       addedCount += 1;

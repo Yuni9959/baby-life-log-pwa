@@ -1,6 +1,6 @@
-const CACHE_NAME = "baby-life-log-v3.6";
+﻿const CACHE_NAME = "baby-life-log-v3.7.1-20260524";
 const CACHE_PREFIX = "baby-life-log-";
-const LEGACY_CACHE_NAME = "baby-life-log-v3.6-legacy";
+const LEGACY_CACHE_NAME = "baby-life-log-v3.7.1-legacy";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -8,6 +8,9 @@ const APP_SHELL = [
   "./service-worker.js",
   "./cloud-config.js",
   "./cloud-supabase.js",
+  "./supabase_phase3_7_1_type_sync_fix.sql",
+  "./PHASE3_7_1_BROWSER_VERIFICATION_REPORT.md",
+  "./supabase_phase3_7_sync_stabilization.sql",
   "./supabase_phase3_6_connection_diagnostics.sql",
   "./PHASE3_6_SUPABASE_CONNECTION_CHECKLIST.md",
   "./supabase_phase3_5_family_baby_hardening.sql",
@@ -66,6 +69,27 @@ self.addEventListener("fetch", function (event) {
 
   const requestUrl = new URL(request.url);
   if (requestUrl.origin !== self.location.origin) {
+    return;
+  }
+
+  if (
+    requestUrl.pathname.endsWith("/cloud-config.js") ||
+    requestUrl.pathname.endsWith("/cloud-supabase.js") ||
+    requestUrl.pathname.endsWith("/service-worker.js")
+  ) {
+    event.respondWith(
+      fetch(request, { cache: "no-store" })
+        .then(function (response) {
+          const responseClone = response.clone();
+          caches.open(CACHE_NAME).then(function (cache) {
+            cache.put(request, responseClone).catch(function () {});
+          });
+          return response;
+        })
+        .catch(function () {
+          return caches.match(request);
+        })
+    );
     return;
   }
 
