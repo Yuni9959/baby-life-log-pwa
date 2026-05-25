@@ -15,7 +15,9 @@
   const LAST_SAFE_MERGE_PREVIEW_KEY = "babyAppLastSafeMergePreview";
   const LAST_SAFE_MERGE_RESULT_KEY = "babyAppLastSafeMergeResult";
   const BACKUP_BEFORE_SERVER_MERGE_KEY = "babyAppBackupBeforeServerMerge";
-  const BABY_CLOUD_APP_VERSION = "3.7.1";
+  const FAMILY_JOIN_BACKUP_PREFIX = "babyAppBackupBeforeFamilyJoin:";
+  const LAST_FAMILY_IDENTITY_DIAGNOSTIC_KEY = "babyAppLastFamilyIdentityDiagnostic";
+  const BABY_CLOUD_APP_VERSION = "3.8";
   const PLACEHOLDER_URL = "https://YOUR_PROJECT_REF.supabase.co";
   const PLACEHOLDER_KEY = "YOUR_SUPABASE_PUBLISHABLE_OR_ANON_KEY";
   const CLOUD_STATUSES = [
@@ -64,9 +66,18 @@
     getSafeStatus: getSafeStatus,
 
     getOrCreateDeviceId: getOrCreateDeviceId,
+    getDeviceName: getDeviceName,
+    getDeviceType: getDeviceType,
     ensureDefaultFamilyAndBaby: ensureDefaultFamilyAndBaby,
     getCloudContext: getCloudContext,
     saveCloudContext: saveCloudContext,
+    ensureFamilyAccessCode: ensureFamilyAccessCode,
+    upsertCurrentDevice: upsertCurrentDevice,
+    fetchLinkedDevices: fetchLinkedDevices,
+    joinFamilyByAccessCode: joinFamilyByAccessCode,
+    backupLocalStorageBeforeFamilyJoin: backupLocalStorageBeforeFamilyJoin,
+    getFamilyIdentityDiagnostic: getFamilyIdentityDiagnostic,
+    diagnoseFamilyIdentity: diagnoseFamilyIdentity,
     fetchCurrentBaby: fetchCurrentBaby,
     syncLocalProfileToBaby: syncLocalProfileToBaby,
     buildProfileSyncPreview: buildProfileSyncPreview,
@@ -301,13 +312,71 @@
   function getOrCreateDeviceId() {
     try {
       const existing = window.localStorage.getItem(DEVICE_ID_KEY);
-      if (existing && /^device_\d+_[a-z0-9]+$/i.test(existing)) return existing;
-      const random = Math.random().toString(36).slice(2, 10);
-      const next = "device_" + Date.now() + "_" + random;
+      if (existing && (/^device_\d+_[a-z0-9]+$/i.test(existing) || /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(existing))) return existing;
+      const next = window.crypto && typeof window.crypto.randomUUID === "function"
+        ? window.crypto.randomUUID()
+        : "device_" + Date.now() + "_" + Math.random().toString(36).slice(2, 10);
       window.localStorage.setItem(DEVICE_ID_KEY, next);
       return next;
     } catch (error) {
       return "device_" + Date.now() + "_" + Math.random().toString(36).slice(2, 10);
+    }
+  }
+
+  function getDeviceType() {
+    const ua = (navigator && navigator.userAgent ? navigator.userAgent : "").toLowerCase();
+    if (/ipad|tablet/.test(ua)) return "tablet";
+    if (/mobi|iphone|android/.test(ua)) return "phone";
+    return "desktop";
+  }
+
+  function getDeviceName() {
+    try {
+      const stored = window.localStorage.getItem("babyAppDeviceName");
+      if (stored && stored.trim()) return stored.trim().slice(0, 80);
+    } catch (error) {}
+    const ua = navigator && navigator.userAgent ? navigator.userAgent : "";
+    const platform = navigator && navigator.platform ? navigator.platform : "";
+    let name = "이 기기";
+    if (/iPhone/i.test(ua)) name = "iPhone";
+    else if (/iPad/i.test(ua)) name = "iPad";
+    else if (/Android/i.test(ua)) name = /Mobile/i.test(ua) ? "Android Phone" : "Android Tablet";
+    else if (/Mac/i.test(platform)) name = "Mac";
+    else if (/Win/i.test(platform)) name = "Windows PC";
+    else if (/Linux/i.test(platform)) name = "Linux Device";
+    return name;
+  }
+
+  function normalizeAccessCode(value) {
+    const compact = String(value || "").trim().toUpperCase().replace(/[^A-Z0-9]/g, "");
+    if (!compact) return "";
+    if (compact.indexOf("FAMILY") === 0 && compact.length > 6) {
+      return "FAMILY-" + compact.slice(6, 12);
+    }
+    if (compact.length === 8) return compact.slice(0, 4) + "-" + compact.slice(4);
+    return compact.length > 6 ? compact.slice(0, 6) + "-" + compact.slice(6, 12) : compact;
+  }
+
+  function backupLocalStorageBeforeFamilyJoin(targetCode) {
+    const createdAt = nowIso();
+    const key = FAMILY_JOIN_BACKUP_PREFIX + createdAt.replace(/[:.]/g, "-");
+    const snapshot = {
+      createdAt: createdAt,
+      reason: "before_family_join",
+      targetAccessCode: normalizeAccessCode(targetCode),
+      currentContext: getCloudContext(),
+      storage: {}
+    };
+    try {
+      for (let i = 0; i < window.localStorage.length; i += 1) {
+        const itemKey = window.localStorage.key(i);
+        snapshot.storage[itemKey] = window.localStorage.getItem(itemKey);
+      }
+      window.localStorage.setItem(key, JSON.stringify(snapshot));
+      window.localStorage.setItem("babyAppLastFamilyJoinBackupKey", key);
+      return { ok: true, key: key, createdAt: createdAt };
+    } catch (error) {
+      return { ok: false, key: key, createdAt: createdAt, error: errorMessage(error) };
     }
   }
 
@@ -365,6 +434,9 @@
       currentFamilyId: context.currentFamilyId || null,
       currentBabyId: context.currentBabyId || null,
       deviceId: context.deviceId || null,
+      deviceName: context.deviceName || null,
+      deviceType: context.deviceType || null,
+      familyAccessCode: context.familyAccessCode || null,
       familyName: context.familyName || null,
       babyName: context.babyName || null,
       babyBirthDate: context.babyBirthDate || null,
@@ -530,6 +602,9 @@
       currentBabyId: context.currentBabyId || null,
       currentUserId: context.currentUserId || BabyCloud.userId || null,
       deviceId: context.deviceId || getOrCreateDeviceId(),
+      deviceName: context.deviceName || getDeviceName(),
+      deviceType: context.deviceType || getDeviceType(),
+      familyAccessCode: context.familyAccessCode || context.accessCode || null,
       familyName: context.familyName || "우리 가족",
       babyName: context.babyName || "아기",
       babyBirthDate: context.babyBirthDate || null,
@@ -552,6 +627,9 @@
       currentBabyId: source.currentBabyId || source.babyId || current.currentBabyId || null,
       currentUserId: source.currentUserId || source.userId || BabyCloud.userId || current.currentUserId || null,
       deviceId: source.deviceId || current.deviceId || getOrCreateDeviceId(),
+      deviceName: source.deviceName || current.deviceName || getDeviceName(),
+      deviceType: source.deviceType || current.deviceType || getDeviceType(),
+      familyAccessCode: source.familyAccessCode || source.accessCode || current.familyAccessCode || null,
       familyName: source.familyName || current.familyName || "우리 가족",
       babyName: source.babyName || current.babyName || "아기",
       babyBirthDate: source.babyBirthDate !== undefined ? source.babyBirthDate : (current.babyBirthDate || null),
@@ -588,6 +666,179 @@
     return normalizeProfileSnapshot(profile);
   }
 
+  async function ensureFamilyAccessCode(familyId) {
+    const client = getClient();
+    if (!client || !familyId) return { ok: false, accessCode: null, error: "family_context_missing" };
+    try {
+      const rpcResult = await client.rpc("ensure_family_access_code", { p_family_id: familyId });
+      if (!rpcResult.error && rpcResult.data) {
+        const accessCode = normalizeAccessCode(rpcResult.data);
+        saveCloudContext(Object.assign({}, getCloudContext(), { familyAccessCode: accessCode }));
+        return { ok: true, accessCode: accessCode };
+      }
+      const readResult = await client
+        .from("families")
+        .select("id,access_code,name")
+        .eq("id", familyId)
+        .maybeSingle();
+      if (readResult.error) throw readResult.error;
+      if (readResult.data && readResult.data.access_code) {
+        const existingCode = normalizeAccessCode(readResult.data.access_code);
+        saveCloudContext(Object.assign({}, getCloudContext(), {
+          familyAccessCode: existingCode,
+          familyName: readResult.data.name || getCloudContext().familyName
+        }));
+        return { ok: true, accessCode: existingCode };
+      }
+      return { ok: false, accessCode: null, error: "access_code_missing_run_phase3_8_sql" };
+    } catch (error) {
+      return { ok: false, accessCode: null, error: errorMessage(error) };
+    }
+  }
+
+  async function upsertCurrentDevice(context) {
+    const client = getClient();
+    const ctx = context || getCloudContext();
+    if (!client || !ctx.currentFamilyId) return { ok: false, device: null, error: "family_context_missing" };
+    try {
+      const user = await ensureUser();
+      const row = {
+        family_id: ctx.currentFamilyId,
+        user_id: (user && user.id) || ctx.currentUserId || BabyCloud.userId || null,
+        device_id: ctx.deviceId || getOrCreateDeviceId(),
+        device_name: ctx.deviceName || getDeviceName(),
+        device_type: ctx.deviceType || getDeviceType(),
+        last_seen_at: nowIso()
+      };
+      const result = await client
+        .from("devices")
+        .upsert(row, { onConflict: "device_id" })
+        .select("id,family_id,user_id,device_id,device_name,device_type,last_seen_at,created_at,updated_at")
+        .single();
+      if (result.error) throw result.error;
+      saveCloudContext(Object.assign({}, ctx, {
+        currentUserId: row.user_id,
+        deviceId: row.device_id,
+        deviceName: row.device_name,
+        deviceType: row.device_type
+      }));
+      return { ok: true, device: result.data };
+    } catch (error) {
+      return { ok: false, device: null, error: errorMessage(error) };
+    }
+  }
+
+  async function fetchLinkedDevices(familyId) {
+    const client = getClient();
+    const ctx = getCloudContext();
+    const targetFamilyId = familyId || ctx.currentFamilyId;
+    if (!client || !targetFamilyId) return { ok: false, devices: [], count: 0, error: "family_context_missing" };
+    try {
+      const result = await client
+        .from("devices")
+        .select("id,family_id,user_id,device_id,device_name,device_type,last_seen_at,created_at,updated_at")
+        .eq("family_id", targetFamilyId)
+        .order("last_seen_at", { ascending: false });
+      if (result.error) throw result.error;
+      const devices = Array.isArray(result.data) ? result.data : [];
+      return { ok: true, devices: devices, count: devices.length };
+    } catch (error) {
+      return { ok: false, devices: [], count: 0, error: errorMessage(error) };
+    }
+  }
+
+  async function joinFamilyByAccessCode(accessCode) {
+    const client = getClient();
+    if (!client) return { ok: false, error: "supabase_client_unavailable" };
+    const normalizedCode = normalizeAccessCode(accessCode);
+    if (!normalizedCode || normalizedCode.length < 6) return { ok: false, error: "access_code_required" };
+    const backup = backupLocalStorageBeforeFamilyJoin(normalizedCode);
+    if (!backup.ok) return { ok: false, error: "family_join_backup_failed", backup: backup };
+    try {
+      const user = await ensureUser();
+      if (!user || !user.id) throw new Error("anonymous_auth_failed");
+      const device = {
+        device_id: getOrCreateDeviceId(),
+        device_name: getDeviceName(),
+        device_type: getDeviceType()
+      };
+      const result = await client.rpc("join_family_by_access_code", {
+        p_access_code: normalizedCode,
+        p_device_id: device.device_id,
+        p_device_name: device.device_name,
+        p_device_type: device.device_type
+      });
+      if (result.error) throw result.error;
+      const row = Array.isArray(result.data) ? result.data[0] : result.data;
+      if (!row || !row.family_id) throw new Error("family_join_failed");
+      const babyId = row.baby_id || null;
+      const context = saveCloudContext({
+        currentFamilyId: row.family_id,
+        currentBabyId: babyId,
+        currentUserId: user.id,
+        deviceId: device.device_id,
+        deviceName: device.device_name,
+        deviceType: device.device_type,
+        familyAccessCode: normalizeAccessCode(row.access_code || normalizedCode),
+        familyName: row.family_name || "우리 가족",
+        babyName: row.baby_name || getCloudContext().babyName || "아기",
+        babyBirthDate: row.baby_birth_date || null,
+        babyGender: row.baby_gender || "unknown",
+        lastSetupAt: nowIso()
+      });
+      await upsertCurrentDevice(context);
+      const recordsResult = await fetchServerRecordsForCurrentBaby({ skipEnsure: true });
+      setState({ ready: true, mode: "cloud_ready", status: "family_joined", userId: user.id, lastError: null });
+      return { ok: true, context: getCloudContext(), backup: backup, records: recordsResult };
+    } catch (error) {
+      setState({ ready: false, mode: "local", status: "family_join_failed", lastError: normalizeError(error) });
+      return { ok: false, error: errorMessage(error), backup: backup };
+    }
+  }
+
+  async function diagnoseFamilyIdentity() {
+    const context = getCloudContext();
+    const storedAppData = readStoredAppData();
+    const localRecords = storedAppData && Array.isArray(storedAppData.records) ? storedAppData.records : [];
+    const summary = getSyncSummary(localRecords);
+    const serverRecords = await fetchServerRecordsForCurrentBaby({ skipEnsure: true });
+    const linkedDevices = await fetchLinkedDevices(context.currentFamilyId);
+    const accessCode = context.familyAccessCode
+      ? { ok: true, accessCode: context.familyAccessCode }
+      : await ensureFamilyAccessCode(context.currentFamilyId);
+    const diagnostic = {
+      ok: !!context.currentFamilyId,
+      checkedAt: nowIso(),
+      userId: context.currentUserId || BabyCloud.userId || null,
+      familyId: context.currentFamilyId || null,
+      babyId: context.currentBabyId || null,
+      deviceId: context.deviceId || getOrCreateDeviceId(),
+      deviceName: context.deviceName || getDeviceName(),
+      deviceType: context.deviceType || getDeviceType(),
+      familyAccessCode: accessCode.accessCode || null,
+      localRecordsCount: summary.total || 0,
+      serverRecordsCount: serverRecords && serverRecords.ok ? serverRecords.total : null,
+      linkedDevicesCount: linkedDevices && linkedDevices.ok ? linkedDevices.count : null,
+      linkedDevices: linkedDevices.devices || [],
+      serverFamilyId: serverRecords && serverRecords.familyId ? serverRecords.familyId : null,
+      serverBabyId: serverRecords && serverRecords.babyId ? serverRecords.babyId : null,
+      errors: [accessCode.error, serverRecords && serverRecords.error, linkedDevices && linkedDevices.error].filter(Boolean)
+    };
+    try {
+      window.localStorage.setItem(LAST_FAMILY_IDENTITY_DIAGNOSTIC_KEY, JSON.stringify(diagnostic));
+    } catch (error) {}
+    return diagnostic;
+  }
+
+  function getFamilyIdentityDiagnostic() {
+    try {
+      const raw = window.localStorage.getItem(LAST_FAMILY_IDENTITY_DIAGNOSTIC_KEY);
+      return raw ? JSON.parse(raw) : null;
+    } catch (error) {
+      return null;
+    }
+  }
+
   async function ensureDefaultFamilyAndBaby() {
     const client = getClient();
     if (!client) return null;
@@ -610,13 +861,17 @@
           context = saveCloudContext(Object.assign({}, context, {
             currentUserId: user.id,
             deviceId: deviceId,
+            deviceName: getDeviceName(),
+            deviceType: getDeviceType(),
             babyName: babyCheck.data.name || context.babyName || "아기",
             babyBirthDate: babyCheck.data.birth_date || null,
             babyGender: babyCheck.data.gender || "unknown",
             lastSetupAt: nowIso()
           }));
+          await ensureFamilyAccessCode(context.currentFamilyId);
+          await upsertCurrentDevice(getCloudContext());
           setState({ ready: true, mode: "cloud_ready", status: "family_ready", userId: user.id, lastError: null });
-          return context;
+          return getCloudContext();
         }
       }
 
@@ -633,7 +888,7 @@
       if (!familyId) {
         const familyResult = await client
           .from("families")
-          .insert({ name: "우리 가족" })
+          .insert({ name: "우리 가족", created_by: user.id })
           .select("id")
           .single();
         if (familyResult.error) throw familyResult.error;
@@ -676,12 +931,19 @@
         currentBabyId: babyId,
         currentUserId: user.id,
         deviceId: deviceId,
+        deviceName: getDeviceName(),
+        deviceType: getDeviceType(),
         familyName: "우리 가족",
         babyName: (babyResult.data && babyResult.data.name) || "아기",
         babyBirthDate: (babyResult.data && babyResult.data.birth_date) || null,
         babyGender: (babyResult.data && babyResult.data.gender) || "unknown",
         lastSetupAt: nowIso()
       });
+      const accessCodeResult = await ensureFamilyAccessCode(familyId);
+      if (accessCodeResult.ok) {
+        context = saveCloudContext(Object.assign({}, context, { familyAccessCode: accessCodeResult.accessCode }));
+      }
+      await upsertCurrentDevice(context);
       setState({
         enabled: true,
         ready: true,
@@ -1068,8 +1330,8 @@
       memo: note,
       is_sample: Boolean(record.isSample),
 
-      app_version: "3.7.1",
-      schema_version: 2,
+      app_version: "3.8",
+      schema_version: 4,
       payload: payload
     };
 
@@ -1589,9 +1851,9 @@
       const row = {
         user_id: auth.userId,
         device_id: deviceId,
-        check_type: "phase3_7_manual",
+        check_type: "phase3_8_manual",
         status: "ok",
-        message: "Phase 3.7.1 diagnostic insert/select test",
+        message: "Phase 3.8 diagnostic insert/select test",
         app_version: BABY_CLOUD_APP_VERSION,
         client_created_at: nowIso()
       };
@@ -1668,7 +1930,7 @@
         type: "test",
         subtype: "connection",
         amount: null,
-        memo: "Phase 3.7.1 records insert/select/update/soft-delete test",
+        memo: "Phase 3.8 records insert/select/update/soft-delete test",
         isSample: true,
         createdAt: now,
         updatedAt: now
@@ -1690,7 +1952,7 @@
       if (selectResult.error) throw selectResult.error;
       if (!selectResult.data) throw new Error("records_select_missing_row");
 
-      const updateNote = "Phase 3.7.1 update test completed";
+      const updateNote = "Phase 3.8 update test completed";
       const updateResult = await client
         .from("records")
         .update({
@@ -1934,7 +2196,7 @@
       type: "test",
       subtype: "connection",
       amount: null,
-      memo: "Phase 3.7.1 server test",
+      memo: "Phase 3.8 server test",
       isSample: true,
       createdAt: now,
       updatedAt: now,
@@ -1984,8 +2246,10 @@
       if (opts.useRpc === true) {
         contextResult = await ensureUserFamilyContextRpc(opts.profile || {});
       }
-      const context = contextResult && contextResult.ok ? getCloudContext() : await ensureDefaultFamilyAndBaby();
-      if (!context || !context.currentFamilyId || !context.currentBabyId) {
+      const context = opts.skipEnsure === true
+        ? getCloudContext()
+        : (contextResult && contextResult.ok ? getCloudContext() : await ensureDefaultFamilyAndBaby());
+      if (!context || !context.currentFamilyId) {
         return { ok: false, status: "error", rows: [], records: [], fetchedAt: null, familyId: null, babyId: null, total: 0, testRows: 0, deletedRows: 0, error: "family_baby_context_missing" };
       }
 
@@ -1993,7 +2257,6 @@
         .from("records")
         .select("*")
         .eq("family_id", context.currentFamilyId)
-        .eq("baby_id", context.currentBabyId)
         .order("recorded_at", { ascending: true });
 
       if (result.error) throw result.error;
@@ -2177,6 +2440,7 @@
     const localOnlyRecords = [];
     const bothRecords = [];
     const deleteApplyRecords = [];
+    const serverNewerRecords = [];
     const conflicts = [];
     const testRows = [];
     const invalidRows = [];
@@ -2218,11 +2482,16 @@
       }
       if (!record.deletedAt && localRecord.deletedAt) return;
       if (recordsConflict(localRecord, record)) {
+        const freshness = compareRecordFreshness(localRecord, record);
+        if (freshness === "server_newer") {
+          serverNewerRecords.push(record);
+          return;
+        }
         conflicts.push({
           id: recordId,
           localRecord: localRecord,
           serverRecord: record,
-          freshness: compareRecordFreshness(localRecord, record)
+          freshness: freshness
         });
       }
     });
@@ -2241,6 +2510,7 @@
       serverDeletedCount: serverDeletedCount,
       localDeletedCount: localDeletedCount,
       deleteApplyCount: deleteApplyRecords.length,
+      serverNewerCount: serverNewerRecords.length,
       conflictCount: conflicts.length,
       testRowCount: testRows.length,
       invalidRowCount: invalidRows.length,
@@ -2248,6 +2518,7 @@
       localOnlyRecords: localOnlyRecords,
       bothRecords: bothRecords,
       deleteApplyRecords: deleteApplyRecords,
+      serverNewerRecords: serverNewerRecords,
       conflicts: conflicts,
       testRows: testRows,
       invalidRows: invalidRows
@@ -2265,7 +2536,7 @@
     }
     const preview = mergePreview && mergePreview.ok ? mergePreview : buildSafeMergePreview(target, opts.serverRows || []);
     const backup = {
-      reason: "before_server_merge_phase3_7",
+      reason: "before_server_merge_phase3_8",
       createdAt: mergedAt,
       appVersion: BABY_CLOUD_APP_VERSION,
       appData: JSON.parse(JSON.stringify(target))
@@ -2283,6 +2554,7 @@
     }));
     let added = 0;
     let deletedApplied = 0;
+    let serverNewerApplied = 0;
 
     (preview.serverOnlyRecords || []).forEach(function (record) {
       if (!record || !record.id || record.deletedAt || isTestRecord(record) || existingIds.has(String(record.id))) return;
@@ -2313,6 +2585,20 @@
       });
     }
 
+    const serverNewerById = new Map();
+    (preview.serverNewerRecords || []).forEach(function (record) {
+      if (record && record.id && !record.deletedAt && !isTestRecord(record)) serverNewerById.set(String(record.id), record);
+    });
+    if (serverNewerById.size) {
+      target.records = target.records.map(function (record) {
+        if (!record || !record.id) return record;
+        const serverRecord = serverNewerById.get(String(record.id));
+        if (!serverRecord) return record;
+        serverNewerApplied += 1;
+        return serverRecord;
+      });
+    }
+
     target.records.sort(function (a, b) {
       return new Date(b.createdAt) - new Date(a.createdAt);
     });
@@ -2322,6 +2608,7 @@
       added: added,
       addedCount: added,
       deletedApplied: deletedApplied,
+      serverNewerApplied: serverNewerApplied,
       skippedExisting: preview.bothCount || 0,
       skippedTestRows: preview.testRowCount || 0,
       conflicts: preview.conflictCount || 0,
@@ -2347,7 +2634,7 @@
 
     const preview = opts.preview || buildSafeMergePreview(target, serverRows);
     const backup = {
-      reason: "before_server_merge_phase3_7",
+      reason: "before_server_merge_phase3_8",
       createdAt: mergedAt,
       appVersion: BABY_CLOUD_APP_VERSION,
       appData: JSON.parse(JSON.stringify(target))

@@ -744,7 +744,7 @@
   <main class="app">
     <header class="topbar">
       <div>
-        <div class="version-badge" id="versionBadge">v3.7.1 · 동기화 검증</div>
+        <div class="version-badge" id="versionBadge">v3.8 · 가족 연결</div>
         <h1 id="babyTitle">우리 아기</h1>
         <div class="baby-days" id="babyDays">생년월일을 입력해 주세요</div>
         <div class="today-line" id="todayLine"></div>
@@ -1006,6 +1006,25 @@
             </div>
             <p class="cloud-message" id="familyBabyStructureMessage">가족/아기 구조를 확인하면 현재 서버 연결 상태를 볼 수 있어요.</p>
           </div>
+          <div class="data-subsection" aria-labelledby="familyIdentityTitle">
+            <h3 id="familyIdentityTitle">가족 연결</h3>
+            <p class="cloud-message">가족 연결 코드를 공유하면 로그인 없이 다른 기기가 같은 family 기록을 사용할 수 있어요. 다른 family에 연결하기 전 현재 로컬 데이터는 자동 백업됩니다.</p>
+            <div class="data-grid" id="familyIdentityGrid"></div>
+            <div class="data-tool-actions">
+              <button type="button" class="small-action" id="copyFamilyCodeButton">가족 코드 복사</button>
+              <button type="button" class="small-action" id="refreshFamilyIdentityButton">가족 연결 새로고침</button>
+            </div>
+            <div class="form-field">
+              <label for="familyAccessCodeInput">가족 연결 코드</label>
+              <input id="familyAccessCodeInput" type="text" inputmode="latin" autocomplete="off" placeholder="ABCD-1234">
+              <p class="field-note">연결 전 현재 로컬 기록과 설정을 자동 백업합니다.</p>
+            </div>
+            <div class="data-tool-actions">
+              <button type="button" class="small-action" id="joinFamilyButton">가족 연결하기</button>
+            </div>
+            <div class="data-grid" id="linkedDevicesGrid"></div>
+            <p class="cloud-message" id="familyIdentityMessage">가족/아기 서버 구조를 확인하면 가족 코드와 연결된 기기 목록을 볼 수 있어요.</p>
+          </div>
           <div class="data-tool-actions">
             <button type="button" class="small-action" id="cloudCheckButton">서버 연결 진단</button>
             <button type="button" class="small-action" id="cloudEnsureFamilyButton">가족/아기 서버 구조 확인</button>
@@ -1176,8 +1195,8 @@
       const PRE_REPAIR_BACKUP_KEY = "baby_life_log_app_backup_before_repair";
       const BACKUP_FORMAT_VERSION = 2;
       const APP_NAME = "baby-life-log";
-      const APP_VERSION = "3.7.1";
-      const APP_PHASE_LABEL = "동기화 검증";
+      const APP_VERSION = "3.8";
+      const APP_PHASE_LABEL = "가족 연결";
       const TYPES = ["feeding", "burp", "diaper", "sleep", "wake"];
       const LONG_PRESS_MS = 700;
       const MAX_FEED_AMOUNT = 500;
@@ -1270,6 +1289,13 @@
         runRecordConnectionDiagnosticButton: document.getElementById("runRecordConnectionDiagnosticButton"),
         familyBabyStructureGrid: document.getElementById("familyBabyStructureGrid"),
         familyBabyStructureMessage: document.getElementById("familyBabyStructureMessage"),
+        familyIdentityGrid: document.getElementById("familyIdentityGrid"),
+        copyFamilyCodeButton: document.getElementById("copyFamilyCodeButton"),
+        refreshFamilyIdentityButton: document.getElementById("refreshFamilyIdentityButton"),
+        familyAccessCodeInput: document.getElementById("familyAccessCodeInput"),
+        joinFamilyButton: document.getElementById("joinFamilyButton"),
+        linkedDevicesGrid: document.getElementById("linkedDevicesGrid"),
+        familyIdentityMessage: document.getElementById("familyIdentityMessage"),
         cloudCheckButton: document.getElementById("cloudCheckButton"),
         cloudEnsureFamilyButton: document.getElementById("cloudEnsureFamilyButton"),
         cloudProfileSyncButton: document.getElementById("cloudProfileSyncButton"),
@@ -3337,7 +3363,7 @@
         const configVersion = diagnostic && diagnostic.configAppVersion
           ? diagnostic.configAppVersion
           : ((window.BABY_APP_CLOUD_CONFIG && window.BABY_APP_CLOUD_CONFIG.appVersion) || "-");
-        const babyCloudVersion = diagnostic && diagnostic.babyCloudAppVersion ? diagnostic.babyCloudAppVersion : "3.7.1";
+        const babyCloudVersion = diagnostic && diagnostic.babyCloudAppVersion ? diagnostic.babyCloudAppVersion : "3.8";
         const versionMismatch = configVersion !== "-" && (String(configVersion) !== APP_VERSION || String(babyCloudVersion) !== APP_VERSION);
 
         if (els.fullConnectionDiagnosticGrid) {
@@ -3632,10 +3658,11 @@
           els.cloudCheckButton.disabled = status.status === "checking";
           els.cloudCheckButton.textContent = status.status === "checking" ? "확인 중" : "서버 연결 진단";
         }
-        [els.cloudEnsureFamilyButton, els.cloudProfileSyncButton, els.cloudRepairServerRecordsButton, els.cloudRepairLocalContextButton, els.cloudProfilePreviewButton, els.cloudTestSaveButton, els.cloudTestFetchButton, els.cloudRetryPendingButton, els.cloudRetryErrorButton, els.cloudFetchRecordsButton, els.cloudRefreshSyncButton].forEach(function (button) {
+        [els.cloudEnsureFamilyButton, els.refreshFamilyIdentityButton, els.joinFamilyButton, els.cloudProfileSyncButton, els.cloudRepairServerRecordsButton, els.cloudRepairLocalContextButton, els.cloudProfilePreviewButton, els.cloudTestSaveButton, els.cloudTestFetchButton, els.cloudRetryPendingButton, els.cloudRetryErrorButton, els.cloudFetchRecordsButton, els.cloudRefreshSyncButton].forEach(function (button) {
           if (button) button.disabled = status.status === "checking";
         });
         renderFamilyBabyStructureStatus(status);
+        renderFamilyIdentityStatus(status);
         renderCloudMergeStatus();
       }
 
@@ -3667,6 +3694,56 @@
         }
       }
 
+      function readFamilyIdentityDiagnostic() {
+        if (window.BabyCloud && typeof window.BabyCloud.getFamilyIdentityDiagnostic === "function") {
+          return window.BabyCloud.getFamilyIdentityDiagnostic();
+        }
+        try {
+          const raw = localStorage.getItem("babyAppLastFamilyIdentityDiagnostic");
+          return raw ? JSON.parse(raw) : null;
+        } catch (error) {
+          return null;
+        }
+      }
+
+      function renderFamilyIdentityStatus(status) {
+        const safeStatus = status || getCloudSafeStatus();
+        const context = window.BabyCloud && typeof window.BabyCloud.getCloudContext === "function"
+          ? window.BabyCloud.getCloudContext()
+          : {};
+        const diagnostic = readFamilyIdentityDiagnostic() || {};
+        const accessCode = diagnostic.familyAccessCode || context.familyAccessCode || safeStatus.familyAccessCode || "-";
+        const devices = Array.isArray(diagnostic.linkedDevices) ? diagnostic.linkedDevices : [];
+        if (els.familyIdentityGrid) {
+          els.familyIdentityGrid.innerHTML = dataItemsHtml([
+            { label: "가족 연결 코드", value: accessCode },
+            { label: "현재 기기 이름", value: diagnostic.deviceName || safeStatus.deviceName || context.deviceName || "-" },
+            { label: "현재 device_id", value: shortUserId(diagnostic.deviceId || safeStatus.deviceId || context.deviceId || "") },
+            { label: "현재 user_id", value: shortUserId(diagnostic.userId || safeStatus.userId || context.currentUserId || "") },
+            { label: "현재 family_id", value: shortUserId(diagnostic.familyId || safeStatus.currentFamilyId || context.currentFamilyId || "") },
+            { label: "현재 baby_id", value: shortUserId(diagnostic.babyId || safeStatus.currentBabyId || context.currentBabyId || "") },
+            { label: "로컬 records 수", value: (diagnostic.localRecordsCount !== undefined ? diagnostic.localRecordsCount : appData.records.length) + "개" },
+            { label: "서버 records 수", value: diagnostic.serverRecordsCount !== null && diagnostic.serverRecordsCount !== undefined ? diagnostic.serverRecordsCount + "개" : "확인 전" },
+            { label: "연결된 기기 수", value: diagnostic.linkedDevicesCount !== null && diagnostic.linkedDevicesCount !== undefined ? diagnostic.linkedDevicesCount + "개" : "확인 전" },
+            { label: "서버 family_id", value: shortUserId(diagnostic.serverFamilyId || "") || "-" },
+            { label: "서버 baby_id", value: shortUserId(diagnostic.serverBabyId || "") || "-" }
+          ]);
+        }
+        if (els.linkedDevicesGrid) {
+          els.linkedDevicesGrid.innerHTML = devices.length
+            ? dataItemsHtml(devices.map(function (device) {
+                const isCurrent = String(device.device_id || "") === String(context.deviceId || safeStatus.deviceId || "");
+                return {
+                  label: (device.device_name || "이름 없는 기기") + (isCurrent ? " (현재)" : ""),
+                  value: (device.device_type || "device") + " · " + formatCloudCheckedAt(device.last_seen_at)
+                };
+              }))
+            : dataItemsHtml([{ label: "연결된 기기", value: "아직 조회 전" }]);
+        }
+        if (els.copyFamilyCodeButton) els.copyFamilyCodeButton.disabled = !accessCode || accessCode === "-";
+        if (els.joinFamilyButton) els.joinFamilyButton.disabled = safeStatus.status === "checking";
+      }
+
       function canWriteServerMergeBackup() {
         try {
           const key = "babyAppBackupBeforeServerMergeWriteTest";
@@ -3685,7 +3762,8 @@
         const serverDeletedCount = preview ? (preview.serverDeletedCount !== undefined ? preview.serverDeletedCount : (preview.deletedServerCount || 0)) : 0;
         const invalidRowCount = preview ? (preview.invalidRowCount !== undefined ? preview.invalidRowCount : (preview.invalidServerCount || 0)) : 0;
         const deleteApplyCount = preview ? (preview.deleteApplyCount || 0) : 0;
-        const canMerge = !!(cloudLastFetchResult && cloudLastFetchResult.ok && preview && ((preview.serverOnlyCount || 0) > 0 || (preview.deleteApplyCount || 0) > 0) && canWriteServerMergeBackup());
+        const serverNewerCount = preview ? (preview.serverNewerCount || 0) : 0;
+        const canMerge = !!(cloudLastFetchResult && cloudLastFetchResult.ok && preview && ((preview.serverOnlyCount || 0) > 0 || (preview.deleteApplyCount || 0) > 0 || (preview.serverNewerCount || 0) > 0) && canWriteServerMergeBackup());
 
         if (els.cloudMergeGrid) {
           els.cloudMergeGrid.innerHTML = dataItemsHtml([
@@ -3698,6 +3776,7 @@
             { label: "로컬에만 있는 기록", value: (preview ? preview.localOnlyCount : 0) + "개" },
             { label: "양쪽 모두에 있는 기록", value: (preview ? preview.bothCount : 0) + "개" },
             { label: "충돌 의심 기록", value: (preview ? preview.conflictCount : 0) + "개" },
+            { label: "서버 최신 우선 반영 대상", value: serverNewerCount + "개" },
             { label: "삭제된 서버 기록", value: serverDeletedCount + "개" },
             { label: "삭제 반영 대상", value: deleteApplyCount + "개" },
             { label: "손상된 서버 기록", value: invalidRowCount + "개" },
@@ -4183,6 +4262,9 @@
                   renderCloudStatus();
                 });
               }
+              if (window.BabyCloud && typeof window.BabyCloud.diagnoseFamilyIdentity === "function") {
+                window.BabyCloud.diagnoseFamilyIdentity().then(renderCloudStatus);
+              }
               showToast("가족/아기 서버 구조가 준비됐어요.");
             } else {
               if (els.cloudActionMessage) els.cloudActionMessage.textContent = "가족/아기 서버 구조를 준비하지 못했어요. Supabase SQL과 RLS를 확인해 주세요.";
@@ -4193,6 +4275,88 @@
             renderCloudStatus();
             if (els.cloudActionMessage) els.cloudActionMessage.textContent = "가족/아기 서버 구조를 준비하지 못했어요. 이 기기의 기록은 그대로 유지됩니다.";
             showToast("가족/아기 서버 구조를 준비하지 못했어요.");
+          });
+        });
+      }
+      if (els.refreshFamilyIdentityButton) {
+        els.refreshFamilyIdentityButton.addEventListener("click", function () {
+          if (!window.BabyCloud || typeof window.BabyCloud.diagnoseFamilyIdentity !== "function") {
+            renderCloudStatus();
+            showToast("가족 연결 정보를 확인할 수 없어요.");
+            return;
+          }
+          if (els.familyIdentityMessage) els.familyIdentityMessage.textContent = "가족 연결 정보를 새로 확인하는 중입니다.";
+          window.BabyCloud.diagnoseFamilyIdentity().then(function (diagnostic) {
+            renderCloudStatus();
+            if (els.familyIdentityMessage) {
+              els.familyIdentityMessage.textContent = diagnostic && diagnostic.ok
+                ? "가족 코드와 연결된 기기 목록을 새로 확인했어요."
+                : "가족 연결 정보를 확인하지 못했어요. Phase 3.8 SQL 적용 여부를 확인해 주세요.";
+            }
+            showToast("가족 연결 정보를 새로고침했어요.");
+          }).catch(function (error) {
+            console.warn("Family identity refresh failed", error);
+            renderCloudStatus();
+            if (els.familyIdentityMessage) els.familyIdentityMessage.textContent = "가족 연결 정보를 확인하지 못했어요.";
+            showToast("가족 연결 정보를 확인하지 못했어요.");
+          });
+        });
+      }
+      if (els.copyFamilyCodeButton) {
+        els.copyFamilyCodeButton.addEventListener("click", function () {
+          const context = window.BabyCloud && typeof window.BabyCloud.getCloudContext === "function" ? window.BabyCloud.getCloudContext() : {};
+          const diagnostic = readFamilyIdentityDiagnostic() || {};
+          const code = diagnostic.familyAccessCode || context.familyAccessCode || "";
+          if (!code) {
+            showToast("복사할 가족 코드가 아직 없어요.");
+            return;
+          }
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(code).then(function () {
+              showToast("가족 코드를 복사했어요.");
+            }).catch(function () {
+              window.prompt("가족 연결 코드", code);
+            });
+          } else {
+            window.prompt("가족 연결 코드", code);
+          }
+        });
+      }
+      if (els.joinFamilyButton) {
+        els.joinFamilyButton.addEventListener("click", function () {
+          if (!window.BabyCloud || typeof window.BabyCloud.joinFamilyByAccessCode !== "function") {
+            showToast("가족 연결 기능을 실행할 수 없어요.");
+            return;
+          }
+          const code = els.familyAccessCodeInput ? els.familyAccessCodeInput.value : "";
+          if (!code.trim()) {
+            showToast("가족 연결 코드를 입력해 주세요.");
+            return;
+          }
+          if (!window.confirm("다른 family에 연결하기 전 현재 로컬 기록과 설정을 자동 백업합니다. 계속할까요?")) return;
+          if (els.familyIdentityMessage) els.familyIdentityMessage.textContent = "현재 로컬 데이터를 백업하고 가족에 연결하는 중입니다.";
+          els.joinFamilyButton.disabled = true;
+          window.BabyCloud.joinFamilyByAccessCode(code).then(function (result) {
+            if (result && result.ok) {
+              if (els.familyAccessCodeInput) els.familyAccessCodeInput.value = "";
+              if (els.familyIdentityMessage) els.familyIdentityMessage.textContent = "가족 연결이 완료됐어요. 서버 기록 새로고침 또는 안전 병합을 실행해 같은 family 기록을 가져올 수 있어요.";
+              showToast("가족 연결이 완료됐어요.");
+            } else {
+              if (els.familyIdentityMessage) els.familyIdentityMessage.textContent = (result && result.error) || "가족 연결에 실패했어요.";
+              showToast("가족 연결에 실패했어요.");
+            }
+            if (window.BabyCloud && typeof window.BabyCloud.diagnoseFamilyIdentity === "function") {
+              window.BabyCloud.diagnoseFamilyIdentity().then(renderCloudStatus);
+            } else {
+              renderCloudStatus();
+            }
+          }).catch(function (error) {
+            console.warn("Family join failed", error);
+            if (els.familyIdentityMessage) els.familyIdentityMessage.textContent = "가족 연결에 실패했어요. 코드를 확인해 주세요.";
+            showToast("가족 연결에 실패했어요.");
+            renderCloudStatus();
+          }).finally(function () {
+            els.joinFamilyButton.disabled = false;
           });
         });
       }
@@ -4390,7 +4554,7 @@
       }
       if (els.cloudMergeRecordsButton) {
         els.cloudMergeRecordsButton.addEventListener("click", function () {
-          if (!cloudMergePreview || ((cloudMergePreview.serverOnlyCount || 0) < 1 && (cloudMergePreview.deleteApplyCount || 0) < 1)) {
+          if (!cloudMergePreview || ((cloudMergePreview.serverOnlyCount || 0) < 1 && (cloudMergePreview.deleteApplyCount || 0) < 1 && (cloudMergePreview.serverNewerCount || 0) < 1)) {
             renderCloudMergeStatus();
             showToast("새로 병합할 서버 기록이 없어요.");
             return;
