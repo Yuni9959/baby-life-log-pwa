@@ -994,6 +994,13 @@
             </div>
             <p class="cloud-message" id="fullConnectionDiagnosticMessage">아직 전체 서버 연결 진단을 실행하지 않았어요.</p>
           </details>
+          <div class="data-subsection" aria-labelledby="authFamilyStatusTitle">
+            <h3 id="authFamilyStatusTitle">계정 상태</h3>
+            <p class="cloud-message">아기의 기록은 이 가족 공간에 저장됩니다. 나중에 Google 또는 Apple 계정을 연결해도 기존 기록은 그대로 유지됩니다.</p>
+            <p class="cloud-message">로그인 계정은 데이터의 주인이 아닙니다. 가족 workspace가 기록의 실제 보관함입니다.</p>
+            <div class="data-grid" id="authFamilyStatusGrid"></div>
+            <p class="cloud-message" id="authFamilyStatusMessage">Google / Apple 계정 연결은 다음 단계에서 추가됩니다.</p>
+          </div>
           <div class="data-subsection" aria-labelledby="familyBabyStructureTitle">
             <h3 id="familyBabyStructureTitle">가족/아기 서버 구조</h3>
             <p class="cloud-message">가족/아기 구조는 Phase 4 로그인 기능으로 넘어가기 위한 준비 단계예요. 현재는 익명 사용자 기준으로 안전하게 연결해 둡니다.</p>
@@ -1287,6 +1294,8 @@
         refreshFullConnectionDiagnosticButton: document.getElementById("refreshFullConnectionDiagnosticButton"),
         copyFullConnectionDiagnosticButton: document.getElementById("copyFullConnectionDiagnosticButton"),
         runRecordConnectionDiagnosticButton: document.getElementById("runRecordConnectionDiagnosticButton"),
+        authFamilyStatusGrid: document.getElementById("authFamilyStatusGrid"),
+        authFamilyStatusMessage: document.getElementById("authFamilyStatusMessage"),
         familyBabyStructureGrid: document.getElementById("familyBabyStructureGrid"),
         familyBabyStructureMessage: document.getElementById("familyBabyStructureMessage"),
         familyIdentityGrid: document.getElementById("familyIdentityGrid"),
@@ -3661,9 +3670,41 @@
         [els.cloudEnsureFamilyButton, els.refreshFamilyIdentityButton, els.joinFamilyButton, els.cloudProfileSyncButton, els.cloudRepairServerRecordsButton, els.cloudRepairLocalContextButton, els.cloudProfilePreviewButton, els.cloudTestSaveButton, els.cloudTestFetchButton, els.cloudRetryPendingButton, els.cloudRetryErrorButton, els.cloudFetchRecordsButton, els.cloudRefreshSyncButton].forEach(function (button) {
           if (button) button.disabled = status.status === "checking";
         });
+        renderAuthFamilyStatus(status);
         renderFamilyBabyStructureStatus(status);
         renderFamilyIdentityStatus(status);
         renderCloudMergeStatus();
+      }
+
+      function renderAuthFamilyStatus(status) {
+        const safeStatus = status || getCloudSafeStatus();
+        const context = window.BabyCloud && typeof window.BabyCloud.getCloudContext === "function"
+          ? window.BabyCloud.getCloudContext()
+          : {};
+        const diagnostic = readFamilyIdentityDiagnostic() || {};
+        const auth = safeStatus.authIdentity || diagnostic.auth || {};
+        const membership = safeStatus.familyMembership || diagnostic.membership || {};
+        const providers = Array.isArray(auth.providers) && auth.providers.length ? auth.providers.join(", ") : "-";
+        const isAnonymous = auth.isAnonymous === true || (!auth.email && providers === "-");
+        if (els.authFamilyStatusGrid) {
+          els.authFamilyStatusGrid.innerHTML = dataItemsHtml([
+            { label: "로그인 상태", value: safeStatus.userId || auth.id ? "연결됨" : "확인 전" },
+            { label: "auth user id", value: shortUserId(auth.id || safeStatus.userId || context.currentUserId || "") || "-" },
+            { label: "anonymous 여부", value: isAnonymous ? "익명 사용자" : "연결 계정" },
+            { label: "email", value: auth.email || "-" },
+            { label: "provider", value: providers },
+            { label: "current family_id", value: shortUserId(context.currentFamilyId || safeStatus.currentFamilyId || diagnostic.familyId || "") || "-" },
+            { label: "family_members 연결", value: membership.id || diagnostic.membershipConnected ? "연결됨" : "확인 전" },
+            { label: "현재 role", value: membership.role || diagnostic.role || "-" },
+            { label: "현재 status", value: membership.status || diagnostic.membershipStatus || "-" },
+            { label: "last_seen_at", value: formatCloudCheckedAt(membership.last_seen_at || diagnostic.lastSeenAt) }
+          ]);
+        }
+        if (els.authFamilyStatusMessage) {
+          els.authFamilyStatusMessage.textContent = context.currentFamilyId || safeStatus.currentFamilyId
+            ? "현재 데이터는 이 family workspace에 연결되어 있습니다. Google / Apple 계정 연결은 다음 단계에서 추가됩니다."
+            : "서버 구조 확인을 실행하면 현재 익명 사용자와 family workspace 연결 상태를 확인할 수 있어요.";
+        }
       }
 
       function renderFamilyBabyStructureStatus(status) {
