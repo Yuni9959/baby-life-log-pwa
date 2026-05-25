@@ -996,10 +996,15 @@
           </details>
           <div class="data-subsection" aria-labelledby="authFamilyStatusTitle">
             <h3 id="authFamilyStatusTitle">계정 상태</h3>
-            <p class="cloud-message">아기의 기록은 이 가족 공간에 저장됩니다. 나중에 Google 또는 Apple 계정을 연결해도 기존 기록은 그대로 유지됩니다.</p>
-            <p class="cloud-message">로그인 계정은 데이터의 주인이 아닙니다. 가족 workspace가 기록의 실제 보관함입니다.</p>
+            <p class="cloud-message">Google 계정을 연결해도 기존 아기 기록은 그대로 유지됩니다.</p>
+            <p class="cloud-message">Google 계정은 family workspace에 접근하는 identity일 뿐, records의 owner가 아닙니다.</p>
             <div class="data-grid" id="authFamilyStatusGrid"></div>
-            <p class="cloud-message" id="authFamilyStatusMessage">Google / Apple 계정 연결은 다음 단계에서 추가됩니다.</p>
+            <div class="data-tool-actions">
+              <button type="button" class="small-action" id="googleConnectButton">Google 계정 연결하기</button>
+              <button type="button" class="small-action" id="googleLogoutButton">로그아웃</button>
+            </div>
+            <p class="cloud-message" id="authFamilyStatusMessage">현재 익명 사용자로 사용 중입니다. Google 계정을 연결하면 다른 기기에서도 이 가족 기록을 이어서 사용할 수 있습니다.</p>
+            <p class="cloud-message" id="googleLoginSetupMessage">Google 로그인이 작동하려면 Supabase Dashboard에서 Google Provider와 Redirect URL 설정이 필요합니다.</p>
           </div>
           <div class="data-subsection" aria-labelledby="familyBabyStructureTitle">
             <h3 id="familyBabyStructureTitle">가족/아기 서버 구조</h3>
@@ -1296,6 +1301,9 @@
         runRecordConnectionDiagnosticButton: document.getElementById("runRecordConnectionDiagnosticButton"),
         authFamilyStatusGrid: document.getElementById("authFamilyStatusGrid"),
         authFamilyStatusMessage: document.getElementById("authFamilyStatusMessage"),
+        googleConnectButton: document.getElementById("googleConnectButton"),
+        googleLogoutButton: document.getElementById("googleLogoutButton"),
+        googleLoginSetupMessage: document.getElementById("googleLoginSetupMessage"),
         familyBabyStructureGrid: document.getElementById("familyBabyStructureGrid"),
         familyBabyStructureMessage: document.getElementById("familyBabyStructureMessage"),
         familyIdentityGrid: document.getElementById("familyIdentityGrid"),
@@ -3667,7 +3675,7 @@
           els.cloudCheckButton.disabled = status.status === "checking";
           els.cloudCheckButton.textContent = status.status === "checking" ? "확인 중" : "서버 연결 진단";
         }
-        [els.cloudEnsureFamilyButton, els.refreshFamilyIdentityButton, els.joinFamilyButton, els.cloudProfileSyncButton, els.cloudRepairServerRecordsButton, els.cloudRepairLocalContextButton, els.cloudProfilePreviewButton, els.cloudTestSaveButton, els.cloudTestFetchButton, els.cloudRetryPendingButton, els.cloudRetryErrorButton, els.cloudFetchRecordsButton, els.cloudRefreshSyncButton].forEach(function (button) {
+        [els.cloudEnsureFamilyButton, els.refreshFamilyIdentityButton, els.joinFamilyButton, els.googleConnectButton, els.googleLogoutButton, els.cloudProfileSyncButton, els.cloudRepairServerRecordsButton, els.cloudRepairLocalContextButton, els.cloudProfilePreviewButton, els.cloudTestSaveButton, els.cloudTestFetchButton, els.cloudRetryPendingButton, els.cloudRetryErrorButton, els.cloudFetchRecordsButton, els.cloudRefreshSyncButton].forEach(function (button) {
           if (button) button.disabled = status.status === "checking";
         });
         renderAuthFamilyStatus(status);
@@ -3685,25 +3693,53 @@
         const auth = safeStatus.authIdentity || diagnostic.auth || {};
         const membership = safeStatus.familyMembership || diagnostic.membership || {};
         const providers = Array.isArray(auth.providers) && auth.providers.length ? auth.providers.join(", ") : "-";
-        const isAnonymous = auth.isAnonymous === true || (!auth.email && providers === "-");
+        const googleConnected = Array.isArray(auth.providers) && auth.providers.indexOf("google") !== -1;
+        const isAnonymous = auth.isAnonymous === true || (!auth.email && !googleConnected && providers === "-");
+        let lastOAuth = null;
+        try {
+          const rawOAuth = window.localStorage.getItem("babylog_last_oauth_result");
+          lastOAuth = rawOAuth ? JSON.parse(rawOAuth) : null;
+        } catch (error) {
+          lastOAuth = null;
+        }
         if (els.authFamilyStatusGrid) {
           els.authFamilyStatusGrid.innerHTML = dataItemsHtml([
-            { label: "로그인 상태", value: safeStatus.userId || auth.id ? "연결됨" : "확인 전" },
+            { label: "로그인 상태", value: googleConnected ? "Google 계정으로 연결됨" : (safeStatus.userId || auth.id ? "익명 사용자로 사용 중" : "확인 전") },
             { label: "auth user id", value: shortUserId(auth.id || safeStatus.userId || context.currentUserId || "") || "-" },
             { label: "anonymous 여부", value: isAnonymous ? "익명 사용자" : "연결 계정" },
+            { label: "Google 연결", value: googleConnected ? "연결됨" : "미연결" },
             { label: "email", value: auth.email || "-" },
             { label: "provider", value: providers },
             { label: "current family_id", value: shortUserId(context.currentFamilyId || safeStatus.currentFamilyId || diagnostic.familyId || "") || "-" },
             { label: "family_members 연결", value: membership.id || diagnostic.membershipConnected ? "연결됨" : "확인 전" },
             { label: "현재 role", value: membership.role || diagnostic.role || "-" },
             { label: "현재 status", value: membership.status || diagnostic.membershipStatus || "-" },
-            { label: "last_seen_at", value: formatCloudCheckedAt(membership.last_seen_at || diagnostic.lastSeenAt) }
+            { label: "last_seen_at", value: formatCloudCheckedAt(membership.last_seen_at || diagnostic.lastSeenAt) },
+            { label: "OAuth 상태", value: lastOAuth ? (lastOAuth.ok ? "성공" : "확인 필요") : "-" }
           ]);
         }
+        if (els.googleConnectButton) {
+          els.googleConnectButton.disabled = safeStatus.status === "checking" || safeStatus.status === "google_login_starting" || googleConnected;
+          els.googleConnectButton.textContent = googleConnected ? "Google 연결됨" : (safeStatus.status === "google_login_starting" ? "Google 연결 중" : "Google 계정 연결하기");
+        }
+        if (els.googleLogoutButton) {
+          els.googleLogoutButton.disabled = safeStatus.status === "checking" || !(safeStatus.userId || auth.id);
+        }
         if (els.authFamilyStatusMessage) {
-          els.authFamilyStatusMessage.textContent = context.currentFamilyId || safeStatus.currentFamilyId
-            ? "현재 데이터는 이 family workspace에 연결되어 있습니다. Google / Apple 계정 연결은 다음 단계에서 추가됩니다."
-            : "서버 구조 확인을 실행하면 현재 익명 사용자와 family workspace 연결 상태를 확인할 수 있어요.";
+          if (googleConnected) {
+            els.authFamilyStatusMessage.textContent = "Google 계정으로 연결되었습니다. 기존 아기 기록은 이 가족 공간에 그대로 유지됩니다.";
+          } else if (lastOAuth && lastOAuth.ok === false) {
+            els.authFamilyStatusMessage.textContent = "Google 로그인에 실패했거나 취소되었습니다. 기존 익명 사용자 상태로 계속 사용할 수 있습니다.";
+          } else if (context.currentFamilyId || safeStatus.currentFamilyId) {
+            els.authFamilyStatusMessage.textContent = "현재 익명 사용자로 사용 중입니다. Google 계정을 연결하면 기기 변경 후에도 가족 기록을 이어서 사용할 수 있습니다.";
+          } else {
+            els.authFamilyStatusMessage.textContent = "서버 구조 확인을 실행하면 현재 익명 사용자와 family workspace 연결 상태를 확인할 수 있어요.";
+          }
+        }
+        if (els.googleLoginSetupMessage) {
+          els.googleLoginSetupMessage.textContent = googleConnected
+            ? "로그아웃해도 이 기기의 기록과 family_id는 삭제되지 않습니다."
+            : "Google 로그인이 작동하려면 Supabase Dashboard에서 Google Provider, Manual Linking, Redirect URL 설정이 필요합니다.";
         }
       }
 
@@ -4250,6 +4286,55 @@
             console.warn("Record diagnostic failed", error);
             if (els.fullConnectionDiagnosticMessage) els.fullConnectionDiagnosticMessage.textContent = "테스트 record 진단에 실패했어요. 기록은 이 기기에 계속 저장됩니다.";
             showToast("테스트 record 진단에 실패했어요.");
+          });
+        });
+      }
+      if (els.googleConnectButton) {
+        els.googleConnectButton.addEventListener("click", function () {
+          if (!window.BabyCloud || typeof window.BabyCloud.signInWithGoogle !== "function") {
+            showToast("Google 로그인 모듈을 아직 불러오지 못했어요.");
+            return;
+          }
+          els.googleConnectButton.disabled = true;
+          if (els.authFamilyStatusMessage) els.authFamilyStatusMessage.textContent = "Google 계정 연결을 시작합니다. 기존 family_id와 기록은 이 기기에 그대로 보존됩니다.";
+          window.BabyCloud.signInWithGoogle().then(function (result) {
+            renderCloudStatus();
+            if (result && result.ok) {
+              if (els.authFamilyStatusMessage) els.authFamilyStatusMessage.textContent = "Google 인증 화면으로 이동합니다. 연결 후 이 가족 공간으로 다시 복구됩니다.";
+            } else {
+              if (els.authFamilyStatusMessage) els.authFamilyStatusMessage.textContent = "Google 로그인에 실패했습니다. 기존 기록은 그대로 유지됩니다. 잠시 후 다시 시도해 주세요.";
+              showToast("Google 로그인에 실패했어요. 기존 기록은 유지됩니다.");
+            }
+          }).catch(function (error) {
+            console.warn("Google login button failed", error);
+            renderCloudStatus();
+            if (els.authFamilyStatusMessage) els.authFamilyStatusMessage.textContent = "Google 로그인에 실패했습니다. 기존 기록은 그대로 유지됩니다.";
+            showToast("Google 로그인에 실패했어요. 기존 기록은 유지됩니다.");
+          }).finally(function () {
+            renderCloudStatus();
+          });
+        });
+      }
+      if (els.googleLogoutButton) {
+        els.googleLogoutButton.addEventListener("click", function () {
+          if (!window.BabyCloud || typeof window.BabyCloud.signOutGoogle !== "function") {
+            showToast("로그아웃 모듈을 아직 불러오지 못했어요.");
+            return;
+          }
+          if (els.authFamilyStatusMessage) els.authFamilyStatusMessage.textContent = "로그아웃 중입니다. 이 기기의 기록과 family_id는 삭제되지 않습니다.";
+          window.BabyCloud.signOutGoogle().then(function (result) {
+            renderCloudStatus();
+            if (result && result.ok) {
+              if (els.authFamilyStatusMessage) els.authFamilyStatusMessage.textContent = "로그아웃되었습니다. 이 기기의 기록은 삭제되지 않았습니다.";
+              showToast("로그아웃했어요. 기록은 이 기기에 그대로 남아 있습니다.");
+            } else {
+              if (els.authFamilyStatusMessage) els.authFamilyStatusMessage.textContent = "로그아웃에 실패했어요. 기록과 family_id는 그대로 유지됩니다.";
+              showToast("로그아웃에 실패했어요.");
+            }
+          }).catch(function (error) {
+            console.warn("Google logout failed", error);
+            renderCloudStatus();
+            showToast("로그아웃에 실패했어요. 기록은 유지됩니다.");
           });
         });
       }

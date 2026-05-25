@@ -17,7 +17,11 @@
   const BACKUP_BEFORE_SERVER_MERGE_KEY = "babyAppBackupBeforeServerMerge";
   const FAMILY_JOIN_BACKUP_PREFIX = "babyAppBackupBeforeFamilyJoin:";
   const LAST_FAMILY_IDENTITY_DIAGNOSTIC_KEY = "babyAppLastFamilyIdentityDiagnostic";
-  const BABY_CLOUD_APP_VERSION = "4.0";
+  const PENDING_OAUTH_FAMILY_ID_KEY = "babylog_pending_family_id_before_oauth";
+  const PENDING_OAUTH_STARTED_AT_KEY = "babylog_oauth_started_at";
+  const PENDING_OAUTH_PROVIDER_KEY = "babylog_oauth_provider";
+  const LAST_OAUTH_RESULT_KEY = "babylog_last_oauth_result";
+  const BABY_CLOUD_APP_VERSION = "4.1";
   const PLACEHOLDER_URL = "https://YOUR_PROJECT_REF.supabase.co";
   const PLACEHOLDER_KEY = "YOUR_SUPABASE_PUBLISHABLE_OR_ANON_KEY";
   const CLOUD_STATUSES = [
@@ -52,6 +56,10 @@
     init: init,
     ensureUser: ensureUser,
     ensureAuthAndFamily: ensureAuthAndFamily,
+    restoreAuthAndFamilyAfterLogin: restoreAuthAndFamilyAfterLogin,
+    signInWithGoogle: signInWithGoogle,
+    signOutGoogle: signOutGoogle,
+    getPendingOAuthContext: getPendingOAuthContext,
     checkConnection: checkConnection,
     testSaveRecord: testSaveRecord,
     testFetchRecords: testFetchRecords,
@@ -498,9 +506,24 @@
       auth: {
         persistSession: true,
         autoRefreshToken: true,
-        detectSessionInUrl: false
+        detectSessionInUrl: true
       }
     });
+    if (supabaseClient.auth && typeof supabaseClient.auth.onAuthStateChange === "function") {
+      supabaseClient.auth.onAuthStateChange(function (event, session) {
+        const user = session && session.user ? session.user : null;
+        if (user && user.id) {
+          setState({ userId: user.id, authIdentity: buildAuthIdentity(user), lastError: null });
+          if (event === "SIGNED_IN" || event === "USER_UPDATED" || event === "INITIAL_SESSION") {
+            restoreAuthAndFamilyAfterLogin({ reason: event }).catch(function (error) {
+              console.warn("BabyCloud OAuth restore after auth event failed", error);
+            });
+          }
+        } else if (event === "SIGNED_OUT") {
+          setState({ userId: null, authIdentity: null, familyMembership: null, status: "signed_out", ready: false, lastError: null });
+        }
+      });
+    }
     setState({ enabled: true, mode: "local", status: "checking", lastError: null });
     return supabaseClient;
   }
@@ -517,6 +540,7 @@
     }
     if (!getClient()) return getSafeStatus();
     setState({ enabled: true, ready: false, mode: "local", status: "anonymous_ready", lastError: null });
+    await restoreAuthAndFamilyAfterLogin({ reason: "init" });
     return getSafeStatus();
   }
 
@@ -871,6 +895,236 @@
     return diagnostic;
   }
 
+  function getPendingOAuthContext() {
+    try {
+      return {
+        familyId: window.localStorage.getItem(PENDING_OAUTH_FAMILY_ID_KEY) || null,
+        startedAt: window.localStorage.getItem(PENDING_OAUTH_STARTED_AT_KEY) || null,
+        provider: window.localStorage.getItem(PENDING_OAUTH_PROVIDER_KEY) || null
+      };
+    } catch (error) {
+      return { familyId: null, startedAt: null, provider: null };
+    }
+  }
+
+  function savePendingOAuthContext(provider, familyId) {
+    try {
+      if (familyId) window.localStorage.setItem(PENDING_OAUTH_FAMILY_ID_KEY, familyId);
+      window.localStorage.setItem(PENDING_OAUTH_STARTED_AT_KEY, nowIso());
+      window.localStorage.setItem(PENDING_OAUTH_PROVIDER_KEY, provider || "google");
+    } catch (error) {
+      console.warn("BabyCloud OAuth pending context storage failed", error);
+    }
+  }
+
+  function clearPendingOAuthContext() {
+    try {
+      window.localStorage.removeItem(PENDING_OAUTH_FAMILY_ID_KEY);
+      window.localStorage.removeItem(PENDING_OAUTH_STARTED_AT_KEY);
+      window.localStorage.removeItem(PENDING_OAUTH_PROVIDER_KEY);
+    } catch (error) {}
+  }
+
+  function saveLastOAuthResult(result) {
+    try {
+      window.localStorage.setItem(LAST_OAUTH_RESULT_KEY, JSON.stringify(Object.assign({ checkedAt: nowIso() }, result || {})));
+    } catch (error) {}
+  }
+
+  function getOAuthRedirectTo() {
+    if (!window.location) return undefined;
+    return window.location.origin + window.location.pathname;
+  }
+
+  function getLocalRecordCount() {
+    const appData = readStoredAppData();
+    return appData && Array.isArray(appData.records) ? appData.records.length : 0;
+  }
+
+  function hasLocalBabyProfile() {
+    const appData = readStoredAppData();
+    return !!(appData && isObject(appData.profile) && Object.keys(appData.profile).length);
+  }
+
+  async function getFirstActiveMembershipForUser(userId) {
+    const client = getClient();
+    if (!client || !userId) return null;
+    const result = await client
+      .from("family_members")
+      .select("id,family_id,user_id,role,status,joined_at,created_at,updated_at,last_seen_at")
+      .eq("user_id", userId)
+      .eq("status", "active")
+      .order("created_at", { ascending: true })
+      .limit(1)
+      .maybeSingle();
+    if (result.error) throw result.error;
+    return result.data || null;
+  }
+
+  async function restoreAuthAndFamilyAfterLogin(options) {
+    const client = getClient();
+    if (!client) return { ok: false, error: "supabase_client_unavailable", context: getCloudContext() };
+
+    const opts = options || {};
+    const pending = getPendingOAuthContext();
+    try {
+      const sessionResult = await client.auth.getSession();
+      if (sessionResult.error) throw sessionResult.error;
+      const user = sessionResult.data && sessionResult.data.session && sessionResult.data.session.user;
+      if (!user || !user.id) {
+        if (pending.provider) {
+          saveLastOAuthResult({
+            ok: false,
+            provider: pending.provider,
+            status: "cancelled_or_no_session",
+            message: "Google login was cancelled or no session was returned."
+          });
+          clearPendingOAuthContext();
+        }
+        return { ok: false, error: "auth_session_missing", context: getCloudContext() };
+      }
+
+      let context = getCloudContext();
+      let familyId = context.currentFamilyId || null;
+      let membership = null;
+
+      if (!familyId && pending.familyId) {
+        familyId = pending.familyId;
+      }
+
+      if (!familyId) {
+        membership = await getFirstActiveMembershipForUser(user.id);
+        if (membership && membership.family_id) familyId = membership.family_id;
+      }
+
+      if (!familyId) {
+        context = await ensureAuthAndFamily();
+        saveLastOAuthResult({
+          ok: !!context,
+          provider: pending.provider || "google",
+          status: context ? "new_family_created_for_new_user" : "restore_failed",
+          reason: opts.reason || ""
+        });
+        clearPendingOAuthContext();
+        return { ok: !!context, context: context, createdNewFamily: !!context };
+      }
+
+      // Google account is only an identity for accessing the family workspace, not the owner of records.
+      const membershipResult = await ensureFamilyMembership(familyId, user);
+      if (membershipResult.ok) membership = membershipResult.membership;
+      context = saveCloudContext(Object.assign({}, context, {
+        currentFamilyId: familyId,
+        currentUserId: user.id,
+        lastSetupAt: context.lastSetupAt || nowIso(),
+        lastError: membershipResult.ok ? "" : (membershipResult.error || "")
+      }));
+      const baby = await ensureBabyForFamily(familyId, context.currentBabyId);
+      if (baby.ok && baby.baby && baby.baby.id) {
+        context = saveCloudContext(Object.assign({}, context, {
+          currentFamilyId: familyId,
+          currentBabyId: baby.baby.id,
+          currentUserId: user.id,
+          babyName: baby.baby.name || context.babyName || "아기",
+          babyBirthDate: baby.baby.birth_date || context.babyBirthDate || null,
+          babyGender: baby.baby.gender || context.babyGender || "unknown"
+        }));
+      }
+      await upsertCurrentDevice(context);
+      setState({
+        enabled: true,
+        ready: true,
+        mode: "cloud_ready",
+        status: pending.provider ? "google_connected" : "family_ready",
+        userId: user.id,
+        authIdentity: buildAuthIdentity(user),
+        familyMembership: membership || BabyCloud.familyMembership || null,
+        lastCheckedAt: nowIso(),
+        lastError: null
+      });
+      saveLastOAuthResult({
+        ok: true,
+        provider: pending.provider || "google",
+        status: pending.provider ? "restored_after_oauth" : "restored",
+        familyId: familyId,
+        userId: user.id,
+        reason: opts.reason || ""
+      });
+      clearPendingOAuthContext();
+      return { ok: true, context: context, membership: membership, auth: buildAuthIdentity(user) };
+    } catch (error) {
+      console.warn("BabyCloud OAuth family restore failed", error);
+      saveLastOAuthResult({
+        ok: false,
+        provider: pending.provider || "google",
+        status: "restore_failed",
+        error: errorMessage(error)
+      });
+      setState({ ready: false, mode: "local", status: "oauth_restore_failed", lastError: normalizeError(error) });
+      return { ok: false, error: errorMessage(error), context: getCloudContext() };
+    }
+  }
+
+  async function signInWithGoogle() {
+    const client = getClient();
+    if (!client) return { ok: false, error: "supabase_client_unavailable" };
+    let context = getCloudContext();
+    try {
+      if (!context.currentFamilyId) {
+        const ensured = await ensureAuthAndFamily();
+        context = ensured || context;
+      }
+      const currentFamilyId = context.currentFamilyId || readLegacyFamilyId() || null;
+      savePendingOAuthContext("google", currentFamilyId);
+      console.log("[BabyCloud] Google login start", {
+        familyId: currentFamilyId,
+        localRecordsCount: getLocalRecordCount(),
+        hasBabyProfile: hasLocalBabyProfile()
+      });
+      setState({ status: "google_login_starting", lastError: null });
+      const redirectTo = getOAuthRedirectTo();
+      const user = await ensureUser();
+      if (!user || !user.id) throw new Error("anonymous_auth_failed");
+      const method = client.auth && typeof client.auth.linkIdentity === "function" ? "linkIdentity" : "signInWithOAuth";
+      const oauthResult = method === "linkIdentity"
+        ? await client.auth.linkIdentity({ provider: "google", options: { redirectTo: redirectTo } })
+        : await client.auth.signInWithOAuth({ provider: "google", options: { redirectTo: redirectTo } });
+      if (oauthResult.error) throw oauthResult.error;
+      saveLastOAuthResult({ ok: true, provider: "google", status: "oauth_redirect_started", method: method, familyId: currentFamilyId });
+      return { ok: true, data: oauthResult.data, method: method, redirectTo: redirectTo };
+    } catch (error) {
+      console.warn("BabyCloud Google login failed", error);
+      saveLastOAuthResult({ ok: false, provider: "google", status: "oauth_start_failed", error: errorMessage(error) });
+      setState({ ready: !!getCloudContext().currentFamilyId, mode: getCloudContext().currentFamilyId ? "cloud_ready" : "local", status: "google_login_failed", lastError: normalizeError(error) });
+      return { ok: false, error: errorMessage(error), context: getCloudContext() };
+    }
+  }
+
+  async function signOutGoogle() {
+    const client = getClient();
+    if (!client) return { ok: false, error: "supabase_client_unavailable", context: getCloudContext() };
+    const preservedContext = getCloudContext();
+    try {
+      const result = await client.auth.signOut();
+      if (result.error) throw result.error;
+      saveCloudContext(preservedContext);
+      setState({
+        ready: !!preservedContext.currentFamilyId,
+        mode: preservedContext.currentFamilyId ? "cloud_ready" : "local",
+        status: "signed_out",
+        userId: null,
+        authIdentity: null,
+        familyMembership: null,
+        lastError: null
+      });
+      return { ok: true, context: getCloudContext() };
+    } catch (error) {
+      console.warn("BabyCloud sign out failed", error);
+      saveCloudContext(preservedContext);
+      setState({ status: "sign_out_failed", lastError: normalizeError(error) });
+      return { ok: false, error: errorMessage(error), context: getCloudContext() };
+    }
+  }
+
   function getFamilyIdentityDiagnostic() {
     try {
       const raw = window.localStorage.getItem(LAST_FAMILY_IDENTITY_DIAGNOSTIC_KEY);
@@ -919,7 +1173,21 @@
         })
         .select("id,family_id,user_id,role,status,joined_at,created_at,updated_at,last_seen_at")
         .single();
-      if (insertResult.error) throw insertResult.error;
+      if (insertResult.error) {
+        if (insertResult.error.code === "23505") {
+          const retrySelect = await client
+            .from("family_members")
+            .select("id,family_id,user_id,role,status,joined_at,created_at,updated_at,last_seen_at")
+            .eq("family_id", currentFamilyId)
+            .eq("user_id", currentUser.id)
+            .maybeSingle();
+          if (!retrySelect.error && retrySelect.data) {
+            setState({ familyMembership: retrySelect.data });
+            return { ok: true, membership: retrySelect.data, existed: true };
+          }
+        }
+        throw insertResult.error;
+      }
       setState({ familyMembership: insertResult.data || null });
       return { ok: true, membership: insertResult.data || null, existed: false };
     } catch (error) {
@@ -1007,9 +1275,14 @@
 
       const deviceId = getOrCreateDeviceId();
       let context = getCloudContext();
+      const pendingOAuth = getPendingOAuthContext();
       let familyId = context.currentFamilyId || null;
       let createdNewFamily = false;
       let familyName = context.familyName || "우리 가족";
+
+      if (!familyId && pendingOAuth.familyId) {
+        familyId = pendingOAuth.familyId;
+      }
 
       if (familyId) {
         const membership = await ensureFamilyMembership(familyId, user);

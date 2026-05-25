@@ -82,6 +82,12 @@ returns trigger
 language plpgsql
 as $$
 begin
+  if tg_op = 'UPDATE' then
+    new.family_id := old.family_id;
+    new.user_id := old.user_id;
+    new.role := old.role;
+  end if;
+
   if new.role = 'caregiver' then
     new.role := 'parent';
   elsif new.role = 'member' then
@@ -162,6 +168,9 @@ using (
 )
 with check (
   user_id = auth.uid()
+  and family_id is not null
+  and role in ('owner', 'parent', 'viewer')
+  and status in ('active', 'invited', 'removed')
 );
 
 grant select, insert, update on public.family_members to anon, authenticated;
@@ -169,3 +178,4 @@ grant execute on function public.is_family_member(uuid) to anon, authenticated;
 
 -- records, babies, and settings must remain family-owned.
 -- Never replace family_id with auth.uid().
+-- Google account is only an identity for accessing the family workspace, not the owner of records.
