@@ -3384,8 +3384,9 @@
         const configVersion = diagnostic && diagnostic.configAppVersion
           ? diagnostic.configAppVersion
           : ((window.BABY_APP_CLOUD_CONFIG && window.BABY_APP_CLOUD_CONFIG.appVersion) || "-");
-        const babyCloudVersion = diagnostic && diagnostic.babyCloudAppVersion ? diagnostic.babyCloudAppVersion : "3.8";
+        const babyCloudVersion = diagnostic && diagnostic.babyCloudAppVersion ? diagnostic.babyCloudAppVersion : "4.3";
         const versionMismatch = configVersion !== "-" && (String(configVersion) !== APP_VERSION || String(babyCloudVersion) !== APP_VERSION);
+        const ids = diagnostic && diagnostic.ids ? diagnostic.ids : {};
 
         if (els.fullConnectionDiagnosticGrid) {
           els.fullConnectionDiagnosticGrid.innerHTML = dataItemsHtml([
@@ -3398,6 +3399,10 @@
             { label: "Supabase client 생성", value: yesNo(checks.clientCreated) },
             { label: "네트워크 상태", value: checks.online === false ? "오프라인" : "온라인" },
             { label: "익명 userId", value: checks.userId ? "생성됨" : "확인 필요" },
+            { label: "provider", value: ids.provider || "-" },
+            { label: "email", value: ids.email || "-" },
+            { label: "current_family_id", value: ids.familyId || "-" },
+            { label: "current_baby_id", value: ids.babyId || "-" },
             { label: "cloud_diagnostics insert/select", value: checks.diagnosticsInsert && checks.diagnosticsSelect ? "성공" : "확인 필요" },
             { label: "family 준비", value: yesNo(checks.familyReady) },
             { label: "family_members 연결", value: yesNo(checks.familyMemberReady) },
@@ -3407,7 +3412,7 @@
             { label: "records update", value: yesNo(checks.recordsUpdate) },
             { label: "records soft delete", value: yesNo(checks.recordsSoftDelete) },
             { label: "마지막 진단 시각", value: formatCloudCheckedAt(diagnostic && diagnostic.checkedAt) },
-            { label: "마지막 오류", value: lastError ? (lastError.userMessage || lastError.message || "-") : "-" }
+            { label: "마지막 오류", value: lastError ? ((lastError.step ? lastError.step + ": " : "") + (lastError.userMessage || lastError.message || "-")) : "-" }
           ]);
         }
 
@@ -3419,7 +3424,7 @@
           } else if (diagnostic.ok) {
             els.fullConnectionDiagnosticMessage.textContent = "서버 연결이 실제로 확인됐어요. Supabase Table Editor에서도 row를 확인해 보세요.";
           } else if (lastError) {
-            els.fullConnectionDiagnosticMessage.textContent = lastError.userMessage || lastError.message || "서버 연결 진단 중 실패 단계가 있어요.";
+            els.fullConnectionDiagnosticMessage.textContent = (lastError.step ? lastError.step + ": " : "") + (lastError.userMessage || lastError.message || "서버 연결 진단 중 실패 단계가 있어요.");
           } else {
             els.fullConnectionDiagnosticMessage.textContent = "서버 연결 진단 중 확인이 필요한 단계가 있어요.";
           }
@@ -3747,7 +3752,7 @@
             { label: "email", value: auth.email || "-" },
             { label: "provider", value: connectedProvider },
             { label: "linked providers", value: providers },
-            { label: "current family_id", value: shortUserId(context.currentFamilyId || safeStatus.currentFamilyId || diagnostic.familyId || "") || "-" },
+            { label: "current family_id", value: context.currentFamilyId || safeStatus.currentFamilyId || diagnostic.familyId || "-" },
             { label: "family_members 연결", value: membership.id || diagnostic.membershipConnected ? "연결됨" : "확인 전" },
             { label: "현재 role", value: membership.role || diagnostic.role || "-" },
             { label: "현재 status", value: membership.status || diagnostic.membershipStatus || "-" },
@@ -3842,8 +3847,8 @@
             { label: "현재 기기 이름", value: diagnostic.deviceName || safeStatus.deviceName || context.deviceName || "-" },
             { label: "현재 device_id", value: shortUserId(diagnostic.deviceId || safeStatus.deviceId || context.deviceId || "") },
             { label: "현재 user_id", value: shortUserId(diagnostic.userId || safeStatus.userId || context.currentUserId || "") },
-            { label: "현재 family_id", value: shortUserId(diagnostic.familyId || safeStatus.currentFamilyId || context.currentFamilyId || "") },
-            { label: "현재 baby_id", value: shortUserId(diagnostic.babyId || safeStatus.currentBabyId || context.currentBabyId || "") },
+            { label: "현재 family_id", value: diagnostic.familyId || safeStatus.currentFamilyId || context.currentFamilyId || "-" },
+            { label: "현재 baby_id", value: diagnostic.babyId || safeStatus.currentBabyId || context.currentBabyId || "-" },
             { label: "로컬 records 수", value: (diagnostic.localRecordsCount !== undefined ? diagnostic.localRecordsCount : appData.records.length) + "개" },
             { label: "서버 records 수", value: diagnostic.serverRecordsCount !== null && diagnostic.serverRecordsCount !== undefined ? diagnostic.serverRecordsCount + "개" : "확인 전" },
             { label: "연결된 기기 수", value: diagnostic.linkedDevicesCount !== null && diagnostic.linkedDevicesCount !== undefined ? diagnostic.linkedDevicesCount + "개" : "확인 전" },
@@ -4513,7 +4518,7 @@
             if (els.familyIdentityMessage) {
               els.familyIdentityMessage.textContent = diagnostic && diagnostic.ok
                 ? "가족 코드와 연결된 기기 목록을 새로 확인했어요."
-                : "가족 연결 정보를 확인하지 못했어요. Phase 3.8 SQL 적용 여부를 확인해 주세요.";
+                : "가족 연결 정보를 확인하지 못했어요. Phase 4.3 SQL 적용 여부를 확인해 주세요.";
             }
             showToast("가족 연결 정보를 새로고침했어요.");
           }).catch(function (error) {
