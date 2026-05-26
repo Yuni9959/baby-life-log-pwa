@@ -21,10 +21,6 @@
   const LAST_CLOUD_RESTORE_STATUS_KEY = "babyAppLastCloudRestoreStatus";
   const FAMILY_JOIN_BACKUP_PREFIX = "babyAppBackupBeforeFamilyJoin:";
   const LAST_FAMILY_IDENTITY_DIAGNOSTIC_KEY = "babyAppLastFamilyIdentityDiagnostic";
-  const CURRENT_FAMILY_ID_KEY = "babylog_family_id";
-  const CURRENT_BABY_ID_KEY = "babylog_baby_id";
-  const CURRENT_FAMILY_CODE_KEY = "babylog_family_code";
-  const CURRENT_ACCOUNT_CODE_KEY = "babylog_account_code";
   const PENDING_OAUTH_FAMILY_ID_KEY = "babylog_pending_family_id_before_oauth";
   const PENDING_OAUTH_STARTED_AT_KEY = "babylog_oauth_started_at";
   const PENDING_OAUTH_PROVIDER_KEY = "babylog_oauth_provider";
@@ -63,8 +59,6 @@
 
     init: init,
     ensureUser: ensureUser,
-    ensureCloudContext: ensureCloudContext,
-    ensureFamilyAndBabyContext: ensureCloudContext,
     ensureAuthAndFamily: ensureAuthAndFamily,
     restoreAuthAndFamilyAfterLogin: restoreAuthAndFamilyAfterLogin,
     signInWithGoogle: signInWithGoogle,
@@ -687,7 +681,7 @@
   }
 
   function readLegacyFamilyId() {
-    const keys = [CURRENT_FAMILY_ID_KEY, "family_id", "familyId", "babyAppFamilyId"];
+    const keys = ["family_id", "familyId", "babyAppFamilyId"];
     for (let i = 0; i < keys.length; i += 1) {
       try {
         const value = window.localStorage.getItem(keys[i]);
@@ -695,45 +689,6 @@
       } catch (error) {}
     }
     return null;
-  }
-
-  function readStoredValue(key) {
-    try {
-      const value = window.localStorage.getItem(key);
-      return value && String(value).trim() ? String(value).trim() : null;
-    } catch (error) {
-      return null;
-    }
-  }
-
-  function readStoredBabyId() {
-    return readStoredValue(CURRENT_BABY_ID_KEY);
-  }
-
-  function readStoredFamilyCode() {
-    return normalizeAccessCode(readStoredValue(CURRENT_FAMILY_CODE_KEY) || "");
-  }
-
-  function readStoredAccountCode() {
-    return normalizeAccountCode(readStoredValue(CURRENT_ACCOUNT_CODE_KEY) || "");
-  }
-
-  function writeCloudContextKeys(context) {
-    const ctx = context || {};
-    try {
-      if (ctx.currentFamilyId) window.localStorage.setItem(CURRENT_FAMILY_ID_KEY, ctx.currentFamilyId);
-      if (ctx.currentBabyId) window.localStorage.setItem(CURRENT_BABY_ID_KEY, ctx.currentBabyId);
-      if (ctx.familyCode || ctx.familyAccessCode) window.localStorage.setItem(CURRENT_FAMILY_CODE_KEY, normalizeAccessCode(ctx.familyCode || ctx.familyAccessCode));
-      if (ctx.accountCode) window.localStorage.setItem(CURRENT_ACCOUNT_CODE_KEY, normalizeAccountCode(ctx.accountCode));
-      if (window.appState && typeof window.appState === "object") {
-        window.appState.currentFamilyId = ctx.currentFamilyId || window.appState.currentFamilyId || null;
-        window.appState.familyId = ctx.currentFamilyId || window.appState.familyId || null;
-        window.appState.currentBabyId = ctx.currentBabyId || window.appState.currentBabyId || null;
-        window.appState.babyId = ctx.currentBabyId || window.appState.babyId || null;
-      }
-    } catch (error) {
-      console.warn("BabyCloud context key storage failed", error);
-    }
   }
 
   function getCloudContext() {
@@ -751,14 +706,14 @@
     return {
       provider: "supabase",
       currentFamilyId: context.currentFamilyId || context.family_id || readLegacyFamilyId() || null,
-      currentBabyId: context.currentBabyId || context.baby_id || readStoredBabyId() || null,
+      currentBabyId: context.currentBabyId || null,
       currentUserId: context.currentUserId || BabyCloud.userId || null,
       deviceId: context.deviceId || getOrCreateDeviceId(),
       deviceName: context.deviceName || getDeviceName(),
       deviceType: context.deviceType || getDeviceType(),
-      familyAccessCode: context.familyAccessCode || context.accessCode || readStoredFamilyCode() || null,
-      familyCode: context.familyCode || context.family_code || context.familyAccessCode || context.accessCode || readStoredFamilyCode() || null,
-      accountCode: context.accountCode || context.account_code || readStoredAccountCode() || null,
+      familyAccessCode: context.familyAccessCode || context.accessCode || null,
+      familyCode: context.familyCode || context.family_code || context.familyAccessCode || context.accessCode || null,
+      accountCode: context.accountCode || context.account_code || null,
       familyName: context.familyName || "우리 가족",
       babyName: context.babyName || "아기",
       babyBirthDate: context.babyBirthDate || null,
@@ -805,7 +760,6 @@
     });
     try {
       window.localStorage.setItem(CLOUD_CONTEXT_KEY, JSON.stringify(next));
-      writeCloudContextKeys(next);
     } catch (error) {
       console.warn("BabyCloud cloud context storage failed", error);
     }
@@ -845,31 +799,15 @@
       currentUser.user_metadata.nickname
     );
     try {
-      let accountCode = readStoredAccountCode();
-      const existing = await client
-        .from("profiles")
-        .select("id,user_id,account_code,provider,email,display_name,created_at,updated_at,last_seen_at")
-        .eq("user_id", currentUser.id)
-        .maybeSingle();
-      if (existing.error) throw existing.error;
-      if (!accountCode && existing.data && existing.data.account_code) accountCode = normalizeAccountCode(existing.data.account_code);
-      if (!accountCode) accountCode = generateAccountCode();
-      const upsertResult = await client
-        .from("profiles")
-        .upsert({
-          user_id: currentUser.id,
-          account_code: accountCode,
-          provider: provider,
-          email: auth.email || null,
-          display_name: displayName || null,
-          last_seen_at: nowIso(),
-          updated_at: nowIso()
-        }, { onConflict: "user_id" })
-        .select("id,user_id,account_code,provider,email,display_name,created_at,updated_at,last_seen_at")
-        .maybeSingle();
-      if (upsertResult.error) throw upsertResult.error;
-      const profile = upsertResult.data || existing.data || null;
-      accountCode = normalizeAccountCode(profile && profile.account_code) || accountCode;
+      const rpcResult = await client.rpc("ensure_current_profile", {
+        p_account_code: generateAccountCode(),
+        p_provider: provider,
+        p_email: auth.email,
+        p_display_name: displayName || null
+      });
+      if (rpcResult.error) throw rpcResult.error;
+      const profile = Array.isArray(rpcResult.data) ? rpcResult.data[0] : rpcResult.data;
+      const accountCode = normalizeAccountCode(profile && profile.account_code);
       if (accountCode) {
         saveCloudContext(Object.assign({}, getCloudContext(), { accountCode: accountCode, currentUserId: currentUser.id }));
         console.log("[AccountCode] profile ready", { accountCode: accountCode });
@@ -886,6 +824,17 @@
     const targetFamilyId = familyId || getCloudContext().currentFamilyId;
     if (!client || !targetFamilyId) return { ok: false, familyCode: null, accessCode: null, error: "family_context_missing" };
     try {
+      const rpcResult = await client.rpc("ensure_family_code", {
+        p_family_id: targetFamilyId,
+        p_family_code: generateFamilyCode()
+      });
+      if (!rpcResult.error && rpcResult.data) {
+        const row = Array.isArray(rpcResult.data) ? rpcResult.data[0] : rpcResult.data;
+        const familyCode = normalizeAccessCode(row.family_code || row);
+        saveCloudContext(Object.assign({}, getCloudContext(), { familyCode: familyCode, familyAccessCode: familyCode }));
+        console.log("[FamilyCode] family code ready", { familyId: targetFamilyId, familyCode: familyCode });
+        return { ok: true, familyCode: familyCode, accessCode: familyCode };
+      }
       const readResult = await client
         .from("families")
         .select("id,family_code,name")
@@ -901,21 +850,7 @@
         }));
         return { ok: true, familyCode: existingCode, accessCode: existingCode };
       }
-      const updateResult = await client
-        .from("families")
-        .update({ family_code: generateFamilyCode(), updated_at: nowIso() })
-        .eq("id", targetFamilyId)
-        .select("id,family_code,name")
-        .maybeSingle();
-      if (updateResult.error) throw updateResult.error;
-      if (!updateResult.data || !updateResult.data.family_code) throw new Error("family_code_update_failed");
-      const familyCode = normalizeAccessCode(updateResult.data.family_code);
-      saveCloudContext(Object.assign({}, getCloudContext(), {
-        familyCode: familyCode,
-        familyAccessCode: familyCode,
-        familyName: updateResult.data.name || getCloudContext().familyName
-      }));
-      return { ok: true, familyCode: familyCode, accessCode: familyCode };
+      return { ok: false, familyCode: null, accessCode: null, error: "family_code_missing_run_phase4_3_sql" };
     } catch (error) {
       console.warn("[FamilyCode] family code ensure failed", error);
       return { ok: false, familyCode: null, accessCode: null, error: errorMessage(error) };
@@ -923,30 +858,54 @@
   }
 
   async function upsertCurrentDevice(context) {
+    const client = getClient();
     const ctx = context || getCloudContext();
-    if (!ctx.currentFamilyId) return { ok: false, device: null, error: "family_context_missing" };
-    const device = {
-      family_id: ctx.currentFamilyId,
-      user_id: ctx.currentUserId || BabyCloud.userId || null,
-      device_id: ctx.deviceId || getOrCreateDeviceId(),
-      device_name: ctx.deviceName || getDeviceName(),
-      device_type: ctx.deviceType || getDeviceType(),
-      last_seen_at: nowIso()
-    };
-    saveCloudContext(Object.assign({}, ctx, {
-      currentUserId: device.user_id,
-      deviceId: device.device_id,
-      deviceName: device.device_name,
-      deviceType: device.device_type
-    }));
-    return { ok: true, skipped: true, reason: "devices_requests_disabled_phase_4_3", device: device };
+    if (!client || !ctx.currentFamilyId) return { ok: false, device: null, error: "family_context_missing" };
+    try {
+      const user = await ensureUser();
+      const row = {
+        family_id: ctx.currentFamilyId,
+        user_id: (user && user.id) || ctx.currentUserId || BabyCloud.userId || null,
+        device_id: ctx.deviceId || getOrCreateDeviceId(),
+        device_name: ctx.deviceName || getDeviceName(),
+        device_type: ctx.deviceType || getDeviceType(),
+        last_seen_at: nowIso()
+      };
+      const result = await client
+        .from("devices")
+        .upsert(row, { onConflict: "device_id" })
+        .select("id,family_id,user_id,device_id,device_name,device_type,last_seen_at,created_at,updated_at")
+        .single();
+      if (result.error) throw result.error;
+      saveCloudContext(Object.assign({}, ctx, {
+        currentUserId: row.user_id,
+        deviceId: row.device_id,
+        deviceName: row.device_name,
+        deviceType: row.device_type
+      }));
+      return { ok: true, device: result.data };
+    } catch (error) {
+      return { ok: false, device: null, error: errorMessage(error) };
+    }
   }
 
   async function fetchLinkedDevices(familyId) {
+    const client = getClient();
     const ctx = getCloudContext();
     const targetFamilyId = familyId || ctx.currentFamilyId;
-    if (!targetFamilyId) return { ok: false, devices: [], count: 0, error: "family_context_missing" };
-    return { ok: true, skipped: true, reason: "devices_requests_disabled_phase_4_3", devices: [], count: null };
+    if (!client || !targetFamilyId) return { ok: false, devices: [], count: 0, error: "family_context_missing" };
+    try {
+      const result = await client
+        .from("devices")
+        .select("id,family_id,user_id,device_id,device_name,device_type,last_seen_at,created_at,updated_at")
+        .eq("family_id", targetFamilyId)
+        .order("last_seen_at", { ascending: false });
+      if (result.error) throw result.error;
+      const devices = Array.isArray(result.data) ? result.data : [];
+      return { ok: true, devices: devices, count: devices.length };
+    } catch (error) {
+      return { ok: false, devices: [], count: 0, error: errorMessage(error) };
+    }
   }
 
   async function joinFamilyByAccessCode(accessCode) {
@@ -966,31 +925,29 @@
         device_type: getDeviceType()
       };
       console.log("[FamilyConnect] join by family_code start", { familyCode: normalizedCode });
-      const familyResult = await client
-        .from("families")
-        .select("id,name,family_code")
-        .eq("family_code", normalizedCode)
-        .maybeSingle();
-      if (familyResult.error) throw familyResult.error;
-      const row = familyResult.data;
-      if (!row || !row.id) throw new Error("family_join_failed");
-      const membership = await ensureFamilyMembership(row.id, user);
-      if (!membership.ok) throw new Error(membership.error || "family_membership_failed");
-      const baby = await ensureBabyForFamily(row.id, null);
-      if (!baby.ok || !baby.baby || !baby.baby.id) throw new Error(baby.error || "family_or_baby_missing");
+      const result = await client.rpc("join_family_by_family_code", {
+        p_family_code: normalizedCode,
+        p_device_id: device.device_id,
+        p_device_name: device.device_name,
+        p_device_type: device.device_type
+      });
+      if (result.error) throw result.error;
+      const row = Array.isArray(result.data) ? result.data[0] : result.data;
+      if (!row || !row.family_id) throw new Error("family_join_failed");
+      const babyId = row.baby_id || null;
       const context = saveCloudContext({
-        currentFamilyId: row.id,
-        currentBabyId: baby.baby.id,
+        currentFamilyId: row.family_id,
+        currentBabyId: babyId,
         currentUserId: user.id,
         deviceId: device.device_id,
         deviceName: device.device_name,
         deviceType: device.device_type,
         familyCode: normalizeAccessCode(row.family_code || normalizedCode),
         familyAccessCode: normalizeAccessCode(row.family_code || normalizedCode),
-        familyName: row.name || "우리 가족",
-        babyName: baby.baby.name || getCloudContext().babyName || "아기",
-        babyBirthDate: baby.baby.birth_date || null,
-        babyGender: baby.baby.gender || "unknown",
+        familyName: row.family_name || "우리 가족",
+        babyName: row.baby_name || getCloudContext().babyName || "아기",
+        babyBirthDate: row.baby_birth_date || null,
+        babyGender: row.baby_gender || "unknown",
         lastSetupAt: nowIso()
       });
       await upsertCurrentDevice(context);
@@ -999,7 +956,7 @@
         ? restoreCloudRecordsToLocal(recordsResult.records, { reason: "family_code_connect" })
         : { ok: false, addedCount: 0, error: recordsResult && recordsResult.error };
       setState({ ready: true, mode: "cloud_ready", status: "family_joined", userId: user.id, lastError: null });
-      console.log("[FamilyConnect] join by family_code complete", { familyId: row.id, restored: restoreResult.addedCount || 0 });
+      console.log("[FamilyConnect] join by family_code complete", { familyId: row.family_id, restored: restoreResult.addedCount || 0 });
       return { ok: true, context: getCloudContext(), backup: backup, records: recordsResult, restore: restoreResult };
     } catch (error) {
       console.warn("[FamilyConnect] family_code join failed", error);
@@ -1347,6 +1304,7 @@
     if (!currentFamilyId || !currentUser || !currentUser.id) return { ok: false, membership: null, error: "family_or_user_missing" };
 
     try {
+      const provider = (buildAuthIdentity(currentUser).providers || [])[0] || null;
       const selectResult = await client
         .from("family_members")
         .select("id,family_id,user_id,role,status,joined_at,created_at,updated_at,last_seen_at")
@@ -1355,17 +1313,17 @@
         .maybeSingle();
       if (selectResult.error) throw selectResult.error;
 
+      const rpcResult = await client.rpc("link_current_user_to_family", {
+        p_family_id: currentFamilyId,
+        p_provider: provider
+      });
+      if (rpcResult.error) throw rpcResult.error;
+
       const membershipResult = await client
         .from("family_members")
-        .upsert({
-          family_id: currentFamilyId,
-          user_id: currentUser.id,
-          role: (selectResult.data && selectResult.data.role) || "owner",
-          status: "active",
-          last_seen_at: nowIso(),
-          updated_at: nowIso()
-        }, { onConflict: "family_id,user_id" })
         .select("id,family_id,user_id,role,status,joined_at,created_at,updated_at,last_seen_at")
+        .eq("family_id", currentFamilyId)
+        .eq("user_id", currentUser.id)
         .maybeSingle();
       if (membershipResult.error) throw membershipResult.error;
       if (!membershipResult.data) throw new Error("family_membership_not_returned");
@@ -1384,7 +1342,7 @@
       if (preferredBabyId) {
         const babyCheck = await client
           .from("babies")
-          .select("id,family_id,name")
+          .select("id,family_id,name,birth_date,gender")
           .eq("id", preferredBabyId)
           .eq("family_id", familyId)
           .maybeSingle();
@@ -1395,7 +1353,7 @@
 
       const babyResult = await client
         .from("babies")
-        .select("id,family_id,name")
+        .select("id,family_id,name,birth_date,gender")
         .eq("family_id", familyId)
         .order("created_at", { ascending: true })
         .limit(1)
@@ -1406,8 +1364,8 @@
       const defaults = profileDefaults();
       const createBabyResult = await client
         .from("babies")
-        .insert({ family_id: familyId, name: defaults.babyName || "아기" })
-        .select("id,family_id,name")
+        .insert({ family_id: familyId, name: defaults.babyName, birth_date: defaults.birthDate, gender: defaults.gender })
+        .select("id,family_id,name,birth_date,gender")
         .single();
       if (createBabyResult.error) throw createBabyResult.error;
       return { ok: true, baby: createBabyResult.data };
@@ -1445,65 +1403,20 @@
     return snapshot;
   }
 
-  function contextErrorMessage(errors) {
-    const source = errors || {};
-    const keys = ["profile", "familySelect", "familyInsert", "familyUpdate", "membershipSelect", "membershipUpsert", "babySelect", "babyInsert", "localStorage"];
-    for (let i = 0; i < keys.length; i += 1) {
-      const value = source[keys[i]];
-      if (value) return keys[i] + ": " + value;
-    }
-    return "family_baby_context_missing";
-  }
-
-  async function ensureCloudContext(options) {
-    const opts = options || {};
+  async function ensureAuthAndFamily() {
     const client = getClient();
     if (!client) return null;
-    const errors = {
-      profile: null,
-      familySelect: null,
-      familyInsert: null,
-      familyUpdate: null,
-      membershipSelect: null,
-      membershipUpsert: null,
-      babySelect: null,
-      babyInsert: null,
-      localStorage: null
-    };
-    let user = null;
-    let familyId = null;
-    let babyId = null;
-    let familyCode = null;
-    let accountCode = null;
-    let membership = null;
-    let profile = null;
 
     try {
-      if (opts.reason === "diagnostics") console.log("[CloudContext] start diagnostics");
       setState({ status: "checking", lastError: null });
-      user = await ensureUser();
+      const user = await ensureUser();
       if (!user || !user.id) throw new Error("anonymous_auth_failed");
-      console.log("[CloudContext] user", user);
-      console.log("[CloudContext] local family_id", window.localStorage.getItem(CURRENT_FAMILY_ID_KEY));
-      console.log("[CloudContext] local baby_id", window.localStorage.getItem(CURRENT_BABY_ID_KEY));
-      let profileResult = { ok: false, profile: null, accountCode: null };
-      try {
-        profileResult = await ensureCurrentProfile(user);
-        if (!profileResult.ok) {
-          errors.profile = profileResult.error || "profile_upsert_failed";
-          console.warn("[CloudContext] profile error", errors.profile);
-        }
-      } catch (profileError) {
-        errors.profile = errorMessage(profileError);
-        console.warn("[CloudContext] profile error", profileError);
-      }
-      profile = profileResult.profile || null;
-      accountCode = profileResult.accountCode || getCloudContext().accountCode || readStoredAccountCode() || null;
+      const profileResult = await ensureCurrentProfile(user);
 
       const deviceId = getOrCreateDeviceId();
       let context = getCloudContext();
       const pendingOAuth = getPendingOAuthContext();
-      familyId = readLegacyFamilyId() || null;
+      let familyId = context.currentFamilyId || null;
       let createdNewFamily = false;
       let familyName = context.familyName || "우리 가족";
 
@@ -1511,182 +1424,80 @@
         familyId = pendingOAuth.familyId;
       }
 
-      if (!familyId) {
-        try {
-          const membershipResult = await client
-            .from("family_members")
-            .select("id,family_id,user_id,role,status,joined_at,created_at,updated_at,last_seen_at")
-            .eq("user_id", user.id)
-            .eq("status", "active")
-            .order("created_at", { ascending: true })
-            .limit(1)
-            .maybeSingle();
-          if (membershipResult.error) throw membershipResult.error;
-          if (membershipResult.data && membershipResult.data.family_id) {
-            familyId = membershipResult.data.family_id;
-            membership = membershipResult.data;
-            setState({ familyMembership: membershipResult.data });
-          }
-        } catch (membershipSelectError) {
-          errors.membershipSelect = errorMessage(membershipSelectError);
-          console.warn("[CloudContext] membership error", membershipSelectError);
-        }
-      }
-
-      if (!familyId) {
-        const code = readStoredFamilyCode() || context.familyCode || context.familyAccessCode || "";
-        if (code) {
-          try {
-            const familyByCode = await client
-              .from("families")
-              .select("id,name,family_code")
-              .eq("family_code", normalizeAccessCode(code))
-              .maybeSingle();
-            if (familyByCode.error) throw familyByCode.error;
-            if (familyByCode.data && familyByCode.data.id) {
-              familyId = familyByCode.data.id;
-              familyName = familyByCode.data.name || familyName;
-              familyCode = normalizeAccessCode(familyByCode.data.family_code || code);
-            }
-          } catch (familySelectError) {
-            errors.familySelect = errorMessage(familySelectError);
-            console.warn("[CloudContext] family error", familySelectError);
-          }
-        }
-      }
-
       if (familyId) {
-        try {
-          const familyCheck = await client
-            .from("families")
-            .select("id,name,family_code")
-            .eq("id", familyId)
-            .maybeSingle();
-          if (familyCheck.error) throw familyCheck.error;
-          if (familyCheck.data) {
-            familyName = familyCheck.data.name || familyName;
-            familyCode = normalizeAccessCode(familyCheck.data.family_code || familyCode || "");
-          }
-        } catch (familySelectError) {
-          errors.familySelect = errorMessage(familySelectError);
-          console.warn("[CloudContext] family error", familySelectError);
-        }
-      }
-
-      if (!familyId) {
-        try {
-          familyCode = generateFamilyCode();
-          const familyResult = await client
-            .from("families")
-            .insert({ name: familyName || "우리 가족", family_code: familyCode })
-            .select("id,name,family_code")
-            .single();
-          if (familyResult.error) throw familyResult.error;
-          familyId = familyResult.data && familyResult.data.id;
-          familyName = (familyResult.data && familyResult.data.name) || familyName;
-          familyCode = normalizeAccessCode(familyResult.data && familyResult.data.family_code) || familyCode;
-          createdNewFamily = true;
-          if (!familyId) throw new Error("family_create_failed");
-        } catch (familyInsertError) {
-          errors.familyInsert = errorMessage(familyInsertError);
-          console.warn("[CloudContext] family error", familyInsertError);
-        }
+        const membership = await ensureFamilyMembership(familyId, user);
+        if (!membership.ok) throw new Error(membership.error || "family_membership_failed");
       } else {
-        if (!familyCode) {
-          try {
-            const accessCodeResult = await ensureFamilyAccessCode(familyId);
-            if (accessCodeResult.ok) familyCode = accessCodeResult.familyCode || accessCodeResult.accessCode;
-            else {
-              errors.familyUpdate = accessCodeResult.error || "family_code_update_failed";
-              console.warn("[CloudContext] family error", errors.familyUpdate);
-            }
-          } catch (familyUpdateError) {
-            errors.familyUpdate = errorMessage(familyUpdateError);
-            console.warn("[CloudContext] family error", familyUpdateError);
-          }
+        const membershipResult = await client
+          .from("family_members")
+          .select("id,family_id,user_id,role,status,joined_at,created_at,updated_at,last_seen_at")
+          .eq("user_id", user.id)
+          .eq("status", "active")
+          .order("created_at", { ascending: true })
+          .limit(1)
+          .maybeSingle();
+        if (membershipResult.error) throw membershipResult.error;
+        if (membershipResult.data && membershipResult.data.family_id) {
+          familyId = membershipResult.data.family_id;
+          setState({ familyMembership: membershipResult.data });
         }
       }
 
-      if (familyId) {
-        try {
-          const membershipResult = await ensureFamilyMembership(familyId, user);
-          if (!membershipResult.ok) throw new Error(membershipResult.error || "family_membership_failed");
-          membership = membershipResult.membership || membership;
-        } catch (membershipUpsertError) {
-          errors.membershipUpsert = errorMessage(membershipUpsertError);
-          console.warn("[CloudContext] membership error", membershipUpsertError);
-        }
-      }
-      console.log("[CloudContext] resolved family_id", familyId);
+      if (!familyId) {
+        const familyResult = await client
+          .from("families")
+          .insert({ name: familyName, created_by: user.id })
+          .select("id,name,family_code")
+          .single();
+        if (familyResult.error) throw familyResult.error;
+        familyId = familyResult.data && familyResult.data.id;
+        familyName = (familyResult.data && familyResult.data.name) || familyName;
+        createdNewFamily = true;
+        if (!familyId) throw new Error("family_create_failed");
 
-      if (familyId) {
-        try {
-          const baby = await ensureBabyForFamily(familyId, readStoredBabyId() || context.currentBabyId);
-          if (!baby.ok || !baby.baby || !baby.baby.id) throw new Error(baby.error || "family_or_baby_missing");
-          babyId = baby.baby.id;
-          context = Object.assign({}, context, {
-            babyName: baby.baby.name || context.babyName || "아기",
-            babyBirthDate: baby.baby.birth_date || context.babyBirthDate || null,
-            babyGender: baby.baby.gender || context.babyGender || "unknown"
-          });
-        } catch (babyError) {
-          const message = errorMessage(babyError);
-          if (String(message).toLowerCase().indexOf("insert") !== -1 || String(message).toLowerCase().indexOf("policy") !== -1) errors.babyInsert = message;
-          else errors.babySelect = message;
-          console.warn("[CloudContext] baby error", babyError);
-        }
+        const membership = await ensureFamilyMembership(familyId, user);
+        if (!membership.ok) throw new Error(membership.error || "family_membership_failed");
       }
-      console.log("[CloudContext] resolved baby_id", babyId);
+
+      const baby = await ensureBabyForFamily(familyId, context.currentBabyId);
+      if (!baby.ok || !baby.baby || !baby.baby.id) throw new Error(baby.error || "family_or_baby_missing");
 
       // records와 babies의 실제 주인은 auth user가 아니라 family_id다.
       // The owner of records and babies is the family_id, not the auth user.
       context = saveCloudContext({
         currentFamilyId: familyId,
-        currentBabyId: babyId,
+        currentBabyId: baby.baby.id,
         currentUserId: user.id,
         deviceId: deviceId,
         deviceName: getDeviceName(),
         deviceType: getDeviceType(),
         familyName: familyName,
-        familyCode: familyCode,
-        familyAccessCode: familyCode,
-        accountCode: accountCode,
-        babyName: context.babyName || "아기",
-        babyBirthDate: context.babyBirthDate || null,
-        babyGender: context.babyGender || "unknown",
+        babyName: baby.baby.name || "아기",
+        babyBirthDate: baby.baby.birth_date || null,
+        babyGender: baby.baby.gender || "unknown",
         lastSetupAt: nowIso()
       });
-      try {
-        if (familyId && window.localStorage.getItem(CURRENT_FAMILY_ID_KEY) !== familyId) errors.localStorage = "babylog_family_id_write_failed";
-        if (babyId && window.localStorage.getItem(CURRENT_BABY_ID_KEY) !== babyId) errors.localStorage = "babylog_baby_id_write_failed";
-      } catch (localStorageError) {
-        errors.localStorage = errorMessage(localStorageError);
-        console.warn("[CloudContext] localStorage error", localStorageError);
+      const accessCodeResult = await ensureFamilyAccessCode(familyId);
+      if (accessCodeResult.ok) {
+        context = saveCloudContext(Object.assign({}, context, {
+          familyAccessCode: accessCodeResult.accessCode,
+          familyCode: accessCodeResult.familyCode || accessCodeResult.accessCode,
+          accountCode: profileResult.accountCode || context.accountCode
+        }));
       }
       await upsertCurrentDevice(context);
-      if (opts.skipAutoBackup !== true) backupLocalRecordsToCloud({ reason: createdNewFamily ? "new_family_initial_upload" : "family_ready_upload", context: context, skipEnsure: true }).catch(function (backupError) {
+      backupLocalRecordsToCloud({ reason: createdNewFamily ? "new_family_initial_upload" : "family_ready_upload", context: context, skipEnsure: true }).catch(function (backupError) {
         console.warn("[CloudBackup] non-blocking local upload failed", backupError);
       });
-      const ok = !!(user && user.id && familyId && babyId && membership);
-      context.ok = ok;
-      context.userId = user.id;
-      context.familyId = familyId;
-      context.babyId = babyId;
-      context.familyCode = familyCode || context.familyCode || context.familyAccessCode || null;
-      context.accountCode = accountCode || context.accountCode || null;
-      context.membership = membership || null;
-      context.profile = profile || null;
-      context.errors = errors;
       setState({
         enabled: true,
-        ready: ok,
-        mode: ok ? "cloud_ready" : "local",
-        status: ok ? (createdNewFamily ? "family_created" : "family_ready") : "family_context_incomplete",
+        ready: true,
+        mode: "cloud_ready",
+        status: createdNewFamily ? "family_created" : "family_ready",
         userId: user.id,
         authIdentity: buildAuthIdentity(user),
-        familyMembership: membership || BabyCloud.familyMembership || null,
         lastCheckedAt: nowIso(),
-        lastError: ok ? null : { message: contextErrorMessage(errors), name: "CloudContextError", code: "family_baby_context_missing" }
+        lastError: null
       });
       return context;
     } catch (error) {
@@ -1699,10 +1510,6 @@
       });
       return null;
     }
-  }
-
-  async function ensureAuthAndFamily() {
-    return ensureCloudContext();
   }
 
   async function ensureDefaultFamilyAndBaby() {
@@ -1801,11 +1608,44 @@
   }
 
   async function assignExistingRecordsToCurrentFamilyBaby() {
+    const client = getClient();
+    if (!client) return { ok: false, scanned: 0, repaired: 0, skipped: 0, failed: 0, error: "supabase_client_unavailable" };
     const context = await ensureDefaultFamilyAndBaby();
     if (!context || !context.currentUserId || !context.currentFamilyId || !context.currentBabyId) {
       return { ok: false, scanned: 0, repaired: 0, skipped: 0, failed: 0, error: "family_baby_context_missing" };
     }
-    return { ok: true, scanned: 0, repaired: 0, skipped: 0, failed: 0, reason: "server_record_repair_disabled_family_id_only" };
+    try {
+      const rowsResult = await client
+        .from("records")
+        .select("id,client_id,family_id,baby_id,device_id")
+        .eq("user_id", context.currentUserId)
+        .or("family_id.is.null,baby_id.is.null")
+        .limit(500);
+      if (rowsResult.error) throw rowsResult.error;
+      const rows = Array.isArray(rowsResult.data) ? rowsResult.data : [];
+      let repaired = 0;
+      let failed = 0;
+      for (let i = 0; i < rows.length; i += 1) {
+        const row = rows[i];
+        const patch = {
+          family_id: row.family_id || context.currentFamilyId,
+          baby_id: row.baby_id || context.currentBabyId,
+          device_id: row.device_id || context.deviceId || getOrCreateDeviceId()
+        };
+        const update = await client
+          .from("records")
+          .update(patch)
+          .eq("id", row.id)
+          .eq("user_id", context.currentUserId)
+          .select("id")
+          .maybeSingle();
+        if (update.error || !update.data) failed += 1;
+        else repaired += 1;
+      }
+      return { ok: failed === 0, scanned: rows.length, repaired: repaired, skipped: 0, failed: failed };
+    } catch (error) {
+      return { ok: false, scanned: 0, repaired: 0, skipped: 0, failed: 1, error: errorMessage(error) };
+    }
   }
 
   function repairLocalRecordsCloudContext(appData) {
@@ -1869,8 +1709,10 @@
       const preview = await buildProfileSyncPreview((readStoredAppData() || {}).profile || {});
       diagnosis.profileMatchesBaby = !!(preview.ok && !preview.hasDifferences);
 
-      diagnosis.serverRecordsMissingFamilyId = 0;
-      diagnosis.serverRecordsMissingBabyId = 0;
+      const missingFamily = await client.from("records").select("id", { count: "exact", head: true }).eq("user_id", context.currentUserId).is("family_id", null);
+      const missingBaby = await client.from("records").select("id", { count: "exact", head: true }).eq("user_id", context.currentUserId).is("baby_id", null);
+      diagnosis.serverRecordsMissingFamilyId = missingFamily.error ? 0 : (missingFamily.count || 0);
+      diagnosis.serverRecordsMissingBabyId = missingBaby.error ? 0 : (missingBaby.count || 0);
 
       const appData = readStoredAppData();
       const records = appData && Array.isArray(appData.records) ? appData.records : [];
@@ -2038,7 +1880,7 @@
       memo: note,
       is_sample: Boolean(record.isSample),
 
-      app_version: BABY_CLOUD_APP_VERSION,
+      app_version: "3.8",
       schema_version: 4,
       payload: payload
     };
@@ -2508,8 +2350,7 @@
     });
     lines.push("마지막 진단 시각: " + (source.checkedAt || "-"));
     if (source.errors && source.errors.length) {
-      const last = source.errors[source.errors.length - 1];
-      lines.push("마지막 오류: " + (last.step ? last.step + ": " : "") + (last.userMessage || last.message));
+      lines.push("마지막 오류: " + (source.errors[source.errors.length - 1].userMessage || source.errors[source.errors.length - 1].message));
     } else if (source.ok) {
       lines.push("서버 연결이 실제로 확인됐어요. Supabase Table Editor에서도 row를 확인해 보세요.");
     }
@@ -2549,9 +2390,9 @@
       const row = {
         user_id: auth.userId,
         device_id: deviceId,
-        check_type: "phase4_3_manual",
+        check_type: "phase3_8_manual",
         status: "ok",
-        message: "Phase 4.3 diagnostic insert/select test",
+        message: "Phase 3.8 diagnostic insert/select test",
         app_version: BABY_CLOUD_APP_VERSION,
         client_created_at: nowIso()
       };
@@ -2581,16 +2422,11 @@
     const client = getClient();
     if (!client) return { ok: false, error: "supabase_client_unavailable" };
     try {
-      const context = await ensureCloudContext({ skipAutoBackup: true, reason: "diagnostics" });
+      const context = await ensureDefaultFamilyAndBaby();
       if (!context || !context.currentUserId || !context.currentFamilyId || !context.currentBabyId) {
-        return {
-          ok: false,
-          error: context && context.errors ? contextErrorMessage(context.errors) : "family_baby_context_missing",
-          rawError: context && context.errors ? JSON.stringify(context.errors) : "family_baby_context_missing",
-          context: context
-        };
+        throw new Error("family_baby_context_missing");
       }
-      const familyResult = await client.from("families").select("id,name,family_code").eq("id", context.currentFamilyId).maybeSingle();
+      const familyResult = await client.from("families").select("id,name,created_at").eq("id", context.currentFamilyId).maybeSingle();
       if (familyResult.error) throw familyResult.error;
       if (!familyResult.data) throw new Error("family_select_missing");
       const memberResult = await client
@@ -2601,7 +2437,7 @@
         .maybeSingle();
       if (memberResult.error) throw memberResult.error;
       if (!memberResult.data) throw new Error("family_member_select_missing");
-      const babyResult = await client.from("babies").select("id,family_id,name").eq("id", context.currentBabyId).maybeSingle();
+      const babyResult = await client.from("babies").select("id,family_id,name,birth_date,gender").eq("id", context.currentBabyId).maybeSingle();
       if (babyResult.error) throw babyResult.error;
       if (!babyResult.data) throw new Error("baby_select_missing");
       return {
@@ -2623,10 +2459,9 @@
     const client = getClient();
     if (!client) return { ok: false, error: "supabase_client_unavailable" };
     try {
-      const context = await ensureCloudContext({ skipAutoBackup: true, reason: "diagnostics" });
+      const context = await ensureDefaultFamilyAndBaby();
       if (!context || !context.currentUserId || !context.currentFamilyId || !context.currentBabyId) {
-        const missing = !context || !context.currentFamilyId ? "currentFamilyId missing" : "currentBabyId missing";
-        return { ok: false, skipped: true, error: "context missing", rawError: missing, context: context };
+        throw new Error("family_baby_context_missing");
       }
       const now = nowIso();
       const testRecord = {
@@ -2634,7 +2469,7 @@
         type: "test",
         subtype: "connection",
         amount: null,
-        memo: "Phase 4.3 records insert/select/update/soft-delete test",
+        memo: "Phase 3.8 records insert/select/update/soft-delete test",
         isSample: true,
         createdAt: now,
         updatedAt: now
@@ -2652,12 +2487,11 @@
         .from("records")
         .select("id,client_id,note,deleted_at,updated_at")
         .eq("client_id", testRecord.id)
-        .eq("family_id", context.currentFamilyId)
         .maybeSingle();
       if (selectResult.error) throw selectResult.error;
       if (!selectResult.data) throw new Error("records_select_missing_row");
 
-      const updateNote = "Phase 4.3 update test completed";
+      const updateNote = "Phase 3.8 update test completed";
       const updateResult = await client
         .from("records")
         .update({
@@ -2667,7 +2501,6 @@
           payload: Object.assign({}, testRecord, { memo: updateNote, updatedAt: nowIso() })
         })
         .eq("client_id", testRecord.id)
-        .eq("family_id", context.currentFamilyId)
         .select("id,client_id,note,updated_at")
         .maybeSingle();
       if (updateResult.error) throw updateResult.error;
@@ -2678,7 +2511,6 @@
         .from("records")
         .update({ deleted_at: deletedAt, updated_at: deletedAt })
         .eq("client_id", testRecord.id)
-        .eq("family_id", context.currentFamilyId)
         .select("id,client_id,deleted_at,updated_at")
         .maybeSingle();
       if (deleteResult.error) throw deleteResult.error;
@@ -2721,31 +2553,12 @@
       result.checks.userId = !!(auth && auth.userId);
       if (!auth.ok) addDiagnosticError(result, "authSession", new Error(auth.error || "anonymous_auth_failed"));
       result.ids.userId = auth && auth.userId;
-      if (auth && auth.user) {
-        const identity = buildAuthIdentity(auth.user);
-        result.ids.provider = identity.providers && identity.providers.length ? identity.providers.join(",") : (identity.isAnonymous ? "anonymous" : "");
-        result.ids.email = identity.email || "";
-      }
 
       const diagnostics = await testDiagnosticsInsertSelect();
       result.checks.diagnosticsInsert = !!(diagnostics && diagnostics.ok && diagnostics.diagnosticId);
       result.checks.diagnosticsSelect = !!(diagnostics && diagnostics.ok);
       if (!diagnostics.ok) addDiagnosticError(result, "diagnosticsInsert", new Error(diagnostics.error || diagnostics.rawError || "diagnostics_insert_select_failed"));
       result.ids.diagnosticId = diagnostics && diagnostics.diagnosticId;
-
-      const contextResult = await ensureCloudContext({ skipAutoBackup: true, reason: "diagnostics" });
-      console.log("[Diagnostics] ensureCloudContext result", contextResult);
-      result.context = contextResult || null;
-      result.ids.userId = (contextResult && contextResult.currentUserId) || result.ids.userId;
-      result.ids.familyId = contextResult && contextResult.currentFamilyId;
-      result.ids.babyId = contextResult && contextResult.currentBabyId;
-      result.ids.familyCode = contextResult && (contextResult.familyCode || contextResult.familyAccessCode);
-      result.ids.accountCode = contextResult && contextResult.accountCode;
-      if (contextResult && contextResult.errors) {
-        Object.keys(contextResult.errors).forEach(function (step) {
-          if (contextResult.errors[step]) addDiagnosticError(result, step, new Error(contextResult.errors[step]));
-        });
-      }
 
       const familyBaby = await testFamilyBabyInsertSelect();
       result.checks.familyReady = !!(familyBaby && familyBaby.ok && familyBaby.familyId);
@@ -2760,7 +2573,7 @@
       result.checks.recordsSelect = !!(recordTest && recordTest.ok && recordTest.selected);
       result.checks.recordsUpdate = !!(recordTest && recordTest.ok && recordTest.updated);
       result.checks.recordsSoftDelete = !!(recordTest && recordTest.ok && recordTest.deleted);
-      if (!recordTest.ok) addDiagnosticError(result, recordTest.skipped ? "recordsSkipped" : "recordsInsert", new Error(recordTest.rawError || recordTest.error || "records_crud_test_failed"));
+      if (!recordTest.ok) addDiagnosticError(result, "recordsInsert", new Error(recordTest.error || recordTest.rawError || "records_crud_test_failed"));
       result.ids.testRecordId = recordTest && recordTest.testRecordId;
       result.ids.serverRecordId = recordTest && recordTest.serverRecordId;
 
@@ -2821,12 +2634,11 @@
       diagnosis.userId = user && user.id ? user.id : null;
       if (!checks.auth) throw new Error("Anonymous Auth user missing");
 
-      const context = await ensureCloudContext({ skipAutoBackup: true, reason: "diagnostics" });
+      const context = await ensureDefaultFamilyAndBaby();
       diagnosis.familyId = context && context.currentFamilyId ? context.currentFamilyId : null;
       diagnosis.babyId = context && context.currentBabyId ? context.currentBabyId : null;
       checks.family = !!diagnosis.familyId;
       checks.baby = !!diagnosis.babyId;
-      if (context && context.errors) diagnosis.contextErrors = context.errors;
 
       const familyMembersResult = await client.from("family_members").select("id,family_id,user_id").eq("user_id", user.id).limit(1);
       checks.familyMembersSelect = !familyMembersResult.error;
@@ -2923,7 +2735,7 @@
       type: "test",
       subtype: "connection",
       amount: null,
-      memo: "Phase 4.3 server test",
+      memo: "Phase 3.8 server test",
       isSample: true,
       createdAt: now,
       updatedAt: now,
