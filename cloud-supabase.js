@@ -21,7 +21,7 @@
   const PENDING_OAUTH_STARTED_AT_KEY = "babylog_oauth_started_at";
   const PENDING_OAUTH_PROVIDER_KEY = "babylog_oauth_provider";
   const LAST_OAUTH_RESULT_KEY = "babylog_last_oauth_result";
-  const BABY_CLOUD_APP_VERSION = "4.1";
+  const BABY_CLOUD_APP_VERSION = "4.2";
   const PLACEHOLDER_URL = "https://YOUR_PROJECT_REF.supabase.co";
   const PLACEHOLDER_KEY = "YOUR_SUPABASE_PUBLISHABLE_OR_ANON_KEY";
   const CLOUD_STATUSES = [
@@ -58,6 +58,7 @@
     ensureAuthAndFamily: ensureAuthAndFamily,
     restoreAuthAndFamilyAfterLogin: restoreAuthAndFamilyAfterLogin,
     signInWithGoogle: signInWithGoogle,
+    signInWithKakao: signInWithKakao,
     signOutGoogle: signOutGoogle,
     getPendingOAuthContext: getPendingOAuthContext,
     checkConnection: checkConnection,
@@ -909,7 +910,11 @@
 
   function savePendingOAuthContext(provider, familyId) {
     try {
-      if (familyId) window.localStorage.setItem(PENDING_OAUTH_FAMILY_ID_KEY, familyId);
+      if (familyId) {
+        window.localStorage.setItem(PENDING_OAUTH_FAMILY_ID_KEY, familyId);
+      } else {
+        window.localStorage.removeItem(PENDING_OAUTH_FAMILY_ID_KEY);
+      }
       window.localStorage.setItem(PENDING_OAUTH_STARTED_AT_KEY, nowIso());
       window.localStorage.setItem(PENDING_OAUTH_PROVIDER_KEY, provider || "google");
     } catch (error) {
@@ -977,7 +982,7 @@
             ok: false,
             provider: pending.provider,
             status: "cancelled_or_no_session",
-            message: "Google login was cancelled or no session was returned."
+            message: (pending.provider === "kakao" ? "Kakao" : "Google") + " login was cancelled or no session was returned."
           });
           clearPendingOAuthContext();
         }
@@ -1009,7 +1014,7 @@
         return { ok: !!context, context: context, createdNewFamily: !!context };
       }
 
-      // Google account is only an identity for accessing the family workspace, not the owner of records.
+      // Kakao account is only an identity for accessing the family workspace, not the owner of records.
       const membershipResult = await ensureFamilyMembership(familyId, user);
       if (membershipResult.ok) membership = membershipResult.membership;
       context = saveCloudContext(Object.assign({}, context, {
@@ -1034,7 +1039,7 @@
         enabled: true,
         ready: true,
         mode: "cloud_ready",
-        status: pending.provider ? "google_connected" : "family_ready",
+        status: pending.provider ? pending.provider + "_connected" : "family_ready",
         userId: user.id,
         authIdentity: buildAuthIdentity(user),
         familyMembership: membership || BabyCloud.familyMembership || null,
@@ -1099,6 +1104,41 @@
     }
   }
 
+  async function signInWithKakao() {
+    const client = getClient();
+    if (!client) return { ok: false, error: "supabase_client_unavailable" };
+    let context = getCloudContext();
+    try {
+      if (!context.currentFamilyId) {
+        const ensured = await ensureAuthAndFamily();
+        context = ensured || context;
+      }
+      const currentFamilyId = context.currentFamilyId || readLegacyFamilyId() || null;
+      savePendingOAuthContext("kakao", currentFamilyId);
+      console.log("[BabyCloud] Kakao login start", {
+        familyId: currentFamilyId,
+        localRecordsCount: getLocalRecordCount(),
+        hasBabyProfile: hasLocalBabyProfile()
+      });
+      setState({ status: "kakao_login_starting", lastError: null });
+      const redirectTo = getOAuthRedirectTo();
+      const user = await ensureUser();
+      if (!user || !user.id) throw new Error("anonymous_auth_failed");
+      const method = client.auth && typeof client.auth.linkIdentity === "function" ? "linkIdentity" : "signInWithOAuth";
+      const oauthResult = method === "linkIdentity"
+        ? await client.auth.linkIdentity({ provider: "kakao", options: { redirectTo: redirectTo } })
+        : await client.auth.signInWithOAuth({ provider: "kakao", options: { redirectTo: redirectTo } });
+      if (oauthResult.error) throw oauthResult.error;
+      saveLastOAuthResult({ ok: true, provider: "kakao", status: "oauth_redirect_started", method: method, familyId: currentFamilyId });
+      return { ok: true, data: oauthResult.data, method: method, redirectTo: redirectTo };
+    } catch (error) {
+      console.warn("BabyCloud Kakao login failed", error);
+      saveLastOAuthResult({ ok: false, provider: "kakao", status: "oauth_start_failed", error: errorMessage(error) });
+      setState({ ready: !!getCloudContext().currentFamilyId, mode: getCloudContext().currentFamilyId ? "cloud_ready" : "local", status: "kakao_login_failed", lastError: normalizeError(error) });
+      return { ok: false, error: errorMessage(error), context: getCloudContext() };
+    }
+  }
+
   async function signOutGoogle() {
     const client = getClient();
     if (!client) return { ok: false, error: "supabase_client_unavailable", context: getCloudContext() };
@@ -1140,6 +1180,7 @@
     if (!currentFamilyId || !currentUser || !currentUser.id) return { ok: false, membership: null, error: "family_or_user_missing" };
 
     try {
+      const provider = (buildAuthIdentity(currentUser).providers || [])[0] || null;
       const selectResult = await client
         .from("family_members")
         .select("id,family_id,user_id,role,status,joined_at,created_at,updated_at,last_seen_at")
@@ -1148,48 +1189,22 @@
         .maybeSingle();
       if (selectResult.error) throw selectResult.error;
 
-      if (selectResult.data) {
-        const updateResult = await client
-          .from("family_members")
-          .update({ status: "active", last_seen_at: nowIso() })
-          .eq("family_id", currentFamilyId)
-          .eq("user_id", currentUser.id)
-          .select("id,family_id,user_id,role,status,joined_at,created_at,updated_at,last_seen_at")
-          .maybeSingle();
-        if (updateResult.error) throw updateResult.error;
-        const preserved = updateResult.data || Object.assign({}, selectResult.data, { status: "active", last_seen_at: nowIso() });
-        setState({ familyMembership: preserved });
-        return { ok: true, membership: preserved, existed: true };
-      }
+      const rpcResult = await client.rpc("link_current_user_to_family", {
+        p_family_id: currentFamilyId,
+        p_provider: provider
+      });
+      if (rpcResult.error) throw rpcResult.error;
 
-      const insertResult = await client
+      const membershipResult = await client
         .from("family_members")
-        .insert({
-          family_id: currentFamilyId,
-          user_id: currentUser.id,
-          role: "owner",
-          status: "active",
-          last_seen_at: nowIso()
-        })
         .select("id,family_id,user_id,role,status,joined_at,created_at,updated_at,last_seen_at")
-        .single();
-      if (insertResult.error) {
-        if (insertResult.error.code === "23505") {
-          const retrySelect = await client
-            .from("family_members")
-            .select("id,family_id,user_id,role,status,joined_at,created_at,updated_at,last_seen_at")
-            .eq("family_id", currentFamilyId)
-            .eq("user_id", currentUser.id)
-            .maybeSingle();
-          if (!retrySelect.error && retrySelect.data) {
-            setState({ familyMembership: retrySelect.data });
-            return { ok: true, membership: retrySelect.data, existed: true };
-          }
-        }
-        throw insertResult.error;
-      }
-      setState({ familyMembership: insertResult.data || null });
-      return { ok: true, membership: insertResult.data || null, existed: false };
+        .eq("family_id", currentFamilyId)
+        .eq("user_id", currentUser.id)
+        .maybeSingle();
+      if (membershipResult.error) throw membershipResult.error;
+      if (!membershipResult.data) throw new Error("family_membership_not_returned");
+      setState({ familyMembership: membershipResult.data });
+      return { ok: true, membership: membershipResult.data, existed: !!selectResult.data };
     } catch (error) {
       setState({ familyMembership: null, lastError: normalizeError(error) });
       return { ok: false, membership: null, error: errorMessage(error) };

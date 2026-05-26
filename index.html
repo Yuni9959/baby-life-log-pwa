@@ -996,15 +996,16 @@
           </details>
           <div class="data-subsection" aria-labelledby="authFamilyStatusTitle">
             <h3 id="authFamilyStatusTitle">계정 상태</h3>
-            <p class="cloud-message">Google 계정을 연결해도 기존 아기 기록은 그대로 유지됩니다.</p>
-            <p class="cloud-message">Google 계정은 family workspace에 접근하는 identity일 뿐, records의 owner가 아닙니다.</p>
+            <p class="cloud-message">Google 또는 Kakao 계정을 연결해도 기존 아기 기록은 그대로 유지됩니다.</p>
+            <p class="cloud-message">Kakao 계정은 family workspace에 접근하는 identity일 뿐, records의 owner가 아닙니다.</p>
             <div class="data-grid" id="authFamilyStatusGrid"></div>
             <div class="data-tool-actions">
               <button type="button" class="small-action" id="googleConnectButton">Google 계정 연결하기</button>
+              <button type="button" class="small-action" id="kakaoConnectButton">카카오 계정 연결하기</button>
               <button type="button" class="small-action" id="googleLogoutButton">로그아웃</button>
             </div>
-            <p class="cloud-message" id="authFamilyStatusMessage">현재 익명 사용자로 사용 중입니다. Google 계정을 연결하면 다른 기기에서도 이 가족 기록을 이어서 사용할 수 있습니다.</p>
-            <p class="cloud-message" id="googleLoginSetupMessage">Google 로그인이 작동하려면 Supabase Dashboard에서 Google Provider와 Redirect URL 설정이 필요합니다.</p>
+            <p class="cloud-message" id="authFamilyStatusMessage">현재 익명 사용자로 사용 중입니다. 카카오 계정을 연결하면 다른 기기에서도 가족 기록을 이어서 사용할 수 있습니다.</p>
+            <p class="cloud-message" id="googleLoginSetupMessage">Kakao/Google 로그인이 작동하려면 Supabase Dashboard에서 Provider와 Redirect URL 설정이 필요합니다.</p>
           </div>
           <div class="data-subsection" aria-labelledby="familyBabyStructureTitle">
             <h3 id="familyBabyStructureTitle">가족/아기 서버 구조</h3>
@@ -1207,8 +1208,8 @@
       const PRE_REPAIR_BACKUP_KEY = "baby_life_log_app_backup_before_repair";
       const BACKUP_FORMAT_VERSION = 2;
       const APP_NAME = "baby-life-log";
-      const APP_VERSION = "3.8";
-      const APP_PHASE_LABEL = "가족 연결";
+      const APP_VERSION = "4.2";
+      const APP_PHASE_LABEL = "Kakao Login";
       const TYPES = ["feeding", "burp", "diaper", "sleep", "wake"];
       const LONG_PRESS_MS = 700;
       const MAX_FEED_AMOUNT = 500;
@@ -1302,6 +1303,7 @@
         authFamilyStatusGrid: document.getElementById("authFamilyStatusGrid"),
         authFamilyStatusMessage: document.getElementById("authFamilyStatusMessage"),
         googleConnectButton: document.getElementById("googleConnectButton"),
+        kakaoConnectButton: document.getElementById("kakaoConnectButton"),
         googleLogoutButton: document.getElementById("googleLogoutButton"),
         googleLoginSetupMessage: document.getElementById("googleLoginSetupMessage"),
         familyBabyStructureGrid: document.getElementById("familyBabyStructureGrid"),
@@ -3675,7 +3677,7 @@
           els.cloudCheckButton.disabled = status.status === "checking";
           els.cloudCheckButton.textContent = status.status === "checking" ? "확인 중" : "서버 연결 진단";
         }
-        [els.cloudEnsureFamilyButton, els.refreshFamilyIdentityButton, els.joinFamilyButton, els.googleConnectButton, els.googleLogoutButton, els.cloudProfileSyncButton, els.cloudRepairServerRecordsButton, els.cloudRepairLocalContextButton, els.cloudProfilePreviewButton, els.cloudTestSaveButton, els.cloudTestFetchButton, els.cloudRetryPendingButton, els.cloudRetryErrorButton, els.cloudFetchRecordsButton, els.cloudRefreshSyncButton].forEach(function (button) {
+        [els.cloudEnsureFamilyButton, els.refreshFamilyIdentityButton, els.joinFamilyButton, els.googleConnectButton, els.kakaoConnectButton, els.googleLogoutButton, els.cloudProfileSyncButton, els.cloudRepairServerRecordsButton, els.cloudRepairLocalContextButton, els.cloudProfilePreviewButton, els.cloudTestSaveButton, els.cloudTestFetchButton, els.cloudRetryPendingButton, els.cloudRetryErrorButton, els.cloudFetchRecordsButton, els.cloudRefreshSyncButton].forEach(function (button) {
           if (button) button.disabled = status.status === "checking";
         });
         renderAuthFamilyStatus(status);
@@ -3694,7 +3696,9 @@
         const membership = safeStatus.familyMembership || diagnostic.membership || {};
         const providers = Array.isArray(auth.providers) && auth.providers.length ? auth.providers.join(", ") : "-";
         const googleConnected = Array.isArray(auth.providers) && auth.providers.indexOf("google") !== -1;
-        const isAnonymous = auth.isAnonymous === true || (!auth.email && !googleConnected && providers === "-");
+        const kakaoConnected = Array.isArray(auth.providers) && auth.providers.indexOf("kakao") !== -1;
+        const connectedProvider = kakaoConnected ? "kakao" : (googleConnected ? "google" : "anonymous");
+        const isAnonymous = auth.isAnonymous === true || (!auth.email && !googleConnected && !kakaoConnected && providers === "-");
         let lastOAuth = null;
         try {
           const rawOAuth = window.localStorage.getItem("babylog_last_oauth_result");
@@ -3704,12 +3708,14 @@
         }
         if (els.authFamilyStatusGrid) {
           els.authFamilyStatusGrid.innerHTML = dataItemsHtml([
-            { label: "로그인 상태", value: googleConnected ? "Google 계정으로 연결됨" : (safeStatus.userId || auth.id ? "익명 사용자로 사용 중" : "확인 전") },
+            { label: "로그인 상태", value: kakaoConnected ? "카카오 계정으로 연결됨" : (googleConnected ? "Google 계정으로 연결됨" : (safeStatus.userId || auth.id ? "익명 사용자로 사용 중" : "확인 전")) },
             { label: "auth user id", value: shortUserId(auth.id || safeStatus.userId || context.currentUserId || "") || "-" },
             { label: "anonymous 여부", value: isAnonymous ? "익명 사용자" : "연결 계정" },
             { label: "Google 연결", value: googleConnected ? "연결됨" : "미연결" },
+            { label: "Kakao 연결", value: kakaoConnected ? "연결됨" : "미연결" },
             { label: "email", value: auth.email || "-" },
-            { label: "provider", value: providers },
+            { label: "provider", value: connectedProvider },
+            { label: "linked providers", value: providers },
             { label: "current family_id", value: shortUserId(context.currentFamilyId || safeStatus.currentFamilyId || diagnostic.familyId || "") || "-" },
             { label: "family_members 연결", value: membership.id || diagnostic.membershipConnected ? "연결됨" : "확인 전" },
             { label: "현재 role", value: membership.role || diagnostic.role || "-" },
@@ -3722,16 +3728,24 @@
           els.googleConnectButton.disabled = safeStatus.status === "checking" || safeStatus.status === "google_login_starting" || googleConnected;
           els.googleConnectButton.textContent = googleConnected ? "Google 연결됨" : (safeStatus.status === "google_login_starting" ? "Google 연결 중" : "Google 계정 연결하기");
         }
+        if (els.kakaoConnectButton) {
+          els.kakaoConnectButton.disabled = safeStatus.status === "checking" || safeStatus.status === "kakao_login_starting" || kakaoConnected;
+          els.kakaoConnectButton.textContent = kakaoConnected ? "카카오 연결됨" : (safeStatus.status === "kakao_login_starting" ? "카카오 연결 중" : "카카오 계정 연결하기");
+        }
         if (els.googleLogoutButton) {
           els.googleLogoutButton.disabled = safeStatus.status === "checking" || !(safeStatus.userId || auth.id);
         }
         if (els.authFamilyStatusMessage) {
-          if (googleConnected) {
+          if (kakaoConnected) {
+            els.authFamilyStatusMessage.textContent = "카카오 계정으로 연결되었습니다. 기존 아기 기록은 그대로 유지됩니다.";
+          } else if (googleConnected) {
             els.authFamilyStatusMessage.textContent = "Google 계정으로 연결되었습니다. 기존 아기 기록은 이 가족 공간에 그대로 유지됩니다.";
+          } else if (lastOAuth && lastOAuth.ok === false && lastOAuth.provider === "kakao") {
+            els.authFamilyStatusMessage.textContent = "카카오 로그인이 실패했거나 취소되었습니다. 기존 상태로 계속 사용할 수 있습니다.";
           } else if (lastOAuth && lastOAuth.ok === false) {
-            els.authFamilyStatusMessage.textContent = "Google 로그인에 실패했거나 취소되었습니다. 기존 익명 사용자 상태로 계속 사용할 수 있습니다.";
+            els.authFamilyStatusMessage.textContent = "로그인이 실패했거나 취소되었습니다. 기존 상태로 계속 사용할 수 있습니다.";
           } else if (context.currentFamilyId || safeStatus.currentFamilyId) {
-            els.authFamilyStatusMessage.textContent = "현재 익명 사용자로 사용 중입니다. Google 계정을 연결하면 기기 변경 후에도 가족 기록을 이어서 사용할 수 있습니다.";
+            els.authFamilyStatusMessage.textContent = "현재 익명 사용자로 사용 중입니다. 카카오 계정을 연결하면 다른 기기에서도 가족 기록을 이어서 사용할 수 있습니다.";
           } else {
             els.authFamilyStatusMessage.textContent = "서버 구조 확인을 실행하면 현재 익명 사용자와 family workspace 연결 상태를 확인할 수 있어요.";
           }
@@ -3739,7 +3753,7 @@
         if (els.googleLoginSetupMessage) {
           els.googleLoginSetupMessage.textContent = googleConnected
             ? "로그아웃해도 이 기기의 기록과 family_id는 삭제되지 않습니다."
-            : "Google 로그인이 작동하려면 Supabase Dashboard에서 Google Provider, Manual Linking, Redirect URL 설정이 필요합니다.";
+            : "Kakao 로그인이 작동하려면 Supabase Dashboard에서 Kakao Provider, Kakao REST API Key, Client Secret, Redirect URL 설정이 필요합니다.";
         }
       }
 
@@ -4310,6 +4324,32 @@
             renderCloudStatus();
             if (els.authFamilyStatusMessage) els.authFamilyStatusMessage.textContent = "Google 로그인에 실패했습니다. 기존 기록은 그대로 유지됩니다.";
             showToast("Google 로그인에 실패했어요. 기존 기록은 유지됩니다.");
+          }).finally(function () {
+            renderCloudStatus();
+          });
+        });
+      }
+      if (els.kakaoConnectButton) {
+        els.kakaoConnectButton.addEventListener("click", function () {
+          if (!window.BabyCloud || typeof window.BabyCloud.signInWithKakao !== "function") {
+            showToast("카카오 로그인 모듈을 아직 불러오지 못했어요.");
+            return;
+          }
+          els.kakaoConnectButton.disabled = true;
+          if (els.authFamilyStatusMessage) els.authFamilyStatusMessage.textContent = "카카오 계정 연결을 시작합니다. 기존 family_id와 기록은 이 기기에 그대로 보존됩니다.";
+          window.BabyCloud.signInWithKakao().then(function (result) {
+            renderCloudStatus();
+            if (result && result.ok) {
+              if (els.authFamilyStatusMessage) els.authFamilyStatusMessage.textContent = "카카오 인증 화면으로 이동합니다. 연결 후 이 가족 공간으로 다시 복구됩니다.";
+            } else {
+              if (els.authFamilyStatusMessage) els.authFamilyStatusMessage.textContent = "카카오 로그인에 실패했습니다. 기존 기록은 그대로 유지됩니다.";
+              showToast("카카오 로그인에 실패했어요. 기존 기록은 유지됩니다.");
+            }
+          }).catch(function (error) {
+            console.warn("Kakao login button failed", error);
+            renderCloudStatus();
+            if (els.authFamilyStatusMessage) els.authFamilyStatusMessage.textContent = "카카오 로그인에 실패했습니다. 기존 기록은 그대로 유지됩니다.";
+            showToast("카카오 로그인에 실패했어요. 기존 기록은 유지됩니다.");
           }).finally(function () {
             renderCloudStatus();
           });

@@ -1,6 +1,6 @@
-const CACHE_NAME = "baby-life-log-v4.1-legacy-20260525";
+const CACHE_NAME = "baby-life-log-v4.2-legacy-20260526";
 const CACHE_PREFIX = "baby-life-log-";
-const PRIMARY_CACHE_NAME = "baby-life-log-v4.1";
+const PRIMARY_CACHE_NAME = "baby-life-log-v4.2";
 const ASSETS_TO_CACHE = [
   "./index.html",
   "./manifest.json",
@@ -8,6 +8,7 @@ const ASSETS_TO_CACHE = [
   "./cloud-config.js",
   "./cloud-supabase.js",
   "./phase4_1_google_login_setup_notes.md",
+  "./phase4_2_kakao_login_notes.md",
   "./supabase_phase4_0_auth_identity_foundation.sql",
   "./supabase_phase3_8_family_identity.sql",
   "./PHASE3_8_MULTI_DEVICE_TEST_REPORT.md",
