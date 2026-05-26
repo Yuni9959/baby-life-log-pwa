@@ -1,12 +1,12 @@
-const CACHE_NAME = "baby-life-log-v4.3-legacy-20260526";
-const CACHE_PREFIX = "baby-life-log-";
-const PRIMARY_CACHE_NAME = "baby-life-log-v4.2";
+const APP_VERSION = "4.3.2";
+const CACHE_NAME = `babylog-cache-${APP_VERSION}`;
 const ASSETS_TO_CACHE = [
   "./index.html",
   "./manifest.json",
-  "./sw.js",
-  "./cloud-config.js",
-  "./cloud-supabase.js",
+  `./sw.js?v=${APP_VERSION}`,
+  `./service-worker.js?v=${APP_VERSION}`,
+  `./cloud-config.js?v=${APP_VERSION}`,
+  `./cloud-supabase.js?v=${APP_VERSION}`,
   "./phase4_3_cloud_backup_notes.md",
   "./phase4_3_sql_migration.sql",
   "./phase4_1_google_login_setup_notes.md",
@@ -30,7 +30,9 @@ const ASSETS_TO_CACHE = [
 self.addEventListener("install", function (event) {
   event.waitUntil(
     caches.open(CACHE_NAME).then(function (cache) {
-      return cache.addAll(ASSETS_TO_CACHE);
+      return Promise.allSettled(ASSETS_TO_CACHE.map(function (asset) {
+        return cache.add(asset);
+      }));
     })
   );
   self.skipWaiting();
@@ -41,19 +43,24 @@ self.addEventListener("activate", function (event) {
     caches.keys().then(function (keys) {
       return Promise.all(
         keys.map(function (key) {
-          if (
-            key.indexOf(CACHE_PREFIX) === 0 &&
-            key !== CACHE_NAME &&
-            key !== PRIMARY_CACHE_NAME
-          ) {
-            return caches.delete(key);
-          }
-          return undefined;
+          return key === CACHE_NAME ? Promise.resolve() : caches.delete(key);
         })
       );
     })
   );
   self.clients.claim();
+});
+
+self.addEventListener("message", function (event) {
+  if (!event.data || event.data.type !== "GET_VERSION") return;
+  const target = event.ports && event.ports[0] ? event.ports[0] : event.source;
+  if (target && typeof target.postMessage === "function") {
+    target.postMessage({
+      type: "VERSION_INFO",
+      appVersion: APP_VERSION,
+      cacheName: CACHE_NAME
+    });
+  }
 });
 
 self.addEventListener("fetch", function (event) {
@@ -67,6 +74,7 @@ self.addEventListener("fetch", function (event) {
     (
       requestUrl.pathname.endsWith("/cloud-config.js") ||
       requestUrl.pathname.endsWith("/cloud-supabase.js") ||
+      requestUrl.pathname.endsWith("/service-worker.js") ||
       requestUrl.pathname.endsWith("/sw.js")
     )
   ) {
@@ -79,6 +87,21 @@ self.addEventListener("fetch", function (event) {
         return response;
       }).catch(function () {
         return caches.match(event.request);
+      })
+    );
+    return;
+  }
+
+  if (event.request.mode === "navigate") {
+    event.respondWith(
+      fetch(event.request, { cache: "no-store" }).then(function (response) {
+        const responseClone = response.clone();
+        caches.open(CACHE_NAME).then(function (cache) {
+          cache.put("./index.html", responseClone).catch(function () {});
+        });
+        return response;
+      }).catch(function () {
+        return caches.match("./index.html");
       })
     );
     return;

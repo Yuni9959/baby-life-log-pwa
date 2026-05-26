@@ -1,13 +1,12 @@
-const CACHE_NAME = "baby-life-log-v4.3-20260526";
-const CACHE_PREFIX = "baby-life-log-";
-const LEGACY_CACHE_NAME = "baby-life-log-v3.8-legacy";
+const APP_VERSION = "4.3.2";
+const CACHE_NAME = `babylog-cache-${APP_VERSION}`;
 const APP_SHELL = [
   "./",
   "./index.html",
   "./manifest.json",
-  "./service-worker.js",
-  "./cloud-config.js",
-  "./cloud-supabase.js",
+  `./service-worker.js?v=${APP_VERSION}`,
+  `./cloud-config.js?v=${APP_VERSION}`,
+  `./cloud-supabase.js?v=${APP_VERSION}`,
   "./phase4_3_cloud_backup_notes.md",
   "./phase4_3_sql_migration.sql",
   "./phase4_1_google_login_setup_notes.md",
@@ -50,14 +49,7 @@ self.addEventListener("activate", function (event) {
       .then(function (cacheNames) {
         return Promise.all(
           cacheNames.map(function (cacheName) {
-            if (
-              cacheName.indexOf(CACHE_PREFIX) === 0 &&
-              cacheName !== CACHE_NAME &&
-              cacheName !== LEGACY_CACHE_NAME
-            ) {
-              return caches.delete(cacheName);
-            }
-            return Promise.resolve();
+            return cacheName === CACHE_NAME ? Promise.resolve() : caches.delete(cacheName);
           })
         );
       })
@@ -65,6 +57,18 @@ self.addEventListener("activate", function (event) {
         return self.clients.claim();
       })
   );
+});
+
+self.addEventListener("message", function (event) {
+  if (!event.data || event.data.type !== "GET_VERSION") return;
+  const target = event.ports && event.ports[0] ? event.ports[0] : event.source;
+  if (target && typeof target.postMessage === "function") {
+    target.postMessage({
+      type: "VERSION_INFO",
+      appVersion: APP_VERSION,
+      cacheName: CACHE_NAME
+    });
+  }
 });
 
 self.addEventListener("fetch", function (event) {
@@ -90,6 +94,8 @@ self.addEventListener("fetch", function (event) {
           const responseClone = response.clone();
           caches.open(CACHE_NAME).then(function (cache) {
             cache.put(request, responseClone).catch(function () {});
+            const versionless = requestUrl.pathname.split("/").pop();
+            if (versionless) cache.put("./" + versionless, response.clone()).catch(function () {});
           });
           return response;
         })
@@ -102,7 +108,7 @@ self.addEventListener("fetch", function (event) {
 
   if (request.mode === "navigate") {
     event.respondWith(
-      fetch(request)
+      fetch(request, { cache: "no-store" })
         .then(function (response) {
           const responseClone = response.clone();
           caches.open(CACHE_NAME).then(function (cache) {

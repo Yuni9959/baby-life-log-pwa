@@ -29,7 +29,7 @@
   const LOCAL_BABY_ID_KEY = "babylog_baby_id";
   const LOCAL_FAMILY_CODE_KEY = "babylog_family_code";
   const LOCAL_ACCOUNT_CODE_KEY = "babylog_account_code";
-  const BABY_CLOUD_APP_VERSION = "4.3.1";
+  const BABY_CLOUD_APP_VERSION = "4.3.2";
   const PLACEHOLDER_URL = "https://YOUR_PROJECT_REF.supabase.co";
   const PLACEHOLDER_KEY = "YOUR_SUPABASE_PUBLISHABLE_OR_ANON_KEY";
   const CLOUD_STATUSES = [
@@ -49,6 +49,7 @@
 
   const BabyCloud = {
     provider: "supabase",
+    version: BABY_CLOUD_APP_VERSION,
     enabled: false,
     ready: false,
     mode: "local",
@@ -1937,7 +1938,7 @@
       memo: note,
       is_sample: Boolean(record.isSample),
 
-      app_version: "3.8",
+      app_version: BABY_CLOUD_APP_VERSION,
       schema_version: 4,
       payload: payload
     };
