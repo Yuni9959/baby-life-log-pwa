@@ -6,7 +6,7 @@ window.BABY_APP_CLOUD_CONFIG = {
   enabled: true,
   supabaseUrl: "https://vburjgyfjhgtkulabrnf.supabase.co",
   supabaseAnonKey: "sb_publishable_o1NUthUHmVjaH4f-j186ng_AbspdQwa",
-  appVersion: "4.3.2",
+  appVersion: "4.3.5.1",
   schemaVersion: 4,
   debug: true
 };

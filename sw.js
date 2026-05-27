@@ -1,4 +1,4 @@
-const APP_VERSION = "4.3.2";
+const APP_VERSION = "4.3.5.1";
 const CACHE_NAME = `babylog-cache-${APP_VERSION}`;
 const ASSETS_TO_CACHE = [
   "./index.html",

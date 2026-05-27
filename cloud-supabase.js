@@ -29,7 +29,7 @@
   const LOCAL_BABY_ID_KEY = "babylog_baby_id";
   const LOCAL_FAMILY_CODE_KEY = "babylog_family_code";
   const LOCAL_ACCOUNT_CODE_KEY = "babylog_account_code";
-  const BABY_CLOUD_APP_VERSION = "4.3.2";
+  const BABY_CLOUD_APP_VERSION = "4.3.5.1";
   const PLACEHOLDER_URL = "https://YOUR_PROJECT_REF.supabase.co";
   const PLACEHOLDER_KEY = "YOUR_SUPABASE_PUBLISHABLE_OR_ANON_KEY";
   const CLOUD_STATUSES = [
@@ -181,6 +181,7 @@
       error: cloud.error ? String(cloud.error).slice(0, 300) : "",
       familyId: cloud.familyId || null,
       babyId: cloud.babyId || null,
+      serverId: cloud.serverId || null,
       lastAttemptAt: safeIso(cloud.lastAttemptAt),
       retryCount: Math.max(0, Math.round(Number(cloud.retryCount) || 0)),
       operation: ["create", "update", "delete", "unknown"].includes(cloud.operation) ? cloud.operation : "unknown"
@@ -938,6 +939,29 @@
         device_name: getDeviceName(),
         device_type: getDeviceType()
       };
+      const currentContext = getCloudContext();
+      const currentCode = normalizeAccessCode(currentContext.familyCode || currentContext.familyAccessCode || "");
+      if (currentContext.currentFamilyId && currentContext.currentBabyId && currentCode && currentCode === normalizedCode) {
+        const membership = await ensureFamilyMembership(currentContext.currentFamilyId, user);
+        if (!membership.ok) throw new Error(membership.error || "family_membership_failed");
+        const context = saveCloudContext(Object.assign({}, currentContext, {
+          currentUserId: user.id,
+          deviceId: device.device_id,
+          deviceName: device.device_name,
+          deviceType: device.device_type,
+          familyCode: currentCode,
+          familyAccessCode: currentCode,
+          lastSetupAt: nowIso(),
+          lastError: ""
+        }));
+        const recordsResult = await fetchServerRecordsForCurrentBaby({ skipEnsure: true });
+        const restoreResult = recordsResult && recordsResult.ok
+          ? restoreCloudRecordsToLocal(recordsResult.records, { reason: "family_join_already_connected" })
+          : { ok: false, addedCount: 0, error: recordsResult && recordsResult.error };
+        setState({ ready: true, mode: "cloud_ready", status: "family_already_connected", userId: user.id, lastError: null });
+        console.log("[FamilyConnect] already connected; fetched latest records", { familyId: context.currentFamilyId, restored: restoreResult.addedCount || 0 });
+        return { ok: true, alreadyConnected: true, context: getCloudContext(), backup: backup, records: recordsResult, restore: restoreResult };
+      }
       console.log("[FamilyConnect] join by family_code start", { familyCode: normalizedCode });
       const result = await client.rpc("join_family_by_family_code", {
         p_family_code: normalizedCode,
@@ -1825,6 +1849,7 @@
   function mapServerTypeToLocalType(type) {
     const value = String(type || "");
     if (value === "sleep_start") return "sleep";
+    if (value === "sleep_end") return "wake";
     return value || "custom";
   }
 
@@ -1962,14 +1987,14 @@
 
   function normalizeServerRowToLocalRecord(row) {
     if (!isObject(row)) return { ok: false, reason: "row_not_object", row: row };
-    const clientId = row.client_id || row.record_id;
+    const clientId = row.client_id || row.record_id || row.id;
     if (!clientId) return { ok: false, reason: "missing_client_id", row: row };
     const payload = isObject(row.payload) ? row.payload : {};
     const createdAt = payload.createdAt || row.recorded_at || row.record_created_at || row.created_at;
     const updatedAt = payload.updatedAt || row.record_updated_at || row.updated_at || row.recorded_at || row.created_at;
     if (!isValidDate(createdAt) || !isValidDate(updatedAt)) return { ok: false, reason: "invalid_date", row: row };
 
-    const localType = payload.type || mapServerTypeToLocalType(row.type);
+    const localType = mapServerTypeToLocalType(payload.type || row.type);
     const record = {
       id: String(clientId),
       type: String(localType || "custom"),
@@ -1985,7 +2010,8 @@
         syncedAt: row.updated_at || row.created_at || nowIso(),
         error: "",
         familyId: row.family_id || null,
-        babyId: row.baby_id || null
+        babyId: row.baby_id || null,
+        serverId: row.id || null
       }
     };
     return { ok: true, record: record, row: row };
@@ -2846,7 +2872,7 @@
       const context = opts.skipEnsure === true
         ? getCloudContext()
         : (contextResult && contextResult.ok ? getCloudContext() : await ensureDefaultFamilyAndBaby());
-      if (!context || !context.currentFamilyId) {
+      if (!context || !context.currentFamilyId || !context.currentBabyId) {
         return { ok: false, status: "error", rows: [], records: [], fetchedAt: null, familyId: null, babyId: null, total: 0, testRows: 0, deletedRows: 0, error: contextMissingError() };
       }
 
@@ -2854,6 +2880,7 @@
         .from("records")
         .select("*")
         .eq("family_id", context.currentFamilyId)
+        .eq("baby_id", context.currentBabyId)
         .order("recorded_at", { ascending: true });
 
       if (result.error) throw result.error;
@@ -3254,6 +3281,33 @@
       return { ok: false, added: 0, deletedApplied: 0, skippedExisting: 0, skippedTestRows: 0, conflicts: 0, mergedAt: mergedAt, error: "invalid_app_data" };
     }
     const preview = mergePreview && mergePreview.ok ? mergePreview : buildSafeMergePreview(target, opts.serverRows || []);
+    if (
+      (preview.serverOnlyCount || 0) < 1 &&
+      (preview.deleteApplyCount || 0) < 1 &&
+      (preview.serverNewerCount || 0) < 1
+    ) {
+      const noChange = {
+        ok: true,
+        added: 0,
+        addedCount: 0,
+        deletedApplied: 0,
+        serverNewerApplied: 0,
+        serverNewerSkipped: 0,
+        overwritePolicy: "server_newer_updates_existing_records",
+        skippedExisting: preview.bothCount || 0,
+        skippedTestRows: preview.testRowCount || 0,
+        conflicts: preview.conflictCount || 0,
+        invalidRows: preview.invalidRowCount || 0,
+        mergedRecords: [],
+        mergedAt: mergedAt,
+        noChange: true
+      };
+      try {
+        window.localStorage.setItem(LAST_SAFE_MERGE_RESULT_KEY, JSON.stringify(noChange));
+        window.localStorage.setItem("babyAppLastServerMergeResult", JSON.stringify(noChange));
+      } catch (storageError) {}
+      return noChange;
+    }
     const backup = {
       reason: "before_server_merge_phase3_8",
       createdAt: mergedAt,
@@ -3273,13 +3327,15 @@
     }));
     let added = 0;
     let deletedApplied = 0;
-    let serverNewerSkipped = 0;
+    let serverNewerApplied = 0;
+    const mergedRecords = [];
 
     (preview.serverOnlyRecords || []).forEach(function (record) {
       if (!record || !record.id || record.deletedAt || isTestRecord(record) || existingIds.has(String(record.id))) return;
       target.records.push(record);
       existingIds.add(String(record.id));
       added += 1;
+      mergedRecords.push(record);
     });
 
     const deleteById = new Map();
@@ -3301,12 +3357,30 @@
           })
         }));
         deletedApplied += 1;
+        mergedRecords.push(record);
       });
     }
 
-    serverNewerSkipped = (preview.serverNewerRecords || []).filter(function (record) {
-      return record && record.id && !record.deletedAt && !isTestRecord(record) && existingIds.has(String(record.id));
-    }).length;
+    const byId = new Map();
+    target.records.forEach(function (record) {
+      if (record && record.id) byId.set(String(record.id), record);
+    });
+    (preview.serverNewerRecords || []).forEach(function (record) {
+      if (!record || !record.id || record.deletedAt || isTestRecord(record)) return;
+      const local = byId.get(String(record.id));
+      if (!local || local.deletedAt) return;
+      Object.assign(local, record, {
+        cloud: normalizeRecordCloud(Object.assign({}, record, {
+          cloud: Object.assign({}, record.cloud || {}, {
+            status: "synced",
+            syncedAt: record.updatedAt || mergedAt,
+            error: ""
+          })
+        }))
+      });
+      serverNewerApplied += 1;
+      mergedRecords.push(local);
+    });
 
     target.records.sort(function (a, b) {
       return new Date(b.createdAt) - new Date(a.createdAt);
@@ -3317,13 +3391,14 @@
       added: added,
       addedCount: added,
       deletedApplied: deletedApplied,
-      serverNewerApplied: 0,
-      serverNewerSkipped: serverNewerSkipped,
-      overwritePolicy: "local_wins_existing_records",
+      serverNewerApplied: serverNewerApplied,
+      serverNewerSkipped: 0,
+      overwritePolicy: "server_newer_updates_existing_records",
       skippedExisting: preview.bothCount || 0,
       skippedTestRows: preview.testRowCount || 0,
       conflicts: preview.conflictCount || 0,
       invalidRows: preview.invalidRowCount || 0,
+      mergedRecords: mergedRecords,
       mergedAt: mergedAt
     };
     try {

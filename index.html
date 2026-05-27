@@ -1041,13 +1041,13 @@
           <div class="data-tool-actions">
             <button type="button" class="small-action" id="cloudCheckButton">서버 연결 진단</button>
             <button type="button" class="small-action" id="cloudEnsureFamilyButton">가족/아기 서버 구조 확인</button>
-            <button type="button" class="small-action" id="cloudRefreshSyncButton">동기화 상태 새로고침</button>
+            <button type="button" class="small-action" id="cloudRefreshSyncButton">동기화 새로고침</button>
             <button type="button" class="small-action" id="cloudBackupUploadButton">로컬 기록 클라우드 백업</button>
             <button type="button" class="small-action" id="cloudTestSaveButton">서버 테스트 저장</button>
             <button type="button" class="small-action" id="cloudTestFetchButton">서버 테스트 조회</button>
             <button type="button" class="small-action" id="cloudRetryPendingButton">동기화 대기 재시도</button>
             <button type="button" class="small-action" id="cloudRetryErrorButton">서버 오류 재시도</button>
-            <button type="button" class="small-action" id="cloudFetchRecordsButton">서버 기록 새로고침</button>
+            <button type="button" class="small-action" id="cloudFetchRecordsButton">최신 기록 가져오기</button>
             <button type="button" class="small-action" id="cloudPreviewMergeButton">안전 병합 미리보기</button>
             <button type="button" class="small-action" id="cloudMergeRecordsButton" disabled>안전 병합 실행</button>
           </div>
@@ -1192,16 +1192,16 @@
   </div>
 
   <script>
-    window.APP_VERSION = "4.3.5";
+    window.APP_VERSION = "4.3.5.1";
   </script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="./cloud-config.js?v=4.3.5"></script>
-  <script src="./cloud-supabase.js?v=4.3.5"></script>
+  <script src="./cloud-config.js?v=4.3.5.1"></script>
+  <script src="./cloud-supabase.js?v=4.3.5.1"></script>
   <script>
     document.addEventListener("DOMContentLoaded", function () {
       if ("serviceWorker" in navigator) {
         let reloadedForServiceWorkerUpdate = false;
-        navigator.serviceWorker.register("./service-worker.js?v=4.3.2").then(function (registration) {
+        navigator.serviceWorker.register("./service-worker.js?v=4.3.5.1").then(function (registration) {
           registration.update().catch(function () {});
           registration.addEventListener("updatefound", function () {
             const worker = registration.installing;
@@ -1231,7 +1231,7 @@
       const PRE_REPAIR_BACKUP_KEY = "baby_life_log_app_backup_before_repair";
       const BACKUP_FORMAT_VERSION = 2;
       const APP_NAME = "baby-life-log";
-      const APP_VERSION = window.APP_VERSION || "4.3.5";
+      const APP_VERSION = window.APP_VERSION || "4.3.5.1";
       const APP_PHASE_LABEL = "가족간 계정 실시간 공유 안정화";
       let pwaVersionInfo = {
         appVersion: APP_VERSION,
@@ -1386,6 +1386,32 @@
       let cloudLastFetchResult = null;
       let cloudMergePreview = null;
       let cloudLastMergeResult = null;
+      const FAMILY_SYNC_INTERVAL_MS = 60000;
+      const FAMILY_SYNC_PROBE_ID = "0b07a661-54e2-4809-b4f7-e0263b4cde6c";
+      let familySyncIntervalId = null;
+      let isFamilySyncing = false;
+      let familySyncState = {
+        autoSyncEnabled: true,
+        intervalMs: FAMILY_SYNC_INTERVAL_MS,
+        lastAutoTickAt: null,
+        isSyncing: false,
+        canRun: false,
+        canRunFalseReason: "not_checked",
+        lastSyncReason: "",
+        lastSyncAt: null,
+        lastSyncResult: "",
+        lastSyncError: "",
+        serverRecordsCount: 0,
+        localRecordsCount: 0,
+        lastFetchedRecordId: "",
+        lastFetchedRecordType: "",
+        lastMergedRecordId: "",
+        lastMergedRecordType: "",
+        probeFetched: false,
+        probeMerged: false,
+        latestStatusRecordId: "",
+        latestStatusRecordType: ""
+      };
       let familyBabyDiagnosis = null;
       let profileSyncPreview = null;
 
@@ -1517,6 +1543,7 @@
           error: source.error ? String(source.error).slice(0, 200) : "",
           familyId: source.familyId || null,
           babyId: source.babyId || null,
+          serverId: source.serverId || null,
           lastAttemptAt: source.lastAttemptAt ? safeIso(source.lastAttemptAt) : null,
           retryCount: Math.max(0, Math.round(Number(source.retryCount) || 0)),
           operation: ["create", "update", "delete", "unknown"].includes(source.operation) ? source.operation : "unknown"
@@ -3737,6 +3764,9 @@
           : null;
         const checks = diagnosis && diagnosis.checks ? diagnosis.checks : {};
         const online = typeof navigator === "undefined" ? true : navigator.onLine !== false;
+        const canSyncNow = canRunFamilySync();
+        familySyncState.canRun = canSyncNow.ok;
+        familySyncState.canRunFalseReason = canSyncNow.ok ? "" : canSyncNow.reason;
         if (els.syncOfflineNote) {
           els.syncOfflineNote.classList.toggle("active", !online);
           els.syncOfflineNote.textContent = online
@@ -3763,8 +3793,33 @@
         if (els.cloudStatusGrid) {
           els.cloudStatusGrid.innerHTML = dataItemsHtml([
             { label: "현재 모드", value: cloudModeLabel(status.mode) },
+            { label: "APP_VERSION", value: APP_VERSION },
             { label: "서버 연결 상태", value: cloudStatusLabel(status.status) },
             { label: "네트워크", value: online ? "온라인" : "오프라인" },
+            { label: "autoSyncEnabled", value: familySyncState.autoSyncEnabled ? "true" : "false" },
+            { label: "intervalActive", value: familySyncIntervalId ? "true" : "false" },
+            { label: "intervalId exists", value: familySyncIntervalId ? "true" : "false" },
+            { label: "intervalMs", value: String(familySyncState.intervalMs) },
+            { label: "lastAutoTickAt", value: formatCloudCheckedAt(familySyncState.lastAutoTickAt) },
+            { label: "isSyncing", value: (isFamilySyncing || familySyncState.isSyncing) ? "true" : "false" },
+            { label: "canRunFamilySync", value: familySyncState.canRun ? "true" : "false" },
+            { label: "sync skip reason", value: familySyncState.canRunFalseReason || "-" },
+            { label: "lastSyncReason", value: familySyncState.lastSyncReason || "-" },
+            { label: "lastSyncAt", value: formatCloudCheckedAt(familySyncState.lastSyncAt) },
+            { label: "lastSyncResult", value: familySyncState.lastSyncResult || "-" },
+            { label: "lastSyncError", value: familySyncState.lastSyncError || "-" },
+            { label: "serverRecordsCount", value: familySyncState.serverRecordsCount + "개" },
+            { label: "localRecordsCount", value: familySyncState.localRecordsCount + "개" },
+            { label: "lastFetchedRecordId", value: shortUserId(familySyncState.lastFetchedRecordId || "") || "-" },
+            { label: "lastFetchedRecordType", value: familySyncState.lastFetchedRecordType || "-" },
+            { label: "lastMergedRecordId", value: shortUserId(familySyncState.lastMergedRecordId || "") || "-" },
+            { label: "lastMergedRecordType", value: familySyncState.lastMergedRecordType || "-" },
+            { label: "probe fetched", value: familySyncState.probeFetched ? "true" : "false" },
+            { label: "probe merged", value: familySyncState.probeMerged ? "true" : "false" },
+            { label: "latest status record id", value: shortUserId(familySyncState.latestStatusRecordId || "") || "-" },
+            { label: "latest status record type", value: familySyncState.latestStatusRecordType || "-" },
+            { label: "document.visibilityState", value: typeof document === "undefined" ? "-" : document.visibilityState },
+            { label: "navigator.onLine", value: online ? "true" : "false" },
             { label: "Family ID", value: status.currentFamilyId ? "준비됨" : "준비 전" },
             { label: "Baby ID", value: status.currentBabyId ? "준비됨" : "준비 전" },
             { label: "클라우드 백업", value: cloudBackup && cloudBackup.ok ? "연결됨" : (status.ready ? "준비됨" : "확인 전") },
@@ -3966,6 +4021,125 @@
         }
       }
 
+      function getLatestStatusRecord() {
+        return getAllRecords().find(function (record) {
+          return record && (record.type === "sleep" || record.type === "wake" || record.type === "feeding" || record.type === "diaper" || record.type === "burp");
+        }) || null;
+      }
+
+      function canRunFamilySync() {
+        if (!familySyncState.autoSyncEnabled) return { ok: false, reason: "auto_sync_disabled" };
+        if (isFamilySyncing) return { ok: false, reason: "sync_in_progress" };
+        if (typeof document !== "undefined" && document.visibilityState && document.visibilityState !== "visible") return { ok: false, reason: "document_not_visible" };
+        if (typeof navigator !== "undefined" && navigator.onLine === false) return { ok: false, reason: "offline" };
+        if (!window.BabyCloud || typeof window.BabyCloud.fetchServerRecordsForCurrentBaby !== "function") return { ok: false, reason: "cloud_fetch_unavailable" };
+        const context = window.BabyCloud && typeof window.BabyCloud.getCloudContext === "function" ? window.BabyCloud.getCloudContext() : {};
+        if (!context.currentFamilyId) return { ok: false, reason: "family_id_missing" };
+        if (!context.currentBabyId) return { ok: false, reason: "baby_id_missing" };
+        return { ok: true, reason: "ready", context: context };
+      }
+
+      function updateFamilySyncDiagnostics(fetchResult, mergeResult, reason, error) {
+        const rows = fetchResult && Array.isArray(fetchResult.records) ? fetchResult.records : [];
+        const lastFetched = rows.length ? rows[rows.length - 1] : null;
+        const latestStatus = getLatestStatusRecord();
+        const probeLocal = appData.records.find(function (record) {
+          return record && (String(record.id) === FAMILY_SYNC_PROBE_ID || String(record.cloud && record.cloud.serverId || "") === FAMILY_SYNC_PROBE_ID);
+        });
+        const lastMergedRecords = mergeResult && Array.isArray(mergeResult.mergedRecords) ? mergeResult.mergedRecords : [];
+        const lastMerged = lastMergedRecords.length ? lastMergedRecords[lastMergedRecords.length - 1] : probeLocal;
+        familySyncState.lastSyncReason = reason || familySyncState.lastSyncReason || "";
+        familySyncState.lastSyncAt = error ? familySyncState.lastSyncAt : nowIso();
+        familySyncState.lastSyncResult = mergeResult && mergeResult.ok ? "ok" : (error ? "error" : "no_change");
+        familySyncState.lastSyncError = error ? String(error.message || error).slice(0, 160) : "";
+        familySyncState.serverRecordsCount = fetchResult && fetchResult.count !== undefined ? fetchResult.count : rows.length;
+        familySyncState.localRecordsCount = appData.records.length;
+        familySyncState.lastFetchedRecordId = lastFetched ? String(lastFetched.client_id || lastFetched.record_id || lastFetched.id || "") : "";
+        familySyncState.lastFetchedRecordType = lastFetched ? String(lastFetched.type || "") : "";
+        familySyncState.lastMergedRecordId = lastMerged ? String((lastMerged.cloud && lastMerged.cloud.serverId) || lastMerged.id || "") : "";
+        familySyncState.lastMergedRecordType = lastMerged ? String(lastMerged.type || "") : "";
+        familySyncState.probeFetched = rows.some(function (row) {
+          return String(row.client_id || row.record_id || row.id || "") === FAMILY_SYNC_PROBE_ID;
+        });
+        familySyncState.probeMerged = !!probeLocal;
+        familySyncState.latestStatusRecordId = latestStatus ? String((latestStatus.cloud && latestStatus.cloud.serverId) || latestStatus.id || "") : "";
+        familySyncState.latestStatusRecordType = latestStatus ? String(latestStatus.type || "") : "";
+      }
+
+      function syncFamilyRecordsFromServer(options) {
+        const opts = options || {};
+        const reason = opts.reason || "manual";
+        const canRun = canRunFamilySync();
+        familySyncState.canRun = canRun.ok;
+        familySyncState.canRunFalseReason = canRun.ok ? "" : canRun.reason;
+        familySyncState.lastSyncReason = reason;
+        if (!canRun.ok) {
+          renderCloudStatus();
+          return Promise.resolve({ ok: false, skipped: true, reason: canRun.reason });
+        }
+
+        isFamilySyncing = true;
+        familySyncState.isSyncing = true;
+        familySyncState.lastSyncError = "";
+        renderCloudStatus();
+
+        return window.BabyCloud.fetchServerRecordsForCurrentBaby({ reason: reason }).then(function (fetchResult) {
+          cloudLastFetchResult = fetchResult || { ok: false, count: 0, fetchedAt: null };
+          cloudFetchedRows = fetchResult && fetchResult.ok && Array.isArray(fetchResult.records) ? fetchResult.records : [];
+          if (!fetchResult || !fetchResult.ok) {
+            throw new Error((fetchResult && fetchResult.error) || "server_fetch_failed");
+          }
+          cloudMergePreview = typeof window.BabyCloud.buildSafeMergePreview === "function"
+            ? window.BabyCloud.buildSafeMergePreview(appData, cloudFetchedRows)
+            : window.BabyCloud.buildMergePreview(appData.records, cloudFetchedRows);
+          const mergeResult = typeof window.BabyCloud.applySafeMerge === "function"
+            ? window.BabyCloud.applySafeMerge(appData, cloudMergePreview, { serverRows: cloudFetchedRows })
+            : window.BabyCloud.mergeServerRecordsIntoLocal(appData, cloudFetchedRows, { preview: cloudMergePreview });
+          cloudLastMergeResult = mergeResult;
+          if (!mergeResult || !mergeResult.ok) {
+            throw new Error((mergeResult && mergeResult.error) || "server_merge_failed");
+          }
+          saveAppData();
+          cloudMergePreview = typeof window.BabyCloud.buildSafeMergePreview === "function"
+            ? window.BabyCloud.buildSafeMergePreview(appData, cloudFetchedRows)
+            : window.BabyCloud.buildMergePreview(appData.records, cloudFetchedRows);
+          updateFamilySyncDiagnostics(fetchResult, mergeResult, reason, null);
+          renderApp();
+          renderCloudStatus();
+          return Object.assign({}, mergeResult, {
+            ok: true,
+            reason: reason,
+            fetched: fetchResult.count || cloudFetchedRows.length
+          });
+        }).catch(function (error) {
+          updateFamilySyncDiagnostics(cloudLastFetchResult, cloudLastMergeResult, reason, error);
+          renderCloudStatus();
+          return { ok: false, reason: reason, error: error.message || String(error) };
+        }).finally(function () {
+          isFamilySyncing = false;
+          familySyncState.isSyncing = false;
+          renderCloudStatus();
+        });
+      }
+
+      function startAutoFamilySync(reason) {
+        if (familySyncIntervalId) return;
+        familySyncIntervalId = window.setInterval(function () {
+          familySyncState.lastAutoTickAt = nowIso();
+          const canRun = canRunFamilySync();
+          familySyncState.canRun = canRun.ok;
+          familySyncState.canRunFalseReason = canRun.ok ? "" : canRun.reason;
+          if (canRun.ok) {
+            syncFamilyRecordsFromServer({ reason: "auto-interval" });
+          } else {
+            renderCloudStatus();
+          }
+        }, FAMILY_SYNC_INTERVAL_MS);
+        familySyncState.autoSyncEnabled = true;
+        familySyncState.lastSyncReason = reason || familySyncState.lastSyncReason;
+        renderCloudStatus();
+      }
+
       function renderCloudMergeStatus() {
         const fetchedAt = cloudLastFetchResult && cloudLastFetchResult.fetchedAt;
         const preview = cloudMergePreview;
@@ -3978,7 +4152,7 @@
 
         if (els.cloudMergeGrid) {
           els.cloudMergeGrid.innerHTML = dataItemsHtml([
-            { label: "서버 기록 새로고침", value: cloudLastFetchResult ? (cloudLastFetchResult.ok ? "성공" : "실패") : "아직 안 함" },
+            { label: "최신 기록 가져오기", value: cloudLastFetchResult ? (cloudLastFetchResult.ok ? "성공" : "실패") : "아직 안 함" },
             { label: "마지막 서버 조회", value: formatCloudCheckedAt(fetchedAt) },
             { label: "불러온 서버 기록", value: (cloudLastFetchResult && cloudLastFetchResult.count !== undefined ? cloudLastFetchResult.count : 0) + "개" },
             { label: "진단용 서버 기록", value: (preview ? preview.testRowCount : (cloudLastFetchResult && cloudLastFetchResult.testRows) || 0) + "개" },
@@ -4528,9 +4702,20 @@
       }
       if (els.cloudRefreshSyncButton) {
         els.cloudRefreshSyncButton.addEventListener("click", function () {
-          renderCloudStatus();
-          if (els.cloudActionMessage) els.cloudActionMessage.textContent = "동기화 상태를 새로 계산했어요.";
-          showToast("동기화 상태를 새로고침했어요.");
+          if (els.cloudActionMessage) els.cloudActionMessage.textContent = "서버 최신 기록을 가져와 이 기기에 안전 병합하는 중입니다.";
+          syncFamilyRecordsFromServer({ reason: "manual-refresh" }).then(function (result) {
+            if (result && result.ok) {
+              const added = result.addedCount || result.added || 0;
+              const updated = result.serverNewerApplied || 0;
+              const deleted = result.deletedApplied || 0;
+              if (els.cloudActionMessage) els.cloudActionMessage.textContent = "최신 기록을 반영했어요. 추가 " + added + "개, 업데이트 " + updated + "개, 삭제 반영 " + deleted + "개";
+              showToast("최신 기록을 반영했어요.");
+            } else {
+              const reason = result && (result.reason || result.error) ? (result.reason || result.error) : "sync_failed";
+              if (els.cloudActionMessage) els.cloudActionMessage.textContent = "최신 기록을 반영하지 못했어요: " + reason;
+              showToast("최신 기록을 반영하지 못했어요.");
+            }
+          });
         });
       }
       if (els.cloudBackupUploadButton) {
@@ -4567,6 +4752,8 @@
             renderCloudStatus();
             if (context && context.currentFamilyId && context.currentBabyId) {
               if (els.cloudActionMessage) els.cloudActionMessage.textContent = "가족/아기 서버 구조가 준비됐어요.";
+              startAutoFamilySync("ensure-family");
+              syncFamilyRecordsFromServer({ reason: "ensure-family" });
               if (window.BabyCloud && typeof window.BabyCloud.diagnoseFamilyBabyStructure === "function") {
                 window.BabyCloud.diagnoseFamilyBabyStructure().then(function (diagnosis) {
                   familyBabyDiagnosis = diagnosis;
@@ -4650,8 +4837,12 @@
           window.BabyCloud.joinFamilyByAccessCode(code).then(function (result) {
             if (result && result.ok) {
               if (els.familyAccessCodeInput) els.familyAccessCodeInput.value = "";
-              if (els.familyIdentityMessage) els.familyIdentityMessage.textContent = "가족 연결이 완료됐어요. 서버 records를 이 기기에 비파괴 방식으로 복원했습니다.";
-              showToast("가족 연결이 완료됐어요.");
+              if (els.familyIdentityMessage) els.familyIdentityMessage.textContent = result.alreadyConnected
+                ? "이미 이 가족에 연결되어 있습니다. 최신 기록을 가져옵니다."
+                : "가족 연결이 완료됐어요. 서버 records를 이 기기에 비파괴 방식으로 복원했습니다.";
+              showToast(result.alreadyConnected ? "이미 연결된 가족이에요. 최신 기록을 가져옵니다." : "가족 연결이 완료됐어요.");
+              startAutoFamilySync("family-code-join");
+              syncFamilyRecordsFromServer({ reason: result.alreadyConnected ? "family-join-already-connected" : "family-code-join" });
             } else {
               if (els.familyIdentityMessage) els.familyIdentityMessage.textContent = (result && result.error) || "가족 연결에 실패했어요.";
               showToast("가족 연결에 실패했어요.");
@@ -4817,19 +5008,19 @@
           cloudMergePreview = null;
           cloudLastFetchResult = { ok: false, count: 0, fetchedAt: null };
           renderCloudMergeStatus();
-          const fetchServerRecords = window.BabyCloud.fetchServerRecordsForCurrentBaby || window.BabyCloud.fetchRecords;
-          fetchServerRecords().then(function (result) {
-            cloudLastFetchResult = result || { ok: false, count: 0, fetchedAt: null };
-            cloudFetchedRows = result && result.ok && Array.isArray(result.records) ? result.records : [];
-            cloudMergePreview = null;
-            renderCloudStatus();
+          if (els.cloudActionMessage) els.cloudActionMessage.textContent = "서버 최신 기록을 가져와 이 기기에 안전 병합하는 중입니다.";
+          syncFamilyRecordsFromServer({ reason: "manual-fetch-latest" }).then(function (result) {
             if (result && result.ok) {
-              const message = "서버 기록 " + result.count + "개를 불러왔어요. 아직 이 기기 데이터는 변경하지 않았어요.";
+              const added = result.addedCount || result.added || 0;
+              const updated = result.serverNewerApplied || 0;
+              const deleted = result.deletedApplied || 0;
+              const message = "서버 최신 기록을 반영했어요. 추가 " + added + "개, 업데이트 " + updated + "개, 삭제 반영 " + deleted + "개";
               if (els.cloudActionMessage) els.cloudActionMessage.textContent = message;
               showToast(message);
             } else {
-              if (els.cloudActionMessage) els.cloudActionMessage.textContent = "서버 기록을 불러오지 못했어요. 이 기기의 기록은 그대로 유지됩니다.";
-              showToast("서버 기록을 불러오지 못했어요.");
+              const reason = result && (result.reason || result.error) ? (result.reason || result.error) : "sync_failed";
+              if (els.cloudActionMessage) els.cloudActionMessage.textContent = "서버 최신 기록을 반영하지 못했어요: " + reason;
+              showToast("서버 최신 기록을 반영하지 못했어요.");
             }
           }).catch(function (error) {
             console.warn("Cloud records fetch failed", error);
@@ -4916,11 +5107,16 @@
       if (els.cloudRetryErrorButton) {
         els.cloudRetryErrorButton.addEventListener("click", retryErrorCloudRecords);
       }
-      window.addEventListener("baby-cloud-status-change", renderCloudStatus);
+      window.addEventListener("baby-cloud-status-change", function () {
+        const context = window.BabyCloud && typeof window.BabyCloud.getCloudContext === "function" ? window.BabyCloud.getCloudContext() : {};
+        if (context.currentFamilyId && context.currentBabyId) startAutoFamilySync("cloud-status-change");
+        renderCloudStatus();
+      });
       window.addEventListener("baby-cloud-local-restore", function (event) {
         appData = loadAppData();
         renderApp();
         renderCloudStatus();
+        startAutoFamilySync("cloud-local-restore");
         if (els.cloudActionMessage) {
           const added = event && event.detail ? (event.detail.addedCount || event.detail.added || 0) : 0;
           els.cloudActionMessage.textContent = "서버 records를 로컬에 복원했어요. 추가 " + added + "개";
@@ -4929,6 +5125,7 @@
       window.addEventListener("online", function () {
         renderCloudStatus();
         if (els.cloudActionMessage) els.cloudActionMessage.textContent = "인터넷 연결이 돌아왔어요. 동기화 대기 기록을 다시 시도할 수 있어요.";
+        syncFamilyRecordsFromServer({ reason: "online" });
       });
       window.addEventListener("offline", function () {
         renderCloudStatus();
@@ -4959,6 +5156,8 @@
       initializeManagementPanel();
       saveAppData();
       renderApp();
+      startAutoFamilySync("app-init");
+      syncFamilyRecordsFromServer({ reason: "app-init" });
       setInterval(renderApp, 60000);
     });
   </script>
