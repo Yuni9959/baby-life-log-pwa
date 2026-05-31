@@ -1,4 +1,4 @@
-const APP_VERSION = "4.3.5.1";
+const APP_VERSION = "5.0.0";
 const CACHE_NAME = `babylog-cache-${APP_VERSION}`;
 const APP_SHELL = [
   "./",
@@ -7,6 +7,7 @@ const APP_SHELL = [
   `./service-worker.js?v=${APP_VERSION}`,
   `./cloud-config.js?v=${APP_VERSION}`,
   `./cloud-supabase.js?v=${APP_VERSION}`,
+  `./phase5-analysis.js?v=${APP_VERSION}`,
   "./phase4_3_cloud_backup_notes.md",
   "./phase4_3_sql_migration.sql",
   "./phase4_1_google_login_setup_notes.md",
@@ -86,6 +87,7 @@ self.addEventListener("fetch", function (event) {
   if (
     requestUrl.pathname.endsWith("/cloud-config.js") ||
     requestUrl.pathname.endsWith("/cloud-supabase.js") ||
+    requestUrl.pathname.endsWith("/phase5-analysis.js") ||
     requestUrl.pathname.endsWith("/service-worker.js")
   ) {
     event.respondWith(
