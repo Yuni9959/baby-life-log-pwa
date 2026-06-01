@@ -1,9 +1,9 @@
 {
   "id": "baby-life-log-pwa-v2-9",
   "version": "2.9",
-  "name": "아기 생활 기록",
-  "short_name": "챙겨조",
-  "description": "아기의 수유, 수면, 기저귀 패턴을 기록하는 간단한 앱",
+  "name": "\uc544\uae30 \uc0dd\ud65c \uae30\ub85d",
+  "short_name": "\uc0dd\ud65c\uae30\ub85d",
+  "description": "\uc544\uae30\uc758 \uc218\uc720, \uc218\uba74, \uae30\uc800\uadc0 \ud328\ud134\uc744 \uae30\ub85d\ud558\ub294 \uac04\ub2e8\ud55c \uc571",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
