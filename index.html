@@ -3930,6 +3930,8 @@
             els.authFamilyStatusMessage.textContent = "카카오 계정으로 연결되었습니다. 기존 아기 기록은 그대로 유지됩니다.";
           } else if (googleConnected) {
             els.authFamilyStatusMessage.textContent = "Google 계정으로 연결되었습니다. 기존 아기 기록은 이 가족 공간에 그대로 유지됩니다.";
+          } else if (lastOAuth && lastOAuth.status === "identity_already_exists") {
+            els.authFamilyStatusMessage.textContent = lastOAuth.message || "이미 연결된 계정입니다. 기존 계정으로 다시 로그인합니다.";
           } else if (lastOAuth && lastOAuth.ok === false && lastOAuth.provider === "kakao") {
             els.authFamilyStatusMessage.textContent = "카카오 로그인이 실패했거나 취소되었습니다. 기존 상태로 계속 사용할 수 있습니다.";
           } else if (lastOAuth && lastOAuth.ok === false) {

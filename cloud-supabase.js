@@ -22,6 +22,8 @@
   const FAMILY_JOIN_BACKUP_PREFIX = "babyAppBackupBeforeFamilyJoin:";
   const LAST_FAMILY_IDENTITY_DIAGNOSTIC_KEY = "babyAppLastFamilyIdentityDiagnostic";
   const PENDING_OAUTH_FAMILY_ID_KEY = "babylog_pending_family_id_before_oauth";
+  const PENDING_OAUTH_FAMILY_CODE_KEY = "babylog_pending_family_code_before_oauth";
+  const PENDING_OAUTH_BABY_ID_KEY = "babylog_pending_baby_id_before_oauth";
   const PENDING_OAUTH_STARTED_AT_KEY = "babylog_oauth_started_at";
   const PENDING_OAUTH_PROVIDER_KEY = "babylog_oauth_provider";
   const LAST_OAUTH_RESULT_KEY = "babylog_last_oauth_result";
@@ -604,6 +606,10 @@
       return getSafeStatus();
     }
     if (!getClient()) return getSafeStatus();
+    const redirectError = handleOAuthRedirectError();
+    if (redirectError && redirectError.handled) {
+      return getSafeStatus();
+    }
     setState({ enabled: true, ready: false, mode: "local", status: "anonymous_ready", lastError: null });
     await restoreAuthAndFamilyAfterLogin({ reason: "init" });
     return getSafeStatus();
@@ -1050,23 +1056,39 @@
     try {
       return {
         familyId: window.localStorage.getItem(PENDING_OAUTH_FAMILY_ID_KEY) || null,
+        familyCode: window.localStorage.getItem(PENDING_OAUTH_FAMILY_CODE_KEY) || window.localStorage.getItem(LOCAL_FAMILY_CODE_KEY) || null,
+        babyId: window.localStorage.getItem(PENDING_OAUTH_BABY_ID_KEY) || window.localStorage.getItem(LOCAL_BABY_ID_KEY) || null,
         startedAt: window.localStorage.getItem(PENDING_OAUTH_STARTED_AT_KEY) || null,
         provider: window.localStorage.getItem(PENDING_OAUTH_PROVIDER_KEY) || null
       };
     } catch (error) {
-      return { familyId: null, startedAt: null, provider: null };
+      return { familyId: null, familyCode: null, babyId: null, startedAt: null, provider: null };
     }
   }
 
-  function savePendingOAuthContext(provider, familyId) {
+  function savePendingOAuthContext(provider, familyId, familyCode, babyId) {
     try {
-      if (familyId) {
-        window.localStorage.setItem(PENDING_OAUTH_FAMILY_ID_KEY, familyId);
-      } else {
-        window.localStorage.removeItem(PENDING_OAUTH_FAMILY_ID_KEY);
-      }
+      const context = getCloudContext();
+      const preservedFamilyId = familyId || context.currentFamilyId || readStoredValue([LOCAL_FAMILY_ID_KEY]) || null;
+      const preservedFamilyCode = normalizeAccessCode(familyCode || context.familyCode || context.familyAccessCode || readStoredValue([LOCAL_FAMILY_CODE_KEY]) || "");
+      const preservedBabyId = babyId || context.currentBabyId || readStoredValue([LOCAL_BABY_ID_KEY]) || null;
+      if (preservedFamilyId) window.localStorage.setItem(PENDING_OAUTH_FAMILY_ID_KEY, preservedFamilyId);
+      else window.localStorage.removeItem(PENDING_OAUTH_FAMILY_ID_KEY);
+      if (preservedFamilyCode) window.localStorage.setItem(PENDING_OAUTH_FAMILY_CODE_KEY, preservedFamilyCode);
+      else window.localStorage.removeItem(PENDING_OAUTH_FAMILY_CODE_KEY);
+      if (preservedBabyId) window.localStorage.setItem(PENDING_OAUTH_BABY_ID_KEY, preservedBabyId);
+      else window.localStorage.removeItem(PENDING_OAUTH_BABY_ID_KEY);
+      if (preservedFamilyId) window.localStorage.setItem(LOCAL_FAMILY_ID_KEY, preservedFamilyId);
+      if (preservedFamilyCode) window.localStorage.setItem(LOCAL_FAMILY_CODE_KEY, preservedFamilyCode);
+      if (preservedBabyId) window.localStorage.setItem(LOCAL_BABY_ID_KEY, preservedBabyId);
       window.localStorage.setItem(PENDING_OAUTH_STARTED_AT_KEY, nowIso());
       window.localStorage.setItem(PENDING_OAUTH_PROVIDER_KEY, provider || "google");
+      console.log("[BabyCloud OAuth] pending context saved", {
+        provider: provider || "google",
+        familyId: preservedFamilyId,
+        familyCode: preservedFamilyCode,
+        babyId: preservedBabyId
+      });
     } catch (error) {
       console.warn("BabyCloud OAuth pending context storage failed", error);
     }
@@ -1075,6 +1097,8 @@
   function clearPendingOAuthContext() {
     try {
       window.localStorage.removeItem(PENDING_OAUTH_FAMILY_ID_KEY);
+      window.localStorage.removeItem(PENDING_OAUTH_FAMILY_CODE_KEY);
+      window.localStorage.removeItem(PENDING_OAUTH_BABY_ID_KEY);
       window.localStorage.removeItem(PENDING_OAUTH_STARTED_AT_KEY);
       window.localStorage.removeItem(PENDING_OAUTH_PROVIDER_KEY);
     } catch (error) {}
@@ -1089,6 +1113,56 @@
   function getOAuthRedirectTo() {
     if (!window.location) return undefined;
     return window.location.origin + window.location.pathname;
+  }
+
+  function readOAuthErrorFromUrl() {
+    if (!window.location) return null;
+    const combined = [window.location.search || "", window.location.hash || ""].join("&");
+    if (!combined) return null;
+    const params = new URLSearchParams(combined.replace(/^[?#&]+/, "").replace(/#/g, "&"));
+    const code = params.get("error_code") || params.get("error");
+    const description = params.get("error_description") || params.get("error-description") || "";
+    if (!code && !description) return null;
+    return { code: code || "", description: description || "" };
+  }
+
+  function cleanOAuthErrorFromUrl() {
+    try {
+      if (!window.history || !window.location) return;
+      window.history.replaceState({}, document.title, window.location.origin + window.location.pathname);
+    } catch (error) {
+      console.warn("BabyCloud OAuth URL cleanup failed", error);
+    }
+  }
+
+  function handleOAuthRedirectError() {
+    const oauthError = readOAuthErrorFromUrl();
+    if (!oauthError) return null;
+    const pending = getPendingOAuthContext();
+    const isIdentityAlreadyExists = oauthError.code === "identity_already_exists" || oauthError.description.indexOf("Identity is already linked") !== -1;
+    const message = isIdentityAlreadyExists
+      ? "이미 연결된 계정입니다. 기존 계정으로 다시 로그인합니다."
+      : "로그인 처리 중 오류가 있었습니다. 기존 가족 기록은 유지됩니다.";
+    saveLastOAuthResult({
+      ok: false,
+      provider: pending.provider || "oauth",
+      status: isIdentityAlreadyExists ? "identity_already_exists" : "oauth_redirect_error",
+      error: oauthError.description || oauthError.code,
+      message: message,
+      familyId: pending.familyId,
+      familyCode: pending.familyCode,
+      babyId: pending.babyId
+    });
+    setState({ status: isIdentityAlreadyExists ? "oauth_identity_already_exists" : "oauth_redirect_error", lastError: { message: message, code: oauthError.code } });
+    cleanOAuthErrorFromUrl();
+    console.warn("[BabyCloud OAuth] redirect error handled", {
+      code: oauthError.code,
+      description: oauthError.description,
+      familyId: pending.familyId,
+      familyCode: pending.familyCode,
+      babyId: pending.babyId
+    });
+    return { ok: false, handled: true, identityAlreadyExists: isIdentityAlreadyExists, message: message };
   }
 
   function getLocalRecordCount() {
@@ -1141,11 +1215,27 @@
       const profileResult = await ensureCurrentProfile(user);
 
       let context = getCloudContext();
-      let familyId = context.currentFamilyId || null;
+      const pendingFamilyCode = normalizeAccessCode(pending.familyCode || context.familyCode || context.familyAccessCode || "");
+      const pendingBabyId = pending.babyId || context.currentBabyId || null;
+      let familyId = context.currentFamilyId || pending.familyId || null;
       let membership = null;
 
-      if (!familyId && pending.familyId) {
-        familyId = pending.familyId;
+      if (pendingFamilyCode) {
+        const joinResult = await joinFamilyByAccessCode(pendingFamilyCode);
+        if (joinResult && joinResult.ok) {
+          context = getCloudContext();
+          familyId = context.currentFamilyId || familyId;
+          membership = BabyCloud.familyMembership || membership;
+          console.log("[BabyCloud OAuth] family restored by family_code", {
+            authUserId: user.id,
+            familyId: context.currentFamilyId,
+            familyCode: context.familyCode || pendingFamilyCode,
+            babyId: context.currentBabyId,
+            membershipRestoreResult: "joined_by_family_code"
+          });
+        } else {
+          console.warn("[BabyCloud OAuth] family_code restore failed; falling back to family_id membership", joinResult);
+        }
       }
 
       if (!familyId) {
@@ -1165,12 +1255,15 @@
         return { ok: !!context, context: context, createdNewFamily: !!context };
       }
 
-      // Kakao account is only an identity for accessing the family workspace, not the owner of records.
+      // OAuth account is only an identity for accessing the family workspace, not the owner of records.
       const membershipResult = await ensureFamilyMembership(familyId, user);
       if (membershipResult.ok) membership = membershipResult.membership;
       context = saveCloudContext(Object.assign({}, context, {
         currentFamilyId: familyId,
+        currentBabyId: pendingBabyId || context.currentBabyId || null,
         currentUserId: user.id,
+        familyCode: pendingFamilyCode || context.familyCode || context.familyAccessCode || null,
+        familyAccessCode: pendingFamilyCode || context.familyCode || context.familyAccessCode || null,
         lastSetupAt: context.lastSetupAt || nowIso(),
         lastError: membershipResult.ok ? "" : (membershipResult.error || "")
       }));
@@ -1213,8 +1306,19 @@
         provider: pending.provider || "google",
         status: pending.provider ? "restored_after_oauth" : "restored",
         familyId: familyId,
+        familyCode: context.familyCode || context.familyAccessCode || pendingFamilyCode || null,
+        babyId: context.currentBabyId || null,
         userId: user.id,
+        membershipRestoreResult: membershipResult.ok ? (membershipResult.existed ? "existing_membership_restored" : "membership_created") : "membership_restore_failed",
         reason: opts.reason || ""
+      });
+      console.log("[BabyCloud OAuth] membership restore result", {
+        authUserId: user.id,
+        familyId: context.currentFamilyId,
+        familyCode: context.familyCode || context.familyAccessCode || null,
+        babyId: context.currentBabyId,
+        membershipRestoreResult: membershipResult.ok ? (membershipResult.existed ? "existing_membership_restored" : "membership_created") : "membership_restore_failed",
+        membershipError: membershipResult.ok ? "" : membershipResult.error
       });
       clearPendingOAuthContext();
       return { ok: true, context: context, membership: membership, auth: buildAuthIdentity(user), profile: profileResult.profile || null };
@@ -1231,74 +1335,91 @@
     }
   }
 
-  async function signInWithGoogle() {
+  async function getCurrentSessionUser() {
+    const client = getClient();
+    if (!client) return null;
+    const sessionResult = await client.auth.getSession();
+    if (sessionResult.error) throw sessionResult.error;
+    return sessionResult.data && sessionResult.data.session && sessionResult.data.session.user
+      ? sessionResult.data.session.user
+      : null;
+  }
+
+  function isAnonymousAuthUser(user) {
+    if (!user) return false;
+    if (user.is_anonymous === true) return true;
+    if (user.app_metadata && user.app_metadata.provider === "anonymous") return true;
+    const identities = Array.isArray(user.identities) ? user.identities : [];
+    return identities.length === 0 && !user.email;
+  }
+
+  async function signInWithProvider(provider) {
     const client = getClient();
     if (!client) return { ok: false, error: "supabase_client_unavailable" };
     let context = getCloudContext();
     try {
-      if (!context.currentFamilyId) {
+      const storedFamilyCodeBeforeEnsure = normalizeAccessCode(context.familyCode || context.familyAccessCode || readStoredValue([LOCAL_FAMILY_CODE_KEY]) || "");
+      if (!context.currentFamilyId && !storedFamilyCodeBeforeEnsure) {
         const ensured = await ensureAuthAndFamily();
         context = ensured || context;
       }
       const currentFamilyId = context.currentFamilyId || readLegacyFamilyId() || null;
-      savePendingOAuthContext("google", currentFamilyId);
-      console.log("[BabyCloud] Google login start", {
+      const currentFamilyCode = normalizeAccessCode(context.familyCode || context.familyAccessCode || readStoredValue([LOCAL_FAMILY_CODE_KEY]) || "");
+      const currentBabyId = context.currentBabyId || readLegacyBabyId() || null;
+      savePendingOAuthContext(provider, currentFamilyId, currentFamilyCode, currentBabyId);
+      console.log("[BabyCloud OAuth] provider login start", {
+        provider: provider,
         familyId: currentFamilyId,
+        familyCode: currentFamilyCode,
+        babyId: currentBabyId,
         localRecordsCount: getLocalRecordCount(),
         hasBabyProfile: hasLocalBabyProfile()
       });
-      setState({ status: "google_login_starting", lastError: null });
+      setState({ status: provider + "_login_starting", lastError: null });
       const redirectTo = getOAuthRedirectTo();
-      const user = await ensureUser();
-      if (!user || !user.id) throw new Error("anonymous_auth_failed");
-      const method = client.auth && typeof client.auth.linkIdentity === "function" ? "linkIdentity" : "signInWithOAuth";
-      const oauthResult = method === "linkIdentity"
-        ? await client.auth.linkIdentity({ provider: "google", options: { redirectTo: redirectTo } })
-        : await client.auth.signInWithOAuth({ provider: "google", options: { redirectTo: redirectTo } });
+      const user = await getCurrentSessionUser();
+      if (isAnonymousAuthUser(user) && client.auth && typeof client.auth.signOut === "function") {
+        await client.auth.signOut();
+        saveCloudContext(Object.assign({}, context, {
+          currentFamilyId: currentFamilyId,
+          currentBabyId: currentBabyId,
+          familyCode: currentFamilyCode,
+          familyAccessCode: currentFamilyCode
+        }));
+        console.log("[BabyCloud OAuth] anonymous session signed out before provider login", {
+          provider: provider,
+          previousUserId: user.id,
+          familyId: currentFamilyId,
+          familyCode: currentFamilyCode,
+          babyId: currentBabyId
+        });
+      }
+      const oauthResult = await client.auth.signInWithOAuth({ provider: provider, options: { redirectTo: redirectTo } });
       if (oauthResult.error) throw oauthResult.error;
-      saveLastOAuthResult({ ok: true, provider: "google", status: "oauth_redirect_started", method: method, familyId: currentFamilyId });
-      return { ok: true, data: oauthResult.data, method: method, redirectTo: redirectTo };
+      saveLastOAuthResult({
+        ok: true,
+        provider: provider,
+        status: "oauth_redirect_started",
+        method: "signInWithOAuth",
+        familyId: currentFamilyId,
+        familyCode: currentFamilyCode,
+        babyId: currentBabyId
+      });
+      return { ok: true, data: oauthResult.data, method: "signInWithOAuth", redirectTo: redirectTo };
     } catch (error) {
-      console.warn("BabyCloud Google login failed", error);
-      saveLastOAuthResult({ ok: false, provider: "google", status: "oauth_start_failed", error: errorMessage(error) });
-      setState({ ready: !!getCloudContext().currentFamilyId, mode: getCloudContext().currentFamilyId ? "cloud_ready" : "local", status: "google_login_failed", lastError: normalizeError(error) });
+      console.warn("BabyCloud " + provider + " login failed", error);
+      saveLastOAuthResult({ ok: false, provider: provider, status: "oauth_start_failed", error: errorMessage(error) });
+      setState({ ready: !!getCloudContext().currentFamilyId, mode: getCloudContext().currentFamilyId ? "cloud_ready" : "local", status: provider + "_login_failed", lastError: normalizeError(error) });
       return { ok: false, error: errorMessage(error), context: getCloudContext() };
     }
   }
 
+  async function signInWithGoogle() {
+    return signInWithProvider("google");
+  }
+
   async function signInWithKakao() {
-    const client = getClient();
-    if (!client) return { ok: false, error: "supabase_client_unavailable" };
-    let context = getCloudContext();
-    try {
-      if (!context.currentFamilyId) {
-        const ensured = await ensureAuthAndFamily();
-        context = ensured || context;
-      }
-      const currentFamilyId = context.currentFamilyId || readLegacyFamilyId() || null;
-      savePendingOAuthContext("kakao", currentFamilyId);
-      console.log("[BabyCloud] Kakao login start", {
-        familyId: currentFamilyId,
-        localRecordsCount: getLocalRecordCount(),
-        hasBabyProfile: hasLocalBabyProfile()
-      });
-      setState({ status: "kakao_login_starting", lastError: null });
-      const redirectTo = getOAuthRedirectTo();
-      const user = await ensureUser();
-      if (!user || !user.id) throw new Error("anonymous_auth_failed");
-      const method = client.auth && typeof client.auth.linkIdentity === "function" ? "linkIdentity" : "signInWithOAuth";
-      const oauthResult = method === "linkIdentity"
-        ? await client.auth.linkIdentity({ provider: "kakao", options: { redirectTo: redirectTo } })
-        : await client.auth.signInWithOAuth({ provider: "kakao", options: { redirectTo: redirectTo } });
-      if (oauthResult.error) throw oauthResult.error;
-      saveLastOAuthResult({ ok: true, provider: "kakao", status: "oauth_redirect_started", method: method, familyId: currentFamilyId });
-      return { ok: true, data: oauthResult.data, method: method, redirectTo: redirectTo };
-    } catch (error) {
-      console.warn("BabyCloud Kakao login failed", error);
-      saveLastOAuthResult({ ok: false, provider: "kakao", status: "oauth_start_failed", error: errorMessage(error) });
-      setState({ ready: !!getCloudContext().currentFamilyId, mode: getCloudContext().currentFamilyId ? "cloud_ready" : "local", status: "kakao_login_failed", lastError: normalizeError(error) });
-      return { ok: false, error: errorMessage(error), context: getCloudContext() };
-    }
+    return signInWithProvider("kakao");
   }
 
   async function signOutGoogle() {
