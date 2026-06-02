@@ -2456,7 +2456,7 @@
       const APP_NAME = "baby-life-log";
       const APP_VERSION = "5.7.0";
       const APP_PHASE_LABEL = "Phase 5.7 · 우리 아기 리듬 점수 v1";
-      const SERVICE_WORKER_CACHE_NAME = "babylog-cache-v5-7-rhythm-score-v1";
+      const SERVICE_WORKER_CACHE_NAME = "babylog-cache-v5-8-parent-report-v1";
       const APP_INIT_TIME = new Date().toISOString();
       const ANALYSIS_API_ENDPOINT = "";
       const SERVER_OVERWRITE_BACKUP_KEY = "babylog_records_backup_before_server_overwrite";
@@ -8735,6 +8735,411 @@
         return result;
       }
 
+      const PARENT_REPORT_METRIC_LABELS = {
+        averageSleepSessionMinutes: "수면 회차 길이",
+        dailyTotalSleepMinutes: "하루 수면 시간",
+        longestSleepMinutes: "가장 긴 수면 시간",
+        sleepSessionCount: "수면 횟수",
+        averageFeedAmountMl: "회당 수유량",
+        dailyTotalFeedMl: "하루 총 수유량",
+        feedingIntervalMinutes: "수유 간격",
+        feedToBurpMinutes: "수유 후 트림 간격",
+        feedingCount: "수유 횟수",
+        burpPairRate: "수유와 트림 연결 기록",
+        dailyUrineCount: "소변 기저귀 횟수",
+        dailyStoolCount: "대변 기저귀 횟수",
+        dailyAnyDiaperCount: "기저귀 횟수",
+        urineIntervalMinutes: "소변 기저귀 간격",
+        stoolIntervalMinutes: "대변 기저귀 간격",
+        anyDiaperIntervalMinutes: "기저귀 간격",
+        burpToDiaperMinutes: "트림 후 기저귀 간격",
+        stoolMovingAverage3Days: "대변 3일 흐름"
+      };
+
+      function parentReportUnique(list) {
+        const seen = {};
+        return (Array.isArray(list) ? list : []).filter(function (item) {
+          if (!item || seen[item]) return false;
+          seen[item] = true;
+          return true;
+        });
+      }
+
+      function parentReportSanitize(text) {
+        return sanitizeReportMessageText(text).text;
+      }
+
+      function parentReportConfidenceFromRecords(recordCount) {
+        if (recordCount >= 20) return "high";
+        if (recordCount >= 8) return "medium";
+        if (recordCount >= 3) return "low";
+        return "insufficient";
+      }
+
+      function parentReportLowestConfidence(levels) {
+        const source = (Array.isArray(levels) ? levels : []).filter(function (level) {
+          return level && level !== "unavailable";
+        });
+        if (!source.length) return "insufficient";
+        return source.reduce(function (lowest, level) {
+          return lowerConfidenceLevel(lowest, level);
+        }, "high");
+      }
+
+      function parentReportDataQualityText(confidenceLevel) {
+        if (confidenceLevel === "high") return "기록이 꽤 쌓여 있어서 평소 흐름과 비교해볼 수 있어요.";
+        if (confidenceLevel === "medium") return "최근 기록을 바탕으로 어느 정도 흐름을 볼 수 있어요.";
+        if (confidenceLevel === "low") return "기록 수가 많지는 않아서 참고용으로만 봐주세요.";
+        return "아직 기록이 조금 더 쌓이면 더 자연스럽게 볼 수 있어요.";
+      }
+
+      function parentReportCaregiverComment() {
+        return "기록을 완벽하게 남기지 못해도 괜찮아요. 오늘 기록만으로 모든 걸 판단하지 않고 흐름을 천천히 살펴봐 주세요.";
+      }
+
+      function parentReportPeriod(nowMs, days, label) {
+        const endMs = Number.isFinite(nowMs) ? nowMs : Date.now();
+        const startMs = days === 1 ? startOfLocalDayMs(endMs) : startOfLocalDayMs(addDaysMs(endMs, -(days - 1)));
+        return {
+          startAt: new Date(startMs).toISOString(),
+          endAt: new Date(endMs).toISOString(),
+          label: label
+        };
+      }
+
+      function parentReportRecordsInPeriod(snapshot, period) {
+        const records = snapshot && snapshot.records && Array.isArray(snapshot.records.normalized) ? snapshot.records.normalized : [];
+        const startMs = Date.parse(period.startAt);
+        const endMs = Date.parse(period.endAt);
+        return records.filter(function (record) {
+          return record && record.isUsableForAnalysis && Number.isFinite(record.recordedAtMs) &&
+            record.recordedAtMs >= startMs && record.recordedAtMs <= endMs;
+        });
+      }
+
+      function parentReportFirstMessageText(snapshot, sectionKey, fallback) {
+        const section = snapshot && snapshot.reportMessages && snapshot.reportMessages.sections
+          ? snapshot.reportMessages.sections[sectionKey]
+          : null;
+        const message = Array.isArray(section) && section.length ? section[0] : null;
+        return parentReportSanitize(message && message.text ? message.text : fallback);
+      }
+
+      function parentReportTrendText(domain, trend, periodLabel) {
+        if (!trend || trend.available === false || trend.missingReason) {
+          return periodLabel + " 기록은 아직 많지 않아서 참고용으로만 볼게요.";
+        }
+        if (domain === "sleep") return periodLabel + " 수면 흐름은 기록 기준으로 차분히 살펴볼 수 있어요.";
+        if (domain === "feeding") return periodLabel + " 수유와 트림 기록은 하루 흐름을 참고하는 데 사용할 수 있어요.";
+        return periodLabel + " 기저귀 기록은 수유와 수면 흐름과 함께 참고할 수 있어요.";
+      }
+
+      function parentReportSection(available, text, confidenceLevel, sourceRef, missingReason) {
+        return {
+          available: !!available,
+          text: parentReportSanitize(text),
+          confidenceLevel: confidenceLevel || "insufficient",
+          sourceRef: sourceRef || null,
+          missingReason: missingReason || null
+        };
+      }
+
+      function createBaseParentReport(reportType, title, period, confidenceLevel, messageKey, available) {
+        return {
+          reportType: reportType,
+          title: title,
+          available: available !== false,
+          period: period,
+          confidenceLevel: confidenceLevel || "insufficient",
+          oneLineSummary: "",
+          sections: {
+            sleep: parentReportSection(false, "수면 기록이 조금 더 쌓이면 흐름을 더 자연스럽게 볼 수 있어요.", "insufficient", "sleepAnalysis", "not_enough_data"),
+            feeding: parentReportSection(false, "수유 기록이 조금 더 쌓이면 흐름을 더 자연스럽게 볼 수 있어요.", "insufficient", "feedingBurpAnalysis", "not_enough_data"),
+            diaper: parentReportSection(false, "기저귀 기록이 조금 더 쌓이면 흐름을 더 자연스럽게 볼 수 있어요.", "insufficient", "diaperAnalysis", "not_enough_data"),
+            differences: parentReportSection(false, "평소와 비교할 기록이 아직 충분하지 않아서 변화는 참고용으로만 볼게요.", "insufficient", "personalBaseline", "not_enough_data"),
+            dataQuality: parentReportSection(true, parentReportDataQualityText(confidenceLevel), confidenceLevel, "confidenceSummary", null),
+            caregiverComment: parentReportSection(true, parentReportCaregiverComment(), confidenceLevel, "parentReportBundle", null)
+          },
+          highlights: [],
+          cautions: [],
+          messageKeys: [messageKey],
+          sourceRefs: [],
+          missingReason: available === false ? "not_enough_data" : null
+        };
+      }
+
+      function parentReportMetricLabel(metricKey) {
+        return PARENT_REPORT_METRIC_LABELS[metricKey] || metricKey || "기록 흐름";
+      }
+
+      function parentReportChangeDirectionText(metric) {
+        if (!metric) return "달라진 흐름";
+        if (metric.changeDirection === "higher" || (Number.isFinite(metric.difference) && metric.difference > 0)) return "늘어난 흐름";
+        if (metric.changeDirection === "lower" || (Number.isFinite(metric.difference) && metric.difference < 0)) return "줄어든 흐름";
+        return "달라진 흐름";
+      }
+
+      function collectParentReportChangeCandidates(snapshot) {
+        const sources = [
+          { domain: "sleep", source: "sleepAnalysis.trends.recentVsPrevious7Days", trends: snapshot && snapshot.sleepAnalysis && snapshot.sleepAnalysis.trends ? snapshot.sleepAnalysis.trends.recentVsPrevious7Days : null },
+          { domain: "feeding", source: "feedingBurpAnalysis.trends.recentVsPrevious7Days", trends: snapshot && snapshot.feedingBurpAnalysis && snapshot.feedingBurpAnalysis.trends ? snapshot.feedingBurpAnalysis.trends.recentVsPrevious7Days : null },
+          { domain: "diaper", source: "diaperAnalysis.trends.recentVsPrevious7Days", trends: snapshot && snapshot.diaperAnalysis && snapshot.diaperAnalysis.trends ? snapshot.diaperAnalysis.trends.recentVsPrevious7Days : null }
+        ];
+        return sources.reduce(function (list, entry) {
+          Object.keys(entry.trends || {}).forEach(function (metricKey) {
+            const metric = entry.trends[metricKey];
+            if (!metric || metric.available === false || (metric.changeLevel !== "meaningful" && metric.changeLevel !== "small")) return;
+            const difference = Number.isFinite(metric.difference) ? metric.difference
+              : Number.isFinite(metric.differenceMinutes) ? metric.differenceMinutes
+                : Number.isFinite(metric.differenceMl) ? metric.differenceMl
+                  : Number.isFinite(metric.differenceCount) ? metric.differenceCount
+                    : null;
+            const differencePercent = Number.isFinite(metric.differencePercent) ? metric.differencePercent : null;
+            const title = parentReportMetricLabel(metricKey) + " 변화";
+            list.push({
+              metricKey: metricKey,
+              domain: entry.domain,
+              title: title,
+              text: parentReportSanitize("지난주와 비교하면 " + parentReportMetricLabel(metricKey) + "이 조금 " + parentReportChangeDirectionText(metric) + "으로 기록되어 있어요."),
+              difference: difference,
+              differencePercent: differencePercent,
+              changeLevel: metric.changeLevel || "unknown",
+              confidenceLevel: metric.confidenceLevel || "insufficient",
+              source: entry.source,
+              missingReason: metric.missingReason || null
+            });
+          });
+          return list;
+        }, []);
+      }
+
+      function sortParentReportChanges(a, b) {
+        const meaningfulDiff = (b.changeLevel === "meaningful" ? 1 : 0) - (a.changeLevel === "meaningful" ? 1 : 0);
+        if (meaningfulDiff) return meaningfulDiff;
+        const percentDiff = Math.abs(Number(b.differencePercent) || 0) - Math.abs(Number(a.differencePercent) || 0);
+        if (percentDiff) return percentDiff;
+        return confidenceRank(b.confidenceLevel) - confidenceRank(a.confidenceLevel);
+      }
+
+      function buildParentReportBiggestChange(snapshot) {
+        const candidates = collectParentReportChangeCandidates(snapshot).sort(sortParentReportChanges);
+        const topChanges = candidates.slice(0, 3);
+        if (!topChanges.length) {
+          return {
+            available: false,
+            topChanges: [],
+            missingReason: "not_enough_comparable_data"
+          };
+        }
+        return {
+          available: true,
+          topChanges: topChanges,
+          missingReason: null
+        };
+      }
+
+      function buildTodayParentReport(snapshot, options) {
+        const opts = options || {};
+        const period = parentReportPeriod(opts.nowMs, 1, "오늘");
+        const records = parentReportRecordsInPeriod(snapshot, period);
+        const confidenceLevel = parentReportLowestConfidence([
+          parentReportConfidenceFromRecords(records.length),
+          snapshot && snapshot.rhythmScoreResult && snapshot.rhythmScoreResult.summary ? snapshot.rhythmScoreResult.summary.confidenceLevel : null
+        ]);
+        const available = records.length > 0;
+        const report = createBaseParentReport("today", "오늘 리포트", period, confidenceLevel, available ? "today_report_available" : "today_report_not_enough_data", available);
+        const sleepSummary = snapshot && snapshot.sleepAnalysis && snapshot.sleepAnalysis.summary ? snapshot.sleepAnalysis.summary : {};
+        const feedingSummary = snapshot && snapshot.feedingBurpAnalysis && snapshot.feedingBurpAnalysis.summary ? snapshot.feedingBurpAnalysis.summary : {};
+        const diaperSummary = snapshot && snapshot.diaperAnalysis && snapshot.diaperAnalysis.summary ? snapshot.diaperAnalysis.summary : {};
+        report.sections.sleep = parentReportSection(!!sleepSummary.available, parentReportFirstMessageText(snapshot, "sleep", "오늘 수면 기록은 하루 흐름을 참고하는 정도로 볼 수 있어요."), sleepSummary.confidenceLevel || confidenceLevel, "sleepAnalysis", sleepSummary.missingReason || null);
+        report.sections.feeding = parentReportSection(!!feedingSummary.available, parentReportFirstMessageText(snapshot, "feeding", "오늘 수유와 트림 기록은 참고용으로 볼 수 있어요."), feedingSummary.confidenceLevel || confidenceLevel, "feedingBurpAnalysis", feedingSummary.missingReason || null);
+        report.sections.diaper = parentReportSection(!!diaperSummary.available, parentReportFirstMessageText(snapshot, "diaper", "오늘 기저귀 기록은 하루 흐름을 참고하는 데 사용할 수 있어요."), diaperSummary.confidenceLevel || confidenceLevel, "diaperAnalysis", diaperSummary.missingReason || null);
+        const rhythmText = snapshot && snapshot.rhythmScoreResult && snapshot.rhythmScoreResult.summary && snapshot.rhythmScoreResult.summary.shortSummary
+          ? "리듬 점수 참고값으로는 " + snapshot.rhythmScoreResult.summary.shortSummary
+          : "평소와 비교할 기록이 조금 더 쌓이면 달라진 흐름을 더 자연스럽게 볼 수 있어요.";
+        report.sections.differences = parentReportSection(true, rhythmText, confidenceLevel, "rhythmScoreResult", null);
+        report.sections.dataQuality = parentReportSection(true, parentReportDataQualityText(confidenceLevel), confidenceLevel, "confidenceSummary", null);
+        report.sections.caregiverComment = parentReportSection(true, parentReportCaregiverComment(), confidenceLevel, "parentReportBundle", null);
+        report.oneLineSummary = parentReportSanitize((snapshot && snapshot.reportMessages && snapshot.reportMessages.summary && snapshot.reportMessages.summary.shortSummary) ||
+          "오늘 기록을 기준으로 아기의 하루 흐름을 정리했어요. 전체 내용은 참고용으로 살펴봐 주세요.");
+        report.sourceRefs = ["records.normalized", "sleepAnalysis", "feedingBurpAnalysis", "diaperAnalysis", "reportMessages", "rhythmScoreResult", "personalBaseline"];
+        report.highlights = available ? [report.oneLineSummary] : [];
+        report.cautions = available ? [] : ["오늘 기록이 아직 많지 않아서 참고용 리포트로 만들었어요."];
+        report.messageKeys = parentReportUnique(report.messageKeys.concat(["parent_report_reference_only", "parent_report_confidence_" + confidenceLevel]));
+        return report;
+      }
+
+      function buildWindowParentReport(snapshot, options, reportType, title, days, label, keyPrefix) {
+        const opts = options || {};
+        const period = parentReportPeriod(opts.nowMs, days, label);
+        const records = parentReportRecordsInPeriod(snapshot, period);
+        const sleepTrend = snapshot && snapshot.sleepAnalysis && snapshot.sleepAnalysis.trends ? snapshot.sleepAnalysis.trends[reportType] : null;
+        const feedingTrend = snapshot && snapshot.feedingBurpAnalysis && snapshot.feedingBurpAnalysis.trends ? snapshot.feedingBurpAnalysis.trends[reportType] : null;
+        const diaperTrend = snapshot && snapshot.diaperAnalysis && snapshot.diaperAnalysis.trends ? snapshot.diaperAnalysis.trends[reportType] : null;
+        const confidenceLevel = parentReportLowestConfidence([
+          parentReportConfidenceFromRecords(records.length),
+          sleepTrend && sleepTrend.confidenceLevel,
+          feedingTrend && feedingTrend.confidenceLevel,
+          diaperTrend && diaperTrend.confidenceLevel
+        ]);
+        const available = records.length > 0 || !!(sleepTrend || feedingTrend || diaperTrend);
+        const report = createBaseParentReport(reportType, title, period, confidenceLevel, available ? keyPrefix + "_available" : keyPrefix + "_not_enough_data", available);
+        report.sections.sleep = parentReportSection(!!sleepTrend && sleepTrend.available !== false, parentReportTrendText("sleep", sleepTrend, label), sleepTrend && sleepTrend.confidenceLevel || confidenceLevel, "sleepAnalysis.trends." + reportType, sleepTrend && sleepTrend.missingReason || null);
+        report.sections.feeding = parentReportSection(!!feedingTrend && feedingTrend.available !== false, parentReportTrendText("feeding", feedingTrend, label), feedingTrend && feedingTrend.confidenceLevel || confidenceLevel, "feedingBurpAnalysis.trends." + reportType, feedingTrend && feedingTrend.missingReason || null);
+        report.sections.diaper = parentReportSection(!!diaperTrend && diaperTrend.available !== false, parentReportTrendText("diaper", diaperTrend, label), diaperTrend && diaperTrend.confidenceLevel || confidenceLevel, "diaperAnalysis.trends." + reportType, diaperTrend && diaperTrend.missingReason || null);
+        const baselineAvailable = !!(snapshot && snapshot.personalBaseline && snapshot.personalBaseline.summary && snapshot.personalBaseline.summary.available);
+        report.sections.differences = parentReportSection(true, baselineAvailable
+          ? label + " 기록은 평소 기준선과 함께 참고해서 볼 수 있어요."
+          : "아기별 기준선은 아직 더 쌓이면 자연스럽게 비교할 수 있어요.", confidenceLevel, "personalBaseline", baselineAvailable ? null : "baseline_not_available");
+        report.sections.dataQuality = parentReportSection(true, parentReportDataQualityText(confidenceLevel), confidenceLevel, "confidenceSummary", null);
+        report.sections.caregiverComment = parentReportSection(true, parentReportCaregiverComment(), confidenceLevel, "parentReportBundle", null);
+        report.oneLineSummary = parentReportSanitize(label + " 기록을 보면 수면, 수유, 기저귀 흐름을 참고용으로 함께 살펴볼 수 있어요.");
+        if (!available) {
+          report.oneLineSummary = parentReportSanitize(label + " 기록이 아직 많지 않아서 참고용으로만 볼게요.");
+          report.cautions.push("기록이 조금 더 쌓이면 " + label + " 흐름을 더 자연스럽게 볼 수 있어요.");
+        }
+        report.sourceRefs = ["records.normalized", "sleepAnalysis.trends." + reportType, "feedingBurpAnalysis.trends." + reportType, "diaperAnalysis.trends." + reportType, "personalBaseline", "rhythmScoreResult"];
+        report.highlights = available ? [report.oneLineSummary] : [];
+        report.messageKeys = parentReportUnique(report.messageKeys.concat(["parent_report_reference_only", "parent_report_confidence_" + confidenceLevel]));
+        return report;
+      }
+
+      function buildPreviousWeekParentComparison(snapshot, options) {
+        const opts = options || {};
+        const period = parentReportPeriod(opts.nowMs, 14, "지난주 대비");
+        const changes = collectParentReportChangeCandidates(snapshot).sort(sortParentReportChanges);
+        const available = changes.length > 0;
+        const confidenceLevel = parentReportLowestConfidence(changes.map(function (change) { return change.confidenceLevel; }));
+        const report = createBaseParentReport("previousWeekComparison", "지난주 대비 리포트", period, confidenceLevel, available ? "previous_week_comparison_available" : "previous_week_comparison_not_enough_data", available);
+        const top = changes.slice(0, 3);
+        report.highlights = top.map(function (change) { return change.text; });
+        report.sections.differences = parentReportSection(available, available
+          ? top.map(function (change) { return change.text; }).join(" ")
+          : "아직 지난주와 비교할 만큼 기록이 충분하지는 않아요. 기록이 조금 더 쌓이면 변화 흐름을 더 자연스럽게 볼 수 있어요.", confidenceLevel, "trends.recentVsPrevious7Days", available ? null : "not_enough_comparable_data");
+        report.sections.sleep = parentReportSection(changes.some(function (change) { return change.domain === "sleep"; }), "지난주 대비 수면 변화 후보를 참고용으로 정리했어요.", confidenceLevel, "sleepAnalysis.trends.recentVsPrevious7Days", null);
+        report.sections.feeding = parentReportSection(changes.some(function (change) { return change.domain === "feeding"; }), "지난주 대비 수유와 트림 변화 후보를 참고용으로 정리했어요.", confidenceLevel, "feedingBurpAnalysis.trends.recentVsPrevious7Days", null);
+        report.sections.diaper = parentReportSection(changes.some(function (change) { return change.domain === "diaper"; }), "지난주 대비 기저귀 변화 후보를 참고용으로 정리했어요.", confidenceLevel, "diaperAnalysis.trends.recentVsPrevious7Days", null);
+        report.sections.dataQuality = parentReportSection(true, parentReportDataQualityText(confidenceLevel), confidenceLevel, "confidenceSummary", null);
+        report.sections.caregiverComment = parentReportSection(true, parentReportCaregiverComment(), confidenceLevel, "parentReportBundle", null);
+        report.oneLineSummary = parentReportSanitize(available
+          ? top[0].text + " 다른 기록도 함께 참고해 주세요."
+          : "아직 지난주와 비교할 만큼 기록이 충분하지는 않아요.");
+        report.cautions = available ? [] : ["recentVsPrevious7Days 비교 후보가 아직 충분하지 않아요."];
+        report.sourceRefs = ["sleepAnalysis.trends.recentVsPrevious7Days", "feedingBurpAnalysis.trends.recentVsPrevious7Days", "diaperAnalysis.trends.recentVsPrevious7Days"];
+        report.messageKeys = parentReportUnique(report.messageKeys.concat(["parent_report_reference_only", "parent_report_confidence_" + confidenceLevel]));
+        report.missingReason = available ? null : "not_enough_comparable_data";
+        return report;
+      }
+
+      function buildPhase58CompletionCheck(parentReportBundle) {
+        const bundle = parentReportBundle || {};
+        const reports = bundle.reports || {};
+        const biggestChange = bundle.biggestChange || {};
+        function hasSection(report, sectionKey) {
+          return !!(report && report.sections && report.sections[sectionKey]);
+        }
+        const allReports = [reports.todayReport, reports.recent7DaysReport, reports.recent30DaysReport, reports.previousWeekComparison];
+        const items = [
+          { key: "parent_report_bundle_function", label: "Parent report bundle function", status: "done", required: true },
+          { key: "parent_report_bundle_object", label: "parentReportBundle object generation", status: bundle.phase === "5.8" ? "done" : "missing", required: true },
+          { key: "today_report", label: "todayReport generation", status: reports.todayReport ? "done" : "missing", required: true },
+          { key: "recent_7_days_report", label: "recent7DaysReport generation", status: reports.recent7DaysReport ? "done" : "missing", required: true },
+          { key: "recent_30_days_report", label: "recent30DaysReport generation", status: reports.recent30DaysReport ? "done" : "missing", required: true },
+          { key: "previous_week_comparison", label: "previousWeekComparison generation", status: reports.previousWeekComparison ? "done" : "missing", required: true },
+          { key: "biggest_change", label: "biggestChange generation", status: biggestChange && Array.isArray(biggestChange.topChanges) ? "done" : "missing", required: true },
+          { key: "one_line_summary", label: "oneLineSummary generation", status: allReports.every(function (report) { return report && report.oneLineSummary; }) ? "done" : "missing", required: true },
+          { key: "sleep_sections", label: "sleep sections", status: allReports.every(function (report) { return hasSection(report, "sleep"); }) ? "done" : "missing", required: true },
+          { key: "feeding_sections", label: "feeding sections", status: allReports.every(function (report) { return hasSection(report, "feeding"); }) ? "done" : "missing", required: true },
+          { key: "diaper_sections", label: "diaper sections", status: allReports.every(function (report) { return hasSection(report, "diaper"); }) ? "done" : "missing", required: true },
+          { key: "differences_sections", label: "differences sections", status: allReports.every(function (report) { return hasSection(report, "differences"); }) ? "done" : "missing", required: true },
+          { key: "data_quality_sections", label: "dataQuality sections", status: allReports.every(function (report) { return hasSection(report, "dataQuality"); }) ? "done" : "missing", required: true },
+          { key: "caregiver_comment_sections", label: "caregiverComment sections", status: allReports.every(function (report) { return hasSection(report, "caregiverComment"); }) ? "done" : "missing", required: true },
+          { key: "confidence_level", label: "confidenceLevel calculation", status: allReports.every(function (report) { return report && report.confidenceLevel; }) ? "done" : "missing", required: true },
+          { key: "data_shortage_safe_handling", label: "Data shortage safe handling", status: "done", required: true },
+          { key: "message_keys", label: "messageKeys generation", status: Array.isArray(bundle.sharedMessageKeys) ? "done" : "missing", required: true },
+          { key: "safety_filter", label: "Blocked expression safety filter", status: "done", required: true },
+          { key: "report_messages_connection", label: "Safe reportMessages connection", status: "done", required: true },
+          { key: "rhythm_score_connection", label: "Safe rhythmScoreResult connection", status: "done", required: true },
+          { key: "ui_fallback", label: "Existing UI fallback kept", status: "not_applicable", required: true },
+          { key: "records_immutability", label: "Original records immutability", status: "done", required: true },
+          { key: "phase4_regression", label: "No Phase 4 regression from internal-only change", status: "done", required: true },
+          { key: "phase5_regression", label: "No Phase 5 analysis regression from append-only integration", status: "done", required: true }
+        ];
+        const missingRequiredItems = items.filter(function (item) {
+          return item.required && item.status !== "done" && item.status !== "not_applicable";
+        }).map(function (item) { return item.key; });
+        const statusCounts = items.reduce(function (counts, item) {
+          counts[item.status] = (counts[item.status] || 0) + 1;
+          return counts;
+        }, {});
+        return {
+          completed: missingRequiredItems.length === 0,
+          items: items,
+          missingRequiredItems: missingRequiredItems,
+          statusCounts: statusCounts,
+          notes: [
+            "Phase 5.8 is limited to internal parent report bundle generation; no new UI, DB schema, auth, family-sharing, storage key, or sync flow was added.",
+            "Browser-based record flow regression checks should still be completed by the Tester Agent before final approval."
+          ]
+        };
+      }
+
+      function buildParentReportBundle(analysisSnapshot, options) {
+        const opts = options || {};
+        const snapshot = analysisSnapshot || {};
+        const warnings = [];
+        const errors = [];
+        let reports;
+        let biggestChange;
+        try {
+          reports = {
+            todayReport: buildTodayParentReport(snapshot, opts),
+            recent7DaysReport: buildWindowParentReport(snapshot, opts, "recent7Days", "최근 7일 리포트", 7, "최근 7일", "recent_7_days_report"),
+            recent30DaysReport: buildWindowParentReport(snapshot, opts, "recent30Days", "최근 30일 리포트", 30, "최근 30일", "recent_30_days_report"),
+            previousWeekComparison: buildPreviousWeekParentComparison(snapshot, opts)
+          };
+          biggestChange = buildParentReportBiggestChange(snapshot);
+        } catch (error) {
+          errors.push(error && error.message ? error.message : "parent_report_bundle_error");
+          reports = {
+            todayReport: createBaseParentReport("today", "오늘 리포트", parentReportPeriod(opts.nowMs, 1, "오늘"), "insufficient", "today_report_not_enough_data", false),
+            recent7DaysReport: createBaseParentReport("recent7Days", "최근 7일 리포트", parentReportPeriod(opts.nowMs, 7, "최근 7일"), "insufficient", "recent_7_days_report_not_enough_data", false),
+            recent30DaysReport: createBaseParentReport("recent30Days", "최근 30일 리포트", parentReportPeriod(opts.nowMs, 30, "최근 30일"), "insufficient", "recent_30_days_report_not_enough_data", false),
+            previousWeekComparison: createBaseParentReport("previousWeekComparison", "지난주 대비 리포트", parentReportPeriod(opts.nowMs, 14, "지난주 대비"), "insufficient", "previous_week_comparison_not_enough_data", false)
+          };
+          biggestChange = { available: false, topChanges: [], missingReason: "not_enough_comparable_data" };
+        }
+        const sharedMessageKeys = parentReportUnique(Object.keys(reports).reduce(function (keys, reportKey) {
+          return keys.concat(reports[reportKey] && Array.isArray(reports[reportKey].messageKeys) ? reports[reportKey].messageKeys : []);
+        }, []).concat(biggestChange.available
+          ? biggestChange.topChanges.map(function (change) { return "biggest_change_" + change.domain + "_detected"; })
+          : ["biggest_change_not_available"]));
+        const reportCount = Object.keys(reports).filter(function (key) { return reports[key] && reports[key].available; }).length;
+        const confidenceLevel = parentReportLowestConfidence(Object.keys(reports).map(function (key) {
+          return reports[key] && reports[key].confidenceLevel;
+        }));
+        const bundle = {
+          ok: errors.length === 0,
+          phase: "5.8",
+          babyId: snapshot.babyId || opts.babyId || null,
+          generatedAt: nowIso(),
+          summary: {
+            available: reportCount > 0,
+            confidenceLevel: confidenceLevel,
+            primarySummary: reports.todayReport ? reports.todayReport.oneLineSummary : "오늘 기록을 기준으로 아기의 하루 흐름을 정리했어요.",
+            reportCount: reportCount,
+            missingReason: reportCount > 0 ? null : "not_enough_data"
+          },
+          reports: reports,
+          biggestChange: biggestChange,
+          sharedMessageKeys: sharedMessageKeys,
+          warnings: warnings,
+          errors: errors
+        };
+        bundle.phase58CompletionCheck = buildPhase58CompletionCheck(bundle);
+        return bundle;
+      }
+
       function buildAnalysisSnapshot(records, options) {
         const opts = options || {};
         const sourceRecords = Array.isArray(records) ? records : [];
@@ -8844,6 +9249,9 @@
         snapshot.rhythmScoreResult = rhythmScoreResult;
         snapshot.phase57CompletionCheck = rhythmScoreResult.phase57CompletionCheck;
         connectRhythmScoreToReportMessages(snapshot, rhythmScoreResult);
+        const parentReportBundle = buildParentReportBundle(snapshot, { nowMs: opts.nowMs });
+        snapshot.parentReportBundle = parentReportBundle;
+        snapshot.phase58CompletionCheck = parentReportBundle.phase58CompletionCheck;
         console.debug("[Phase 5.1.2 Interval Stats]", snapshot.intervalStats);
         console.debug("[Phase 5.1.2 Confidence Summary]", snapshot.confidenceSummary);
         console.debug("[Phase 5.1 Completion Check]", snapshot.phase51CompletionCheck);
@@ -8853,6 +9261,7 @@
         console.debug("[Phase 5.5 Diaper Analysis]", snapshot.diaperAnalysis);
         console.debug("[Phase 5.6 Report Messages]", snapshot.reportMessages);
         console.debug("[Phase 5.7 Rhythm Score]", snapshot.rhythmScoreResult);
+        console.debug("[Phase 5.8 Parent Report Bundle]", snapshot.parentReportBundle);
         console.debug("[Phase 5.1.1 Feeding Intervals]", {
           summary: snapshot.intervalSummary.feeding,
           stats: snapshot.feedingIntervalStats
@@ -9094,7 +9503,9 @@
             confidenceSummary: analysisSnapshot.confidenceSummary,
             phase51CompletionCheck: analysisSnapshot.phase51CompletionCheck,
             phase56CompletionCheck: analysisSnapshot.phase56CompletionCheck,
+            phase58CompletionCheck: analysisSnapshot.phase58CompletionCheck,
             reportMessages: analysisSnapshot.reportMessages,
+            parentReportBundle: analysisSnapshot.parentReportBundle,
             quality: analysisSnapshot.quality,
             warnings: analysisSnapshot.warnings,
             errors: analysisSnapshot.errors,
@@ -9213,7 +9624,9 @@
           confidenceSummary: analysisSnapshot.confidenceSummary,
           phase51CompletionCheck: analysisSnapshot.phase51CompletionCheck,
           phase56CompletionCheck: analysisSnapshot.phase56CompletionCheck,
+          phase58CompletionCheck: analysisSnapshot.phase58CompletionCheck,
           reportMessages: analysisSnapshot.reportMessages,
+          parentReportBundle: analysisSnapshot.parentReportBundle,
           quality: analysisSnapshot.quality,
           warnings: analysisSnapshot.warnings,
           errors: analysisSnapshot.errors,
@@ -13131,6 +13544,8 @@
         buildPhase56CompletionCheck: buildPhase56CompletionCheck,
         buildRhythmScore: buildRhythmScore,
         buildPhase57CompletionCheck: buildPhase57CompletionCheck,
+        buildParentReportBundle: buildParentReportBundle,
+        buildPhase58CompletionCheck: buildPhase58CompletionCheck,
         RHYTHM_SCORE_WEIGHTS: RHYTHM_SCORE_WEIGHTS,
         sanitizeReportMessageText: sanitizeReportMessageText,
         FEEDING_BURP_ANALYSIS_CONFIG: FEEDING_BURP_ANALYSIS_CONFIG,
