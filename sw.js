@@ -1,4 +1,4 @@
-const CACHE_NAME = "babylog-cache-v5-5-4-ui-button-polish";
+const CACHE_NAME = "babylog-cache-v5-6-report-message-engine";
 const CACHE_PREFIX = "babylog-cache-";
 const OLD_CACHE_PREFIX = "baby-life-log-";
 const PRIMARY_CACHE_NAME = CACHE_NAME;

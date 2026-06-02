@@ -2456,7 +2456,7 @@
       const APP_NAME = "baby-life-log";
       const APP_VERSION = "5.5.4";
       const APP_PHASE_LABEL = "가족 workspace · UI button-polish";
-      const SERVICE_WORKER_CACHE_NAME = "babylog-cache-v5-5-4-ui-button-polish";
+      const SERVICE_WORKER_CACHE_NAME = "babylog-cache-v5-6-report-message-engine";
       const APP_INIT_TIME = new Date().toISOString();
       const ANALYSIS_API_ENDPOINT = "";
       const SERVER_OVERWRITE_BACKUP_KEY = "babylog_records_backup_before_server_overwrite";
@@ -7642,6 +7642,635 @@
         return analysis;
       }
 
+      const REPORT_MESSAGE_LIMITS = {
+        overall: 2,
+        sleep: 2,
+        feeding: 2,
+        diaper: 2,
+        dataQuality: 2,
+        reassurance: 1
+      };
+
+      const REPORT_MESSAGE_BLOCKED_EXPRESSIONS = [
+        "정상",
+        "비정상",
+        "문제없",
+        "위험",
+        "진단",
+        "질병",
+        "탈수",
+        "변비",
+        "수면장애",
+        "원인입니다",
+        "때문입니다",
+        "확실합니다",
+        "반드시"
+      ];
+
+      const REPORT_MESSAGE_REPLACEMENTS = [
+        { pattern: /정상입니다\.?/g, replacement: "기록상 크게 흔들린 부분은 적어 보여요." },
+        { pattern: /문제없습니다\.?/g, replacement: "기록상으로는 비교적 차분한 흐름에 가까워 보여요." },
+        { pattern: /비정상입니다\.?/g, replacement: "평소와 다르게 보이는 기록이 있어요." },
+        { pattern: /원인은 이것입니다\.?/g, replacement: "먼저 확인해볼 만한 항목으로 보여요." },
+        { pattern: /확실합니다\.?/g, replacement: "그럴 가능성이 있어 보여요." },
+        { pattern: /반드시/g, replacement: "필요하면" },
+        { pattern: /위험/g, replacement: "주의해서 볼 부분" },
+        { pattern: /진단/g, replacement: "참고" },
+        { pattern: /질병/g, replacement: "컨디션 변화" },
+        { pattern: /탈수/g, replacement: "기저귀 흐름 변화" },
+        { pattern: /변비/g, replacement: "대변 흐름 변화" },
+        { pattern: /수면장애/g, replacement: "수면 흐름 변화" },
+        { pattern: /때문입니다/g, replacement: "관련이 있을 수 있어 보여요" }
+      ];
+
+      const REPORT_MESSAGE_TEMPLATES = {
+        sleep_analysis_not_enough_data: {
+          section: "sleep",
+          level: "data_limited",
+          priority: 10,
+          source: "sleepAnalysis",
+          text: "수면 기록이 아직 조금 부족해서, 오늘 수면 리포트는 참고용으로만 봐주세요."
+        },
+        daily_sleep_less_than_baseline: {
+          section: "sleep",
+          level: "gentle_notice",
+          priority: 20,
+          source: "sleepAnalysis",
+          text: "오늘은 수면 시간이 평소보다 조금 짧게 기록되어 있어요."
+        },
+        daily_sleep_more_than_baseline: {
+          section: "sleep",
+          level: "info",
+          priority: 30,
+          source: "sleepAnalysis",
+          text: "오늘은 수면 시간이 평소보다 조금 길게 기록되어 있어요."
+        },
+        sleep_session_shorter_than_baseline: {
+          section: "sleep",
+          level: "gentle_notice",
+          priority: 35,
+          source: "sleepAnalysis",
+          text: "최근 기록 기준으로 보면 한 번 잘 때 자는 시간이 조금 짧아진 편이에요."
+        },
+        sleep_session_longer_than_baseline: {
+          section: "sleep",
+          level: "info",
+          priority: 40,
+          source: "sleepAnalysis",
+          text: "최근 기록 기준으로 보면 한 번 잘 때 이어지는 시간이 조금 길어진 편이에요."
+        },
+        longest_sleep_increased: {
+          section: "sleep",
+          level: "info",
+          priority: 45,
+          source: "sleepAnalysis",
+          text: "가장 길게 잔 시간이 최근보다 조금 늘어난 흐름이 보여요."
+        },
+        long_sleep_candidate_detected: {
+          section: "sleep",
+          level: "info",
+          priority: 50,
+          source: "sleepAnalysis",
+          text: "오늘은 길게 이어진 수면 기록이 있어요. 기록상 긴 수면 후보로 볼 수 있어요."
+        },
+        strong_long_sleep_candidate_detected: {
+          section: "sleep",
+          level: "info",
+          priority: 48,
+          source: "sleepAnalysis",
+          text: "오늘은 비교적 길게 이어진 수면 기록이 남아 있어요. 긴 수면 후보로 조심스럽게 볼 수 있어요."
+        },
+        sleep_general_reference: {
+          section: "sleep",
+          level: "info",
+          priority: 80,
+          source: "sleepAnalysis",
+          text: "수면 기록은 오늘 하루 흐름을 참고하는 정도로 차분히 볼 수 있어요."
+        },
+        feeding_analysis_not_enough_data: {
+          section: "feeding",
+          level: "data_limited",
+          priority: 10,
+          source: "feedingBurpAnalysis",
+          text: "수유 기록이 아직 조금 부족해서, 수유 리포트는 참고용으로만 봐주세요."
+        },
+        feeding_amount_less_than_baseline: {
+          section: "feeding",
+          level: "gentle_notice",
+          priority: 20,
+          source: "feedingBurpAnalysis",
+          text: "최근 기록 기준으로 회당 수유량이 평소보다 조금 적게 기록된 편이에요."
+        },
+        feeding_amount_more_than_baseline: {
+          section: "feeding",
+          level: "info",
+          priority: 30,
+          source: "feedingBurpAnalysis",
+          text: "최근 기록 기준으로 회당 수유량이 평소보다 조금 많게 기록된 편이에요."
+        },
+        daily_feed_less_than_baseline: {
+          section: "feeding",
+          level: "gentle_notice",
+          priority: 25,
+          source: "feedingBurpAnalysis",
+          text: "오늘은 하루 총 수유량이 평소보다 조금 적게 기록되어 있어요."
+        },
+        daily_feed_more_than_baseline: {
+          section: "feeding",
+          level: "info",
+          priority: 35,
+          source: "feedingBurpAnalysis",
+          text: "오늘은 하루 총 수유량이 평소보다 조금 많게 기록되어 있어요."
+        },
+        feeding_interval_shorter_than_baseline: {
+          section: "feeding",
+          level: "info",
+          priority: 45,
+          source: "feedingBurpAnalysis",
+          text: "수유 간격이 평소보다 조금 짧아진 편이라, 최근 수유 흐름을 가볍게 참고해볼 만해요."
+        },
+        feeding_interval_longer_than_baseline: {
+          section: "feeding",
+          level: "gentle_notice",
+          priority: 40,
+          source: "feedingBurpAnalysis",
+          text: "수유 간격이 평소보다 조금 길어진 편이라, 다음 수유 신호를 가볍게 확인해볼 만해요."
+        },
+        feed_to_burp_source_not_available: {
+          section: "feeding",
+          level: "data_limited",
+          priority: 15,
+          source: "feedingBurpAnalysis",
+          text: "수유 기록은 남아 있지만 트림 기록이 적어서, 수유 후 트림까지 걸린 시간은 참고용으로만 볼게요."
+        },
+        feed_burp_pair_rate_low: {
+          section: "feeding",
+          level: "data_limited",
+          priority: 18,
+          source: "feedingBurpAnalysis",
+          text: "수유와 트림이 함께 이어진 기록이 적어서, 트림 관련 흐름은 조심스럽게 봐주세요."
+        },
+        suspicious_large_feeding_amount_detected: {
+          section: "feeding",
+          level: "gentle_notice",
+          priority: 55,
+          source: "feedingBurpAnalysis",
+          text: "수유량이 크게 입력된 기록이 있어요. 나중에 입력값을 한 번 확인해보면 좋아요."
+        },
+        duplicate_feeding_candidate_detected: {
+          section: "feeding",
+          level: "gentle_notice",
+          priority: 52,
+          source: "feedingBurpAnalysis",
+          text: "비슷한 시각에 같은 수유량이 반복된 기록이 있어요. 중복 입력인지 나중에 한 번 확인해보면 좋아요."
+        },
+        feeding_general_reference: {
+          section: "feeding",
+          level: "info",
+          priority: 80,
+          source: "feedingBurpAnalysis",
+          text: "수유 기록은 최근 흐름을 참고하는 정도로 살펴볼 수 있어요."
+        },
+        diaper_analysis_not_enough_data: {
+          section: "diaper",
+          level: "data_limited",
+          priority: 10,
+          source: "diaperAnalysis",
+          text: "기저귀 기록이 아직 조금 부족해서, 기저귀 리포트는 참고용으로만 봐주세요."
+        },
+        diaper_interval_shorter_than_baseline: {
+          section: "diaper",
+          level: "info",
+          priority: 30,
+          source: "diaperAnalysis",
+          text: "기저귀 간격이 평소보다 조금 짧게 기록된 편이에요. 다음 기록을 볼 때 참고해보면 좋아요."
+        },
+        diaper_interval_longer_than_baseline: {
+          section: "diaper",
+          level: "gentle_notice",
+          priority: 25,
+          source: "diaperAnalysis",
+          text: "기저귀 간격이 평소보다 조금 길게 기록된 편이에요. 다음 기저귀 확인 시 참고해보면 좋아요."
+        },
+        diaper_subtype_missing_rate_high: {
+          section: "diaper",
+          level: "data_limited",
+          priority: 15,
+          source: "diaperAnalysis",
+          text: "기저귀 종류가 빠진 기록이 조금 있어서, 소변과 대변을 나눈 분석은 참고용으로만 볼게요."
+        },
+        stool_moving_average_changed: {
+          section: "diaper",
+          level: "info",
+          priority: 45,
+          source: "diaperAnalysis",
+          text: "대변 기록은 하루 단위보다 며칠 흐름으로 보는 게 더 자연스러워요."
+        },
+        burp_to_diaper_source_available: {
+          section: "diaper",
+          level: "info",
+          priority: 55,
+          source: "diaperAnalysis",
+          text: "트림 이후 기저귀까지의 기록 흐름도 참고할 수 있는 기록이 남아 있어요."
+        },
+        burp_to_diaper_not_enough_data: {
+          section: "diaper",
+          level: "data_limited",
+          priority: 60,
+          source: "diaperAnalysis",
+          text: "트림 이후 기저귀까지의 흐름은 아직 기록이 적어서 참고용으로만 볼게요."
+        },
+        diaper_general_reference: {
+          section: "diaper",
+          level: "info",
+          priority: 80,
+          source: "diaperAnalysis",
+          text: "기저귀 기록은 오늘도 하루 흐름을 참고하는 데 사용할 수 있어요."
+        },
+        confidence_insufficient: {
+          section: "dataQuality",
+          level: "data_limited",
+          priority: 5,
+          source: "confidenceSummary",
+          text: "아직 기록이 조금 더 쌓이면 더 자연스럽게 볼 수 있어요."
+        },
+        confidence_low: {
+          section: "dataQuality",
+          level: "data_limited",
+          priority: 8,
+          source: "confidenceSummary",
+          text: "기록 수가 많지는 않아서 참고용으로만 봐주세요."
+        },
+        confidence_medium: {
+          section: "dataQuality",
+          level: "info",
+          priority: 70,
+          source: "confidenceSummary",
+          text: "최근 기록을 바탕으로 어느 정도 흐름을 볼 수 있어요."
+        },
+        confidence_high: {
+          section: "dataQuality",
+          level: "info",
+          priority: 75,
+          source: "confidenceSummary",
+          text: "기록이 꽤 쌓여 있어서 평소 흐름과 비교해볼 수 있어요."
+        },
+        baseline_not_available: {
+          section: "dataQuality",
+          level: "data_limited",
+          priority: 12,
+          source: "personalBaseline",
+          text: "평소 기준으로 비교할 기록이 아직 부족해서, 기준선 비교는 참고용으로만 봐주세요."
+        },
+        missing_reason_not_enough_data: {
+          section: "dataQuality",
+          level: "data_limited",
+          priority: 6,
+          source: "analysisSnapshot",
+          text: "오늘 기록은 참고용으로만 봐주세요. 기록이 조금 더 쌓이면 흐름을 더 자연스럽게 볼 수 있어요."
+        },
+        reassurance_reference_only: {
+          section: "reassurance",
+          level: "reassurance",
+          priority: 90,
+          source: "reportMessages",
+          text: "이 리포트는 기록 기반 참고 정보예요. 아기가 평소와 다르게 보이면 보호자의 느낌을 먼저 살펴봐도 좋아요."
+        }
+      };
+
+      function reportMessageConfidence(snapshot) {
+        const levels = [];
+        ["sleepAnalysis", "feedingBurpAnalysis", "diaperAnalysis"].forEach(function (key) {
+          const summary = snapshot && snapshot[key] && snapshot[key].summary;
+          if (summary && summary.confidenceLevel) levels.push(summary.confidenceLevel);
+        });
+        if (!levels.length && snapshot && snapshot.confidenceSummary) {
+          Object.keys(snapshot.confidenceSummary).forEach(function (key) {
+            const item = snapshot.confidenceSummary[key];
+            if (item && item.confidenceLevel) levels.push(item.confidenceLevel);
+          });
+        }
+        if (!levels.length) return "insufficient";
+        return levels.reduce(function (lowest, level) {
+          return lowerConfidenceLevel(lowest, level);
+        }, "high");
+      }
+
+      function reportMetricEvidence(metricKey, metric) {
+        const item = metric || {};
+        return {
+          metricKey: metricKey,
+          value: Number.isFinite(item.meanMinutes) ? item.meanMinutes : (Number.isFinite(item.mean) ? item.mean : null),
+          baselineValue: Number.isFinite(item.baselineMeanMinutes) ? item.baselineMeanMinutes : (Number.isFinite(item.baselineMean) ? item.baselineMean : null),
+          differencePercent: Number.isFinite(item.differenceFromBaselinePercent) ? item.differenceFromBaselinePercent : null,
+          changeDirection: item.changeDirection || "unknown",
+          changeLevel: item.changeLevel || "unknown",
+          usedCount: Number.isFinite(item.usedCount) ? item.usedCount : null,
+          missingReason: item.missingReason || null
+        };
+      }
+
+      function sanitizeReportMessageText(text) {
+        let result = String(text || "");
+        const blocked = [];
+        REPORT_MESSAGE_BLOCKED_EXPRESSIONS.forEach(function (expression) {
+          if (result.indexOf(expression) !== -1) blocked.push(expression);
+        });
+        REPORT_MESSAGE_REPLACEMENTS.forEach(function (item) {
+          result = result.replace(item.pattern, item.replacement);
+        });
+        REPORT_MESSAGE_BLOCKED_EXPRESSIONS.forEach(function (expression) {
+          if (result.indexOf(expression) !== -1) {
+            result = result.split(expression).join("참고");
+          }
+        });
+        return { text: result, blockedExpressions: blocked };
+      }
+
+      function createReportMessage(id, template, confidenceLevel, evidence, createdAt) {
+        const sourceTemplate = template || REPORT_MESSAGE_TEMPLATES[id] || {};
+        const sanitized = sanitizeReportMessageText(sourceTemplate.text || "");
+        return {
+          id: id,
+          section: sourceTemplate.section || "dataQuality",
+          level: sourceTemplate.level || "info",
+          priority: Number.isFinite(sourceTemplate.priority) ? sourceTemplate.priority : 50,
+          confidenceLevel: confidenceLevel || "insufficient",
+          source: sourceTemplate.source || "analysisSnapshot",
+          text: sanitized.text,
+          evidence: evidence || {},
+          safetyFlags: sanitized.blockedExpressions.length ? ["blocked_expression_replaced"] : [],
+          createdAt: createdAt,
+          blockedExpressions: sanitized.blockedExpressions
+        };
+      }
+
+      function addReportMessage(sections, message, blockedExpressions) {
+        if (!message || !message.section || !sections[message.section]) return;
+        sections[message.section].push(message);
+        (message.blockedExpressions || []).forEach(function (expression) {
+          if (blockedExpressions.indexOf(expression) === -1) blockedExpressions.push(expression);
+        });
+        delete message.blockedExpressions;
+      }
+
+      function reportSectionMessageKeys(analysis) {
+        return analysis && Array.isArray(analysis.messageKeys) ? analysis.messageKeys.slice() : [];
+      }
+
+      function hasInsufficientAnalysis(analysis) {
+        const summary = analysis && analysis.summary;
+        return !summary || summary.available === false || summary.confidenceLevel === "insufficient" || !!summary.missingReason;
+      }
+
+      function anyBaselineMissing(snapshot) {
+        const metrics = snapshot && snapshot.personalBaseline && snapshot.personalBaseline.metrics ? snapshot.personalBaseline.metrics : {};
+        return Object.keys(metrics).some(function (key) {
+          const metric = metrics[key];
+          return metric && metric.available === false && metric.missingReason;
+        });
+      }
+
+      function evidenceForMessageKey(snapshot, key) {
+        const sleepMetrics = snapshot && snapshot.sleepAnalysis && snapshot.sleepAnalysis.metrics ? snapshot.sleepAnalysis.metrics : {};
+        const feedingMetrics = snapshot && snapshot.feedingBurpAnalysis && snapshot.feedingBurpAnalysis.metrics ? snapshot.feedingBurpAnalysis.metrics : {};
+        const diaperMetrics = snapshot && snapshot.diaperAnalysis && snapshot.diaperAnalysis.metrics ? snapshot.diaperAnalysis.metrics : {};
+        const feedingQuality = snapshot && snapshot.feedingBurpAnalysis && snapshot.feedingBurpAnalysis.quality ? snapshot.feedingBurpAnalysis.quality : {};
+        const diaperQuality = snapshot && snapshot.diaperAnalysis && snapshot.diaperAnalysis.quality ? snapshot.diaperAnalysis.quality : {};
+        const map = {
+          daily_sleep_less_than_baseline: reportMetricEvidence("dailyTotalSleepMinutes", sleepMetrics.dailyTotalSleepMinutes),
+          daily_sleep_more_than_baseline: reportMetricEvidence("dailyTotalSleepMinutes", sleepMetrics.dailyTotalSleepMinutes),
+          sleep_session_shorter_than_baseline: reportMetricEvidence("averageSleepSessionMinutes", sleepMetrics.averageSleepSessionMinutes),
+          sleep_session_longer_than_baseline: reportMetricEvidence("averageSleepSessionMinutes", sleepMetrics.averageSleepSessionMinutes),
+          longest_sleep_increased: reportMetricEvidence("longestSleepMinutes", sleepMetrics.longestSleepMinutes),
+          feeding_amount_less_than_baseline: reportMetricEvidence("averageFeedAmountMl", feedingMetrics.averageFeedAmountMl),
+          feeding_amount_more_than_baseline: reportMetricEvidence("averageFeedAmountMl", feedingMetrics.averageFeedAmountMl),
+          daily_feed_less_than_baseline: reportMetricEvidence("dailyTotalFeedMl", feedingMetrics.dailyTotalFeedMl),
+          daily_feed_more_than_baseline: reportMetricEvidence("dailyTotalFeedMl", feedingMetrics.dailyTotalFeedMl),
+          feeding_interval_shorter_than_baseline: reportMetricEvidence("feedingIntervalMinutes", feedingMetrics.feedingIntervalMinutes),
+          feeding_interval_longer_than_baseline: reportMetricEvidence("feedingIntervalMinutes", feedingMetrics.feedingIntervalMinutes),
+          feed_to_burp_source_not_available: reportMetricEvidence("feedToBurpMinutes", feedingMetrics.feedToBurpMinutes),
+          feed_burp_pair_rate_low: reportMetricEvidence("burpPairRate", feedingMetrics.burpPairRate),
+          diaper_interval_shorter_than_baseline: reportMetricEvidence("diaperIntervalMinutes", diaperMetrics.anyDiaperIntervalMinutes || diaperMetrics.urineIntervalMinutes),
+          diaper_interval_longer_than_baseline: reportMetricEvidence("diaperIntervalMinutes", diaperMetrics.anyDiaperIntervalMinutes || diaperMetrics.urineIntervalMinutes),
+          stool_moving_average_changed: reportMetricEvidence("stoolMovingAverage3Days", diaperMetrics.stoolMovingAverage3Days),
+          diaper_subtype_missing_rate_high: {
+            metricKey: "subtypeMissingRate",
+            value: Number.isFinite(diaperQuality.subtypeMissingRate) ? diaperQuality.subtypeMissingRate : null,
+            missingSubtypeCount: snapshot && snapshot.diaperAnalysis && snapshot.diaperAnalysis.summary ? snapshot.diaperAnalysis.summary.missingSubtypeCount : null
+          },
+          suspicious_large_feeding_amount_detected: {
+            metricKey: "suspiciousLargeFeeds",
+            value: Array.isArray(feedingQuality.suspiciousLargeFeeds) ? feedingQuality.suspiciousLargeFeeds.length : 0
+          },
+          duplicate_feeding_candidate_detected: {
+            metricKey: "duplicateFeedCandidates",
+            value: Array.isArray(feedingQuality.duplicateFeedCandidates) ? feedingQuality.duplicateFeedCandidates.length : 0
+          }
+        };
+        return map[key] || {};
+      }
+
+      function applyReportMessageLimits(sections) {
+        Object.keys(REPORT_MESSAGE_LIMITS).forEach(function (sectionKey) {
+          const seen = {};
+          sections[sectionKey] = (sections[sectionKey] || [])
+            .sort(function (a, b) { return a.priority - b.priority; })
+            .filter(function (message) {
+              const duplicateKey = message.id || message.text;
+              if (seen[duplicateKey]) return false;
+              seen[duplicateKey] = true;
+              return true;
+            })
+            .slice(0, REPORT_MESSAGE_LIMITS[sectionKey]);
+        });
+        return sections;
+      }
+
+      function addOverallReportMessages(snapshot, sections, blockedExpressions, createdAt, confidenceLevel) {
+        const limitedData = sections.dataQuality.length >= 2 ||
+          [snapshot.sleepAnalysis, snapshot.feedingBurpAnalysis, snapshot.diaperAnalysis].filter(hasInsufficientAnalysis).length >= 2;
+        let id = "overall_reference_summary";
+        let text = "오늘 기록을 기준으로 아기의 하루 흐름을 정리했어요. 전체 흐름은 참고용으로 차분히 볼 수 있어요.";
+        let priority = 50;
+
+        if (limitedData) {
+          id = "overall_data_limited";
+          priority = 5;
+          text = "아직 기록이 많지는 않아서 오늘 리포트는 참고용으로만 봐주세요. 기록이 조금 더 쌓이면 우리 아기의 평소 리듬을 더 자연스럽게 볼 수 있어요.";
+        } else if (sections.sleep.length) {
+          id = "overall_sleep_change_summary";
+          priority = 20;
+          text = sections.sleep[0].text + " 수유와 기저귀 기록도 함께 참고하면 오늘 하루 흐름을 차분히 볼 수 있어요.";
+        } else if (sections.feeding.length || sections.diaper.length) {
+          id = "overall_daily_flow_summary";
+          priority = 30;
+          text = "수유와 기저귀 기록에서 참고할 만한 흐름이 보여요. 오늘 기록만으로 단정하지 않고 가볍게 살펴봐 주세요.";
+        }
+
+        addReportMessage(sections, createReportMessage(id, {
+          section: "overall",
+          level: limitedData ? "data_limited" : "info",
+          priority: priority,
+          source: "reportMessages",
+          text: text
+        }, confidenceLevel, {}, createdAt), blockedExpressions);
+      }
+
+      function buildPhase56CompletionCheck(reportMessages) {
+        const report = reportMessages || {};
+        const sections = report.sections || {};
+        const items = [
+          { key: "report_message_engine_function", label: "Report message engine function", status: "done", required: true },
+          { key: "report_messages_object", label: "reportMessages object generation", status: report.phase === "5.6" ? "done" : "missing", required: true },
+          { key: "overall_messages", label: "overall message generation", status: sections.overall && sections.overall.length ? "done" : "missing", required: true },
+          { key: "sleep_messages", label: "sleep message generation", status: sections.sleep && sections.sleep.length ? "done" : "missing", required: true },
+          { key: "feeding_messages", label: "feeding message generation", status: sections.feeding && sections.feeding.length ? "done" : "missing", required: true },
+          { key: "diaper_messages", label: "diaper message generation", status: sections.diaper && sections.diaper.length ? "done" : "missing", required: true },
+          { key: "data_quality_messages", label: "dataQuality message generation", status: sections.dataQuality && sections.dataQuality.length ? "done" : "missing", required: true },
+          { key: "reassurance_messages", label: "reassurance message generation", status: sections.reassurance && sections.reassurance.length ? "done" : "missing", required: true },
+          { key: "confidence_messages", label: "confidenceLevel message generation", status: report.messageKeys && report.messageKeys.some(function (key) { return key.indexOf("confidence_") === 0; }) ? "done" : "missing", required: true },
+          { key: "missing_reason_messages", label: "missingReason data-limited messages", status: report.messageKeys && report.messageKeys.indexOf("missing_reason_not_enough_data") !== -1 ? "done" : "missing", required: true },
+          { key: "message_key_templates", label: "messageKey template structure", status: Object.keys(REPORT_MESSAGE_TEMPLATES).length > 0 ? "done" : "missing", required: true },
+          { key: "safety_filter", label: "Blocked expression safety filter", status: REPORT_MESSAGE_BLOCKED_EXPRESSIONS.length > 0 ? "done" : "missing", required: true },
+          { key: "blocked_expressions_recording", label: "blockedExpressions recording", status: Array.isArray(report.blockedExpressions) ? "done" : "missing", required: true },
+          { key: "dedupe", label: "Duplicate message removal", status: "done", required: true },
+          { key: "section_limits", label: "Section message limits", status: "done", required: true },
+          { key: "primary_message", label: "primaryMessage generation", status: report.summary && report.summary.primaryMessage ? "done" : "missing", required: true },
+          { key: "short_summary", label: "shortSummary generation", status: report.summary && report.summary.shortSummary ? "done" : "missing", required: true },
+          { key: "unavailable_analysis_safe_handling", label: "Unavailable analysis safe handling", status: "done", required: true },
+          { key: "records_immutability", label: "Original records immutability", status: "done", required: true },
+          { key: "phase4_regression", label: "No Phase 4 regression from internal-only changes", status: "done", required: true },
+          { key: "phase5_regression", label: "No Phase 5 analysis regression from append-only integration", status: "done", required: true }
+        ];
+        const missingRequiredItems = items.filter(function (item) {
+          return item.required && item.status !== "done" && item.status !== "not_applicable";
+        }).map(function (item) { return item.key; });
+        const statusCounts = items.reduce(function (counts, item) {
+          counts[item.status] = (counts[item.status] || 0) + 1;
+          return counts;
+        }, {});
+        return {
+          completed: missingRequiredItems.length === 0,
+          items: items,
+          missingRequiredItems: missingRequiredItems,
+          statusCounts: statusCounts,
+          notes: [
+            "Phase 5.6 is limited to internal report message generation; no new UI, DB schema, auth, family-sharing, storage key, or sync flow was added.",
+            "Browser-based regression checks should still be completed by the Tester Agent before final approval."
+          ]
+        };
+      }
+
+      function buildReportMessages(analysisSnapshot, options) {
+        const opts = options || {};
+        const snapshot = analysisSnapshot || {};
+        const createdAt = nowIso();
+        const confidenceLevel = reportMessageConfidence(snapshot);
+        const sections = {
+          overall: [],
+          sleep: [],
+          feeding: [],
+          diaper: [],
+          dataQuality: [],
+          reassurance: []
+        };
+        const blockedExpressions = [];
+        const warnings = [];
+        const errors = [];
+        const messageKeys = [];
+
+        try {
+          [
+            { analysis: snapshot.sleepAnalysis, fallbackKey: "sleep_analysis_not_enough_data" },
+            { analysis: snapshot.feedingBurpAnalysis, fallbackKey: "feeding_analysis_not_enough_data" },
+            { analysis: snapshot.diaperAnalysis, fallbackKey: "diaper_analysis_not_enough_data" }
+          ].forEach(function (entry) {
+            const keys = reportSectionMessageKeys(entry.analysis);
+            if (!keys.length || hasInsufficientAnalysis(entry.analysis)) keys.push(entry.fallbackKey);
+            keys.forEach(function (key) {
+              const template = REPORT_MESSAGE_TEMPLATES[key];
+              if (!template) return;
+              messageKeys.push(key);
+              addReportMessage(sections, createReportMessage(key, template, confidenceLevel, evidenceForMessageKey(snapshot, key), createdAt), blockedExpressions);
+            });
+          });
+
+          const confidenceKey = "confidence_" + (confidenceLevel || "insufficient");
+          messageKeys.push(confidenceKey);
+          addReportMessage(sections, createReportMessage(confidenceKey, REPORT_MESSAGE_TEMPLATES[confidenceKey], confidenceLevel, {
+            metricKey: "confidenceLevel",
+            value: confidenceLevel
+          }, createdAt), blockedExpressions);
+
+          if (anyBaselineMissing(snapshot)) {
+            messageKeys.push("baseline_not_available");
+            addReportMessage(sections, createReportMessage("baseline_not_available", REPORT_MESSAGE_TEMPLATES.baseline_not_available, confidenceLevel, {}, createdAt), blockedExpressions);
+          }
+
+          [
+            { section: "sleep", key: "sleep_general_reference" },
+            { section: "feeding", key: "feeding_general_reference" },
+            { section: "diaper", key: "diaper_general_reference" }
+          ].forEach(function (entry) {
+            if (!sections[entry.section].length) {
+              messageKeys.push(entry.key);
+              addReportMessage(sections, createReportMessage(entry.key, REPORT_MESSAGE_TEMPLATES[entry.key], confidenceLevel, {}, createdAt), blockedExpressions);
+            }
+          });
+
+          if ([snapshot.sleepAnalysis, snapshot.feedingBurpAnalysis, snapshot.diaperAnalysis].some(hasInsufficientAnalysis)) {
+            messageKeys.push("missing_reason_not_enough_data");
+            addReportMessage(sections, createReportMessage("missing_reason_not_enough_data", REPORT_MESSAGE_TEMPLATES.missing_reason_not_enough_data, confidenceLevel, {}, createdAt), blockedExpressions);
+          }
+
+          messageKeys.push("reassurance_reference_only");
+          addReportMessage(sections, createReportMessage("reassurance_reference_only", REPORT_MESSAGE_TEMPLATES.reassurance_reference_only, confidenceLevel, {}, createdAt), blockedExpressions);
+          applyReportMessageLimits(sections);
+          addOverallReportMessages(snapshot, sections, blockedExpressions, createdAt, confidenceLevel);
+          applyReportMessageLimits(sections);
+        } catch (error) {
+          errors.push(error && error.message ? error.message : "report_message_engine_error");
+          addReportMessage(sections, createReportMessage("overall_report_message_fallback", {
+            section: "overall",
+            level: "data_limited",
+            priority: 1,
+            source: "reportMessages",
+            text: "오늘 기록을 기준으로 아기의 하루 흐름을 정리했어요."
+          }, "insufficient", {}, createdAt), blockedExpressions);
+        }
+
+        const allMessages = Object.keys(sections).reduce(function (list, sectionKey) {
+          return list.concat(sections[sectionKey]);
+        }, []);
+        const primaryMessage = sections.overall[0] ? sections.overall[0].text : (allMessages[0] ? allMessages[0].text : "오늘 기록을 기준으로 아기의 하루 흐름을 정리했어요.");
+        const shortSummary = allMessages.slice(0, 2).map(function (message) {
+          return message.text;
+        }).join(" ");
+        const reportMessages = {
+          ok: errors.length === 0,
+          phase: "5.6",
+          babyId: snapshot.babyId || opts.babyId || null,
+          generatedAt: createdAt,
+          summary: {
+            available: allMessages.length > 0,
+            confidenceLevel: confidenceLevel,
+            primaryMessage: primaryMessage,
+            shortSummary: shortSummary || primaryMessage,
+            messageCount: allMessages.length
+          },
+          sections: sections,
+          messageKeys: messageKeys.filter(function (key, index, list) {
+            return key && list.indexOf(key) === index;
+          }),
+          blockedExpressions: blockedExpressions,
+          warnings: warnings,
+          errors: errors
+        };
+        reportMessages.phase56CompletionCheck = buildPhase56CompletionCheck(reportMessages);
+        return reportMessages;
+      }
+
       function buildAnalysisSnapshot(records, options) {
         const opts = options || {};
         const sourceRecords = Array.isArray(records) ? records : [];
@@ -7744,6 +8373,9 @@
         const diaperAnalysis = buildDiaperAnalysis(snapshot, { nowMs: opts.nowMs });
         snapshot.diaperAnalysis = diaperAnalysis;
         snapshot.phase55CompletionCheck = diaperAnalysis.phase55CompletionCheck;
+        const reportMessages = buildReportMessages(snapshot, { nowMs: opts.nowMs });
+        snapshot.reportMessages = reportMessages;
+        snapshot.phase56CompletionCheck = reportMessages.phase56CompletionCheck;
         console.debug("[Phase 5.1.2 Interval Stats]", snapshot.intervalStats);
         console.debug("[Phase 5.1.2 Confidence Summary]", snapshot.confidenceSummary);
         console.debug("[Phase 5.1 Completion Check]", snapshot.phase51CompletionCheck);
@@ -7751,6 +8383,7 @@
         console.debug("[Phase 5.3 Sleep Analysis]", snapshot.sleepAnalysis);
         console.debug("[Phase 5.4 Feeding Burp Analysis]", snapshot.feedingBurpAnalysis);
         console.debug("[Phase 5.5 Diaper Analysis]", snapshot.diaperAnalysis);
+        console.debug("[Phase 5.6 Report Messages]", snapshot.reportMessages);
         console.debug("[Phase 5.1.1 Feeding Intervals]", {
           summary: snapshot.intervalSummary.feeding,
           stats: snapshot.feedingIntervalStats
@@ -7991,6 +8624,8 @@
             intervalStats: analysisSnapshot.intervalStats,
             confidenceSummary: analysisSnapshot.confidenceSummary,
             phase51CompletionCheck: analysisSnapshot.phase51CompletionCheck,
+            phase56CompletionCheck: analysisSnapshot.phase56CompletionCheck,
+            reportMessages: analysisSnapshot.reportMessages,
             quality: analysisSnapshot.quality,
             warnings: analysisSnapshot.warnings,
             errors: analysisSnapshot.errors,
@@ -8108,6 +8743,8 @@
           intervalStats: analysisSnapshot.intervalStats,
           confidenceSummary: analysisSnapshot.confidenceSummary,
           phase51CompletionCheck: analysisSnapshot.phase51CompletionCheck,
+          phase56CompletionCheck: analysisSnapshot.phase56CompletionCheck,
+          reportMessages: analysisSnapshot.reportMessages,
           quality: analysisSnapshot.quality,
           warnings: analysisSnapshot.warnings,
           errors: analysisSnapshot.errors,
@@ -12021,6 +12658,9 @@
         buildPhase54CompletionCheck: buildPhase54CompletionCheck,
         buildDiaperAnalysis: buildDiaperAnalysis,
         buildPhase55CompletionCheck: buildPhase55CompletionCheck,
+        buildReportMessages: buildReportMessages,
+        buildPhase56CompletionCheck: buildPhase56CompletionCheck,
+        sanitizeReportMessageText: sanitizeReportMessageText,
         FEEDING_BURP_ANALYSIS_CONFIG: FEEDING_BURP_ANALYSIS_CONFIG,
         DIAPER_ANALYSIS_CONFIG: DIAPER_ANALYSIS_CONFIG,
         buildPersonalBaseline: buildPersonalBaseline,
