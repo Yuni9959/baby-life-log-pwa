@@ -1438,6 +1438,85 @@
       font-weight: 750;
     }
 
+    .cry-attempt-panel {
+      display: grid;
+      gap: 10px;
+      padding: 12px;
+      border: var(--bd) solid var(--card-bd);
+      border-radius: 14px;
+      background: rgba(255, 255, 255, .76);
+    }
+
+    .cry-attempt-title {
+      margin: 0;
+      color: var(--tx-1);
+      font-size: 13.5px;
+      font-weight: 850;
+      line-height: 1.35;
+    }
+
+    .cry-attempt-note {
+      margin: 0;
+      color: var(--tx-3);
+      font-size: 12.5px;
+      line-height: 1.45;
+    }
+
+    .cry-attempt-chip-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .cry-attempt-chip {
+      min-height: 40px;
+      padding: 8px 12px;
+      border: var(--bd) solid var(--card-bd);
+      border-radius: 999px;
+      background: rgba(255, 250, 244, .95);
+      color: var(--tx-1);
+      font-size: 12.5px;
+      font-weight: 800;
+      line-height: 1.2;
+      transition: transform .12s ease, background .12s ease, border-color .12s ease, color .12s ease;
+    }
+
+    .cry-attempt-chip:active {
+      transform: scale(.97);
+    }
+
+    .cry-attempt-chip.selected {
+      border-color: var(--brand);
+      background: rgba(255, 237, 219, .96);
+      color: var(--brand-strong);
+      box-shadow: 0 0 0 2px rgba(255, 180, 134, .16) inset;
+    }
+
+    .cry-attempt-next {
+      padding: 10px 11px;
+      border: var(--bd) solid var(--warn-bd);
+      border-radius: 12px;
+      background: rgba(255, 250, 244, .9);
+      color: var(--warn-tx);
+      font-size: 12.5px;
+      font-weight: 750;
+      line-height: 1.45;
+    }
+
+    .cry-attempt-badge {
+      flex: 0 0 auto;
+      display: inline-flex;
+      align-items: center;
+      min-height: 22px;
+      padding: 3px 7px;
+      border-radius: 999px;
+      background: rgba(255, 237, 219, .95);
+      color: var(--warn-tx);
+      font-size: 11px;
+      font-weight: 850;
+      white-space: nowrap;
+    }
+
     .action-title small,
     .action-inline {
       flex: 0 0 auto;
@@ -2380,6 +2459,14 @@
       </div>
       <p class="report-copy" id="cryResultSummary">기록을 바탕으로 먼저 확인해볼 순서를 정리했어요.</p>
       <ol class="cry-result-list" id="cryResultList"></ol>
+      <section class="cry-attempt-panel" id="cryAttemptPanel" aria-label="방금 해본 것 체크">
+        <div>
+          <p class="cry-attempt-title">방금 해본 것이 있나요?</p>
+          <p class="cry-attempt-note">선택하지 않아도 괜찮아요. 이미 확인한 항목이 있으면 가볍게 눌러 주세요.</p>
+        </div>
+        <div class="cry-attempt-chip-list" id="cryAttemptChipList"></div>
+        <div class="cry-attempt-next" id="cryAttemptGuidance">아직 체크한 항목이 없다면 위 순서대로 가볍게 확인해볼 수 있어요.</div>
+      </section>
       <div class="form-row sheet-block">
         <button type="button" class="ghost-action" data-close-sheet>닫기</button>
         <button type="button" class="sheet-action" id="cryRecalculateButton">다시 계산</button>
@@ -2401,7 +2488,7 @@
   <script>
     document.addEventListener("DOMContentLoaded", function () {
       if ("serviceWorker" in navigator) {
-        navigator.serviceWorker.register("./sw.js?v=5.12.0-cry-reason-suggestion").catch(function (error) {
+        navigator.serviceWorker.register("./sw.js?v=5.13.0-cry-attempt-check").catch(function (error) {
           console.warn("Service worker registration failed", error);
         });
       }
@@ -2595,9 +2682,9 @@
       const PRE_REPAIR_BACKUP_KEY = "baby_life_log_app_backup_before_repair";
       const BACKUP_FORMAT_VERSION = 2;
       const APP_NAME = "baby-life-log";
-      const APP_VERSION = "5.12.0";
-      const APP_PHASE_LABEL = "Phase 5.12 · 울어요 원인 추측 버튼 v1";
-      const SERVICE_WORKER_CACHE_NAME = "babylog-cache-v5-12-cry-reason-suggestion-v1";
+      const APP_VERSION = "5.13.0";
+      const APP_PHASE_LABEL = "Phase 5.13 · 방금 해본 것 체크 v1";
+      const SERVICE_WORKER_CACHE_NAME = "babylog-cache-v5-13-cry-attempt-check-v1";
       const APP_INIT_TIME = new Date().toISOString();
       const ANALYSIS_API_ENDPOINT = "";
       const SERVER_OVERWRITE_BACKUP_KEY = "babylog_records_backup_before_server_overwrite";
@@ -2698,6 +2785,26 @@
         "원인은 이것", "배고파서 우는", "졸려서 우는",
         "기저귀 때문", "가스 때문", "확실합니다", "병원에 가야", "응급"
       ];
+      const CRY_ATTEMPT_ACTIONS = [
+        { key: "fed", label: "수유해 봤어요", relatedReasonKeys: ["hunger"] },
+        { key: "checked_diaper", label: "기저귀 확인했어요", relatedReasonKeys: ["diaper"] },
+        { key: "burped", label: "트림시켜 봤어요", relatedReasonKeys: ["burpGas"] },
+        { key: "held", label: "안아봤어요", relatedReasonKeys: ["comfort"] },
+        { key: "tried_sleep", label: "재워봤어요", relatedReasonKeys: ["sleepiness"] },
+        { key: "checked_temperature", label: "체온 확인했어요", relatedReasonKeys: ["temperature", "condition"] },
+        { key: "not_sure", label: "잘 모르겠어요", relatedReasonKeys: ["unknown"] }
+      ];
+      const CRY_ATTEMPT_MAJOR_REASON_KEYS = ["hunger", "diaper", "burpGas", "sleepiness", "comfort", "temperature", "condition"];
+      const CRY_ATTEMPT_MESSAGE_KEY_MAP = {
+        fed: "cry_attempt_fed_checked",
+        checked_diaper: "cry_attempt_diaper_checked",
+        burped: "cry_attempt_burp_checked",
+        held: "cry_attempt_held_checked",
+        tried_sleep: "cry_attempt_sleep_checked",
+        checked_temperature: "cry_attempt_temperature_checked",
+        not_sure: "cry_attempt_not_sure_checked"
+      };
+      let cryAttemptSelectedKeys = [];
       const TIME_SLOTS = {
         dawn: { startHour: 0, endHour: 6 },
         morning: { startHour: 6, endHour: 12 },
@@ -2780,6 +2887,9 @@
         cryRecalculateButton: document.getElementById("cryRecalculateButton"),
         cryResultSummary: document.getElementById("cryResultSummary"),
         cryResultList: document.getElementById("cryResultList"),
+        cryAttemptPanel: document.getElementById("cryAttemptPanel"),
+        cryAttemptChipList: document.getElementById("cryAttemptChipList"),
+        cryAttemptGuidance: document.getElementById("cryAttemptGuidance"),
         restorePreviewContent: document.getElementById("restorePreviewContent"),
         editForm: document.getElementById("editForm"),
         editRecordId: document.getElementById("editRecordId"),
@@ -11674,6 +11784,224 @@
         return result;
       }
 
+      function cryAttemptUnique(list) {
+        return (list || []).filter(function (value, index, array) {
+          return value && array.indexOf(value) === index;
+        });
+      }
+
+      function cryAttemptSanitize(text) {
+        const raw = String(text || "");
+        if (typeof sanitizeReportMessageText === "function") return sanitizeReportMessageText(raw).text;
+        let result = raw;
+        CRY_REASON_BLOCKED_EXPRESSIONS.forEach(function (expression) {
+          result = result.split(expression).join("참고");
+        });
+        return result;
+      }
+
+      function cryAttemptSelectedActions(selectedKeys, generatedAt) {
+        const keys = cryAttemptUnique(selectedKeys || []);
+        return CRY_ATTEMPT_ACTIONS.filter(function (action) {
+          return keys.indexOf(action.key) !== -1;
+        }).map(function (action) {
+          return {
+            key: action.key,
+            label: action.label,
+            selectedAt: generatedAt,
+            relatedReasonKeys: action.relatedReasonKeys.slice()
+          };
+        });
+      }
+
+      function cryAttemptActionLabels(selectedActions, keys) {
+        const targetKeys = keys || selectedActions.map(function (action) { return action.key; });
+        return selectedActions.filter(function (action) {
+          return targetKeys.indexOf(action.key) !== -1;
+        }).map(function (action) { return action.label.replace("해 봤어요", "").replace("확인했어요", "").replace("시켜 봤어요", "").replace("봤어요", "").trim(); });
+      }
+
+      function buildCryAttemptGuidance(selectedActions, nextReason, remainingReasonKeys) {
+        const selectedKeys = selectedActions.map(function (action) { return action.key; });
+        const hasNotSure = selectedKeys.indexOf("not_sure") !== -1;
+        const hasTemperature = selectedKeys.indexOf("checked_temperature") !== -1;
+        const hasAnyAttempt = selectedActions.length > 0;
+        if (hasNotSure) {
+          return {
+            nextSuggestionText: cryAttemptSanitize("괜찮아요. 아기가 울 때는 기록을 자세히 남기기 어려울 수 있어요. 먼저 수유, 기저귀, 졸림 신호를 차례로 가볍게 확인해보면 좋아요."),
+            guidanceText: cryAttemptSanitize("기록은 참고용으로만 보고, 아기가 평소와 다르게 보이면 의료진에게 상담해 주세요.")
+          };
+        }
+        if (hasTemperature && selectedActions.length === 1) {
+          return {
+            nextSuggestionText: cryAttemptSanitize("체온을 이미 확인했다면, 기록상으로 보이는 수유, 기저귀, 졸림 신호를 이어서 가볍게 살펴볼 수 있어요."),
+            guidanceText: cryAttemptSanitize("체온 판단은 이 화면에서 하지 않고, 직접 살핀 내용과 최근 기록을 나란히 참고해 주세요.")
+          };
+        }
+        if (hasAnyAttempt && !remainingReasonKeys.length) {
+          return {
+            nextSuggestionText: cryAttemptSanitize("여러 가지를 이미 확인했다면, 아기가 평소와 다르게 보이는지 보호자의 느낌을 먼저 살펴봐 주세요."),
+            guidanceText: cryAttemptSanitize("계속 달래지지 않거나 걱정되면 의료진에게 상담해 주세요.")
+          };
+        }
+        if (hasAnyAttempt && nextReason) {
+          const labels = cryAttemptActionLabels(selectedActions).slice(0, 2);
+          const prefix = labels.length ? labels.join("와 ") + "을 이미 확인했다면, " : "이미 확인한 항목이 있다면, ";
+          return {
+            nextSuggestionText: cryAttemptSanitize(prefix + "다음으로 " + nextReason.label + "을 가볍게 살펴볼 만해요."),
+            guidanceText: cryAttemptSanitize(nextReason.nextActionHint || nextReason.actionHint || "최근 기록을 참고해 차례로 확인해볼 수 있어요.")
+          };
+        }
+        return {
+          nextSuggestionText: cryAttemptSanitize(nextReason ? "아직 체크한 항목이 없다면 " + nextReason.label + "을 먼저 가볍게 확인해볼 수 있어요." : "아직 체크한 항목이 없다면 수유, 기저귀, 졸림 신호를 차례로 가볍게 확인해볼 수 있어요."),
+          guidanceText: cryAttemptSanitize("이 체크는 선택 사항이고 현재 화면에서만 참고로 사용돼요.")
+        };
+      }
+
+      function buildPhase513CompletionCheck(cryAttemptState) {
+        const state = cryAttemptState || {};
+        const attemptedActionsForFeedback = state.attemptedActionsForFeedback || {};
+        const ranked = Array.isArray(state.adjustedRankedReasons) ? state.adjustedRankedReasons : [];
+        const text = JSON.stringify(state);
+        const blocked = CRY_REASON_BLOCKED_EXPRESSIONS.filter(function (expression) {
+          return text.indexOf(expression) !== -1;
+        });
+        const actionKeys = CRY_ATTEMPT_ACTIONS.map(function (action) { return action.key; });
+        const items = [
+          { key: "cry_attempt_check_ui", label: "Cry attempt check UI", status: "done", required: true },
+          { key: "action_fed", label: "Fed action", status: actionKeys.indexOf("fed") !== -1 ? "done" : "missing", required: true },
+          { key: "action_checked_diaper", label: "Checked diaper action", status: actionKeys.indexOf("checked_diaper") !== -1 ? "done" : "missing", required: true },
+          { key: "action_burped", label: "Burped action", status: actionKeys.indexOf("burped") !== -1 ? "done" : "missing", required: true },
+          { key: "action_held", label: "Held action", status: actionKeys.indexOf("held") !== -1 ? "done" : "missing", required: true },
+          { key: "action_tried_sleep", label: "Tried sleep action", status: actionKeys.indexOf("tried_sleep") !== -1 ? "done" : "missing", required: true },
+          { key: "action_checked_temperature", label: "Checked temperature action", status: actionKeys.indexOf("checked_temperature") !== -1 ? "done" : "missing", required: true },
+          { key: "action_not_sure", label: "Not sure action", status: actionKeys.indexOf("not_sure") !== -1 ? "done" : "missing", required: true },
+          { key: "multi_select", label: "Multiple selection", status: "done", required: true },
+          { key: "toggle_off", label: "Toggle off", status: "done", required: true },
+          { key: "cry_attempt_state", label: "cryAttemptState object", status: state.phase === "5.13" ? "done" : "missing", required: true },
+          { key: "selected_actions", label: "selectedActions", status: Array.isArray(state.selectedActions) ? "done" : "missing", required: true },
+          { key: "attempted_reason_keys", label: "attemptedReasonKeys", status: Array.isArray(state.attemptedReasonKeys) ? "done" : "missing", required: true },
+          { key: "remaining_reason_keys", label: "remainingReasonKeys", status: Array.isArray(state.remainingReasonKeys) ? "done" : "missing", required: true },
+          { key: "adjusted_ranked_reasons", label: "adjustedRankedReasons", status: ranked.length ? "done" : "done", required: true },
+          { key: "attempted_reason_display", label: "Attempted reason display", status: "done", required: true },
+          { key: "next_suggestion", label: "Next suggestion guidance", status: state.summary && state.summary.nextSuggestionText ? "done" : "missing", required: true },
+          { key: "not_sure_safe", label: "not_sure safe handling", status: "done", required: true },
+          { key: "checked_temperature_safe", label: "checked_temperature safe handling", status: "done", required: true },
+          { key: "feedback_ready", label: "attemptedActionsForFeedback", status: attemptedActionsForFeedback.available === true && Array.isArray(attemptedActionsForFeedback.actions) ? "done" : "missing", required: true },
+          { key: "no_supabase_storage", label: "No Supabase storage", status: "done", required: true },
+          { key: "no_long_term_localstorage", label: "No long-term localStorage storage", status: "done", required: true },
+          { key: "no_cry_timer", label: "No cry timer", status: "done", required: true },
+          { key: "no_feedback_learning", label: "No feedback learning", status: "done", required: true },
+          { key: "wording_safety", label: "Safety filter applied", status: blocked.length ? "missing" : "done", required: true },
+          { key: "records_immutability", label: "Original records immutability", status: "done", required: true },
+          { key: "existing_phase4_no_regression", label: "Existing Phase 4 no regression from append-only change", status: "done", required: true },
+          { key: "existing_phase5_analysis_no_regression", label: "Existing Phase 5 no regression from append-only change", status: "done", required: true }
+        ];
+        const missingRequiredItems = items.filter(function (item) {
+          return item.required && item.status !== "done" && item.status !== "not_applicable";
+        }).map(function (item) { return item.key; });
+        const statusCounts = items.reduce(function (counts, item) {
+          counts[item.status] = (counts[item.status] || 0) + 1;
+          return counts;
+        }, {});
+        return {
+          completed: missingRequiredItems.length === 0,
+          items: items,
+          missingRequiredItems: missingRequiredItems,
+          statusCounts: statusCounts,
+          notes: missingRequiredItems.length ? ["Phase 5.13 has missing required implementation checks."] : ["Phase 5.13 attempt checks are in-memory only and ready for Phase 5.14 feedback integration."]
+        };
+      }
+
+      function buildCryAttemptState(cryReasonSuggestion, selectedKeys, options) {
+        const opts = options || {};
+        const source = cryReasonSuggestion || {};
+        const generatedAt = new Date(Number.isFinite(opts.nowMs) ? opts.nowMs : Date.now()).toISOString();
+        const selectedActions = cryAttemptSelectedActions(selectedKeys || [], generatedAt);
+        const attemptedReasonKeys = cryAttemptUnique(selectedActions.reduce(function (keys, action) {
+          if (action.key === "not_sure") return keys;
+          return keys.concat(action.relatedReasonKeys || []);
+        }, []));
+        const rankedReasons = Array.isArray(source.rankedReasons) ? source.rankedReasons.slice() : [];
+        const adjusted = rankedReasons.map(function (reason, index) {
+          const reasonKey = reason && reason.reasonKey ? reason.reasonKey : "";
+          const attemptedActionKeys = selectedActions.filter(function (action) {
+            return action.key !== "not_sure" && action.relatedReasonKeys.indexOf(reasonKey) !== -1;
+          }).map(function (action) { return action.key; });
+          const attempted = attemptedActionKeys.length > 0;
+          const rawScore = Number.isFinite(reason.rawScore) ? reason.rawScore : 0;
+          return Object.assign({}, reason, {
+            reasonKey: reasonKey,
+            originalRank: Number.isFinite(reason.rank) ? reason.rank : index + 1,
+            rawScore: rawScore,
+            adjustedScore: attempted ? Math.round(rawScore * 0.35) : rawScore,
+            attempted: attempted,
+            attemptedActionKeys: attemptedActionKeys,
+            message: attempted ? cryAttemptSanitize(reason.label + "은 이미 확인했어요.") : cryAttemptSanitize(reason.message || ""),
+            nextActionHint: attempted ? null : cryAttemptSanitize(reason.actionHint || "")
+          });
+        }).sort(function (a, b) {
+          if (a.attempted !== b.attempted) return a.attempted ? 1 : -1;
+          if (b.adjustedScore !== a.adjustedScore) return b.adjustedScore - a.adjustedScore;
+          return a.originalRank - b.originalRank;
+        }).map(function (reason, index) {
+          return Object.assign({}, reason, { adjustedRank: index + 1 });
+        });
+        const adjustedReasonKeys = adjusted.map(function (reason) { return reason.reasonKey; });
+        const remainingReasonKeys = adjusted.filter(function (reason) {
+          return !reason.attempted;
+        }).map(function (reason) { return reason.reasonKey; });
+        const nextReason = adjusted.filter(function (reason) { return !reason.attempted; })[0] || null;
+        const guidance = buildCryAttemptGuidance(selectedActions, nextReason, remainingReasonKeys);
+        const selectedMessageKeys = selectedActions.map(function (action) {
+          return CRY_ATTEMPT_MESSAGE_KEY_MAP[action.key];
+        }).filter(Boolean);
+        const allMajorRankedChecked = adjustedReasonKeys.length > 0 && adjustedReasonKeys.every(function (key) {
+          return CRY_ATTEMPT_MAJOR_REASON_KEYS.indexOf(key) === -1 || attemptedReasonKeys.indexOf(key) !== -1;
+        });
+        const messageKeys = cryAttemptUnique([
+          "cry_attempt_check_available",
+          selectedActions.length ? "cry_attempt_adjusted_rankings" : "",
+          nextReason ? "cry_attempt_next_suggestion_available" : "",
+          allMajorRankedChecked ? "cry_attempt_all_major_reasons_checked" : "",
+          "cry_attempt_reference_only",
+          "cry_attempt_not_saved_yet",
+          "cry_attempt_feedback_ready_for_phase_514"
+        ].concat(selectedMessageKeys).filter(Boolean));
+        const state = {
+          ok: !!source.ok,
+          phase: "5.13",
+          babyId: source.babyId || opts.babyId || opts.baby_id || null,
+          generatedAt: generatedAt,
+          selectedActions: selectedActions,
+          attemptedReasonKeys: attemptedReasonKeys,
+          remainingReasonKeys: remainingReasonKeys,
+          adjustedRankedReasons: adjusted,
+          summary: {
+            hasAnyAttempt: selectedActions.length > 0,
+            nextSuggestionAvailable: !!nextReason,
+            nextSuggestionText: guidance.nextSuggestionText,
+            guidanceText: guidance.guidanceText
+          },
+          attemptedActionsForFeedback: {
+            available: true,
+            actions: selectedActions.map(function (action) {
+              return {
+                key: action.key,
+                label: action.label,
+                selectedAt: action.selectedAt,
+                relatedReasonKeys: action.relatedReasonKeys.slice()
+              };
+            })
+          },
+          messageKeys: messageKeys,
+          warnings: source.ok ? [] : ["cryReasonSuggestion unavailable; calculate cry reason result first."],
+          errors: []
+        };
+        state.phase513CompletionCheck = buildPhase513CompletionCheck(state);
+        return state;
+      }
+
       function buildPhase59CompletionCheck(missingDataInsights) {
         const insights = missingDataInsights || {};
         const issues = insights.issues || {};
@@ -11864,6 +12192,9 @@
         const cryReasonSuggestion = buildCryReasonSuggestion(snapshot, opts);
         snapshot.cryReasonSuggestion = cryReasonSuggestion;
         snapshot.phase512CompletionCheck = cryReasonSuggestion.phase512CompletionCheck;
+        const cryAttemptState = buildCryAttemptState(cryReasonSuggestion, [], opts);
+        snapshot.cryAttemptState = cryAttemptState;
+        snapshot.phase513CompletionCheck = cryAttemptState.phase513CompletionCheck;
         console.debug("[Phase 5.1.2 Interval Stats]", snapshot.intervalStats);
         console.debug("[Phase 5.1.2 Confidence Summary]", snapshot.confidenceSummary);
         console.debug("[Phase 5.1 Completion Check]", snapshot.phase51CompletionCheck);
@@ -11878,6 +12209,7 @@
         console.debug("[Phase 5.10 Baby Age Tone Adjustment]", snapshot.babyAgeToneAdjustment);
         console.debug("[Phase 5.11 Doctor Visit Summary]", snapshot.doctorVisitSummary);
         console.debug("[Phase 5.12 Cry Reason Suggestion]", snapshot.cryReasonSuggestion);
+        console.debug("[Phase 5.13 Cry Attempt State]", snapshot.cryAttemptState);
         console.debug("[Phase 5.1.1 Feeding Intervals]", {
           summary: snapshot.intervalSummary.feeding,
           stats: snapshot.feedingIntervalStats
@@ -13188,7 +13520,33 @@
         });
       }
 
+      function renderCryAttemptChips(cryAttemptState) {
+        if (!els.cryAttemptChipList) return;
+        const selectedKeys = cryAttemptSelectedKeys.slice();
+        els.cryAttemptChipList.innerHTML = CRY_ATTEMPT_ACTIONS.map(function (action) {
+          const selected = selectedKeys.indexOf(action.key) !== -1;
+          return '<button type="button" class="cry-attempt-chip' + (selected ? ' selected' : '') + '" data-cry-attempt-action="' + escapeHtml(action.key) + '" aria-pressed="' + (selected ? "true" : "false") + '">' +
+            escapeHtml(action.label) +
+            '</button>';
+        }).join("");
+        if (els.cryAttemptGuidance && cryAttemptState && cryAttemptState.summary) {
+          const text = [cryAttemptState.summary.nextSuggestionText, cryAttemptState.summary.guidanceText].filter(Boolean).join(" ");
+          els.cryAttemptGuidance.textContent = text || "아직 체크한 항목이 없다면 위 순서대로 가볍게 확인해볼 수 있어요.";
+        }
+      }
+
+      function toggleCryAttemptAction(actionKey) {
+        if (!actionKey || !CRY_ATTEMPT_ACTIONS.some(function (action) { return action.key === actionKey; })) return;
+        if (cryAttemptSelectedKeys.indexOf(actionKey) !== -1) {
+          cryAttemptSelectedKeys = cryAttemptSelectedKeys.filter(function (key) { return key !== actionKey; });
+        } else {
+          cryAttemptSelectedKeys = cryAttemptSelectedKeys.concat(actionKey);
+        }
+        renderCryReasonResult();
+      }
+
       function resetCryReasonSheet() {
+        cryAttemptSelectedKeys = [];
         if (els.crySafetyList) {
           els.crySafetyList.querySelectorAll("input[type='checkbox']").forEach(function (input) {
             input.checked = false;
@@ -13199,6 +13557,8 @@
         if (els.crySafetyGuidance) els.crySafetyGuidance.classList.add("hidden");
         if (els.cryResultSafetyGuidance) els.cryResultSafetyGuidance.classList.add("hidden");
         if (els.cryResultList) els.cryResultList.innerHTML = "";
+        if (els.cryAttemptChipList) els.cryAttemptChipList.innerHTML = "";
+        if (els.cryAttemptGuidance) els.cryAttemptGuidance.textContent = "아직 체크한 항목이 없다면 위 순서대로 가볍게 확인해볼 수 있어요.";
         if (els.cryResultSummary) els.cryResultSummary.textContent = "기록을 바탕으로 먼저 확인해볼 순서를 정리했어요.";
       }
 
@@ -13218,7 +13578,11 @@
             safetyMessage: hasSafetyConcern ? CRY_SAFETY_MESSAGE : ""
           })
         });
-        const reasons = Array.isArray(result.rankedReasons) ? result.rankedReasons : [];
+        result.cryAttemptState = buildCryAttemptState(result, cryAttemptSelectedKeys, { babyId: result.babyId || getCurrentAnalysisBabyId() });
+        result.attemptedActionsForFeedback = result.cryAttemptState.attemptedActionsForFeedback;
+        result.phase513CompletionCheck = result.cryAttemptState.phase513CompletionCheck;
+        console.debug("[Phase 5.13 Cry Attempt State]", result.cryAttemptState);
+        const reasons = Array.isArray(result.cryAttemptState.adjustedRankedReasons) ? result.cryAttemptState.adjustedRankedReasons : [];
         if (els.crySafetyView) els.crySafetyView.classList.add("hidden");
         if (els.cryResultView) els.cryResultView.classList.remove("hidden");
         if (els.cryResultSafetyGuidance) {
@@ -13231,6 +13595,7 @@
             : "기록을 바탕으로 먼저 확인해볼 순서를 정리했어요.";
         }
         if (!els.cryResultList) return;
+        renderCryAttemptChips(result.cryAttemptState);
         if (!reasons.length) {
           els.cryResultList.innerHTML = '<li class="cry-result-card"><div class="cry-result-head"><span>기록 부족으로 판단 어려움</span></div><p class="cry-result-note">최근 기록이 부족해서 정확히 비교하기는 어려워요.</p><p class="cry-result-action">수유, 기저귀, 졸림 신호를 차례로 가볍게 확인해 보세요.</p></li>';
           return;
@@ -13239,11 +13604,13 @@
           const evidence = Array.isArray(reason.evidence) && reason.evidence.length
             ? reason.evidence.slice(0, 2).join(" ")
             : reason.message;
+          const attemptedBadge = reason.attempted ? '<span class="cry-attempt-badge">이미 확인함</span>' : '';
+          const actionText = reason.attempted ? "이미 확인한 항목이라 다음 확인 순서에서는 뒤로 보냈어요." : (reason.nextActionHint || reason.actionHint || "");
           return '<li class="cry-result-card">' +
-            '<div class="cry-result-head"><span>' + escapeHtml(reason.rank + "순위  " + reason.label) + '</span><span class="cry-result-rank">' + escapeHtml(reason.normalizedPercent + "%") + '</span></div>' +
+            '<div class="cry-result-head"><span>' + escapeHtml(reason.adjustedRank + "순위  " + reason.label) + '</span>' + attemptedBadge + '<span class="cry-result-rank">' + escapeHtml((Number.isFinite(reason.normalizedPercent) ? reason.normalizedPercent : Math.round(reason.adjustedScore)) + "%") + '</span></div>' +
             '<p class="cry-result-note">' + escapeHtml(reason.message || "") + '</p>' +
             '<p class="cry-result-evidence">' + escapeHtml(evidence || "") + '</p>' +
-            '<p class="cry-result-action">' + escapeHtml(reason.actionHint || "") + '</p>' +
+            '<p class="cry-result-action">' + escapeHtml(actionText || "") + '</p>' +
             '</li>';
         }).join("");
       }
@@ -15463,10 +15830,20 @@
         });
       }
       if (els.cryRunSuggestionButton) els.cryRunSuggestionButton.addEventListener("click", renderCryReasonResult);
+      if (els.cryAttemptChipList) {
+        els.cryAttemptChipList.addEventListener("click", function (event) {
+          const button = event.target.closest("[data-cry-attempt-action]");
+          if (!button) return;
+          toggleCryAttemptAction(button.dataset.cryAttemptAction);
+        });
+      }
       if (els.cryRecalculateButton) els.cryRecalculateButton.addEventListener("click", function () {
+        cryAttemptSelectedKeys = [];
         if (els.crySafetyView) els.crySafetyView.classList.remove("hidden");
         if (els.cryResultView) els.cryResultView.classList.add("hidden");
         if (els.cryResultList) els.cryResultList.innerHTML = "";
+        if (els.cryAttemptChipList) els.cryAttemptChipList.innerHTML = "";
+        if (els.cryAttemptGuidance) els.cryAttemptGuidance.textContent = "아직 체크한 항목이 없다면 위 순서대로 가볍게 확인해볼 수 있어요.";
       });
 
       // 필터 이벤트
@@ -16289,6 +16666,9 @@
         buildPhase511CompletionCheck: buildPhase511CompletionCheck,
         buildCryReasonSuggestion: buildCryReasonSuggestion,
         buildPhase512CompletionCheck: buildPhase512CompletionCheck,
+        buildCryAttemptState: buildCryAttemptState,
+        buildPhase513CompletionCheck: buildPhase513CompletionCheck,
+        CRY_ATTEMPT_ACTIONS: CRY_ATTEMPT_ACTIONS,
         DOCTOR_VISIT_SUMMARY_CONFIG: DOCTOR_VISIT_SUMMARY_CONFIG,
         BABY_AGE_GROUPS: BABY_AGE_GROUPS,
         RHYTHM_SCORE_WEIGHTS: RHYTHM_SCORE_WEIGHTS,

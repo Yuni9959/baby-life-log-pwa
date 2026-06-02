@@ -1,4 +1,4 @@
-const CACHE_NAME = "babylog-cache-v5-12-cry-reason-suggestion-v1";
+const CACHE_NAME = "babylog-cache-v5-13-cry-attempt-check-v1";
 const CACHE_PREFIX = "babylog-cache-";
 const OLD_CACHE_PREFIX = "baby-life-log-";
 const PRIMARY_CACHE_NAME = CACHE_NAME;
