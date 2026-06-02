@@ -804,10 +804,153 @@
       .quick-row-primary .record-action,
       .quick-row-secondary .record-action { padding: 11px 8px; }
     }
+
+    .app-wallpaper {
+      position: fixed;
+      inset: 0;
+      z-index: 0;
+      overflow: hidden;
+      pointer-events: none;
+      user-select: none;
+      background:
+        radial-gradient(circle at 14% 8%, rgba(244, 224, 209, 0.78), transparent 24%),
+        radial-gradient(circle at 88% 18%, rgba(125, 163, 127, 0.18), transparent 26%),
+        linear-gradient(180deg, #FAF6EF 0%, #F6EFE4 100%);
+    }
+    .app-wallpaper::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(216, 201, 184, 0.16) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(216, 201, 184, 0.12) 1px, transparent 1px);
+      background-size: 44px 44px;
+      opacity: 0.22;
+    }
+    .illustration-slot {
+      position: fixed;
+      width: clamp(92px, 24vw, 160px);
+      aspect-ratio: 1;
+      background-repeat: no-repeat;
+      background-position: center;
+      background-size: contain;
+      opacity: var(--illustration-opacity, 0.16);
+      mix-blend-mode: multiply;
+      pointer-events: none;
+      user-select: none;
+      z-index: 0;
+      filter: saturate(0.9) contrast(0.96);
+      transition: opacity 160ms ease, transform 160ms ease;
+    }
+    .illustration-slot.is-hidden { opacity: 0; }
+    .slot-1 { top: 5%; left: 4%; transform: rotate(-8deg); }
+    .slot-2 { top: 12%; right: 6%; transform: rotate(7deg); }
+    .slot-3 { top: 35%; left: -3%; transform: rotate(5deg); }
+    .slot-4 { top: 48%; right: -4%; transform: rotate(-6deg); }
+    .slot-5 { bottom: 18%; left: 6%; transform: rotate(8deg); }
+    .slot-6 { right: 8%; bottom: 6%; transform: rotate(-5deg); }
+    .slot-7 { top: 66%; left: 22%; transform: rotate(3deg); }
+    .slot-8 { top: 72%; right: 24%; transform: rotate(-3deg); }
+
+    .app-scroll-layer {
+      position: fixed;
+      inset: 0;
+      z-index: 1;
+      min-height: 100dvh;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+      overscroll-behavior-y: contain;
+    }
+    .app-shell {
+      width: min(100%, 430px);
+      margin: 0 auto;
+      padding: 18px 14px calc(30px + env(safe-area-inset-bottom));
+    }
+    .app-shell .topbar { padding-top: 12px; }
+    .profile-card, .section, .status-card, .bottom-sheet, .undo-bar, .toast {
+      backdrop-filter: blur(12px);
+    }
+    .profile-card, .section, .status-card {
+      background: rgba(255, 253, 248, 0.92);
+      border-color: rgba(216, 201, 184, 0.82);
+    }
+    .record-action {
+      border-color: rgba(216, 201, 184, 0.88);
+      background:
+        linear-gradient(180deg, rgba(255, 253, 248, 0.96), rgba(246, 239, 228, 0.94));
+    }
+    .record-action.primary {
+      background:
+        linear-gradient(135deg, rgba(125, 163, 127, 0.96), rgba(79, 126, 85, 0.96));
+    }
+
+    .wallpaper-tweaks {
+      margin: 0 0 14px;
+      padding: 12px;
+      border: 1px solid rgba(216, 201, 184, 0.72);
+      border-radius: var(--radius);
+      background: rgba(255, 253, 248, 0.76);
+      box-shadow: 0 8px 20px rgba(77, 61, 42, 0.08);
+      backdrop-filter: blur(10px);
+    }
+    .wallpaper-tweaks summary {
+      cursor: pointer;
+      color: var(--muted);
+      font-size: 0.84rem;
+      font-weight: 900;
+      list-style-position: inside;
+    }
+    .wallpaper-tweaks-panel {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 10px;
+      margin-top: 10px;
+    }
+    .wallpaper-tweaks label {
+      display: grid;
+      gap: 5px;
+      color: var(--muted);
+      font-size: 0.78rem;
+      font-weight: 850;
+    }
+    .wallpaper-tweaks input,
+    .wallpaper-tweaks select {
+      min-height: 38px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--panel);
+      color: var(--text);
+      font-weight: 800;
+    }
+
+    @media (min-width: 768px) {
+      .app-shell { padding-top: 24px; padding-bottom: 44px; }
+      .illustration-slot { width: clamp(120px, 15vw, 190px); }
+    }
+
+    @media (max-width: 430px) {
+      .app-shell { padding-inline: 12px; }
+      .illustration-slot { width: clamp(82px, 28vw, 128px); }
+      .slot-3 { left: -12%; }
+      .slot-4 { right: -12%; }
+      .slot-7, .slot-8 { display: none; }
+    }
   </style>
 </head>
 <body>
-  <main class="app">
+  <div class="app-wallpaper" aria-hidden="true">
+    <div class="illustration-slot slot-1"></div>
+    <div class="illustration-slot slot-2"></div>
+    <div class="illustration-slot slot-3"></div>
+    <div class="illustration-slot slot-4"></div>
+    <div class="illustration-slot slot-5"></div>
+    <div class="illustration-slot slot-6"></div>
+    <div class="illustration-slot slot-7"></div>
+    <div class="illustration-slot slot-8"></div>
+  </div>
+
+  <div class="app-scroll-layer">
+  <main class="app app-shell">
     <header class="topbar">
       <div>
         <div class="version-badge" id="versionBadge">v6.0.0-design-foundation</div>
@@ -1223,7 +1366,24 @@
         </div>
       </div>
     </section>
+    <details class="wallpaper-tweaks">
+      <summary>디자인 조절</summary>
+      <div class="wallpaper-tweaks-panel">
+        <label for="wallpaperOpacityInput">배경 투명도
+          <input id="wallpaperOpacityInput" type="range" min="0.08" max="0.24" step="0.01" value="0.16">
+        </label>
+        <label for="wallpaperDensityInput">배경 밀도
+          <select id="wallpaperDensityInput">
+            <option value="low">low</option>
+            <option value="normal" selected>normal</option>
+            <option value="high">high</option>
+          </select>
+        </label>
+        <button type="button" class="small-action" id="shuffleWallpaperButton">배경 그림 새로 뽑기</button>
+      </div>
+    </details>
   </main>
+  </div>
 
   <div class="overlay" id="overlay" tabindex="-1"></div>
 
@@ -1349,15 +1509,105 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="./cloud-config.js?v=6.0.0-design-foundation"></script>
-  <script src="./cloud-supabase.js?v=6.0.0-design-foundation"></script>
+  <script src="./cloud-config.js?v=6.0.0-design-foundation-ui-hotfix"></script>
+  <script src="./cloud-supabase.js?v=6.0.0-design-foundation-ui-hotfix"></script>
   <script>
     document.addEventListener("DOMContentLoaded", function () {
       if ("serviceWorker" in navigator) {
-        navigator.serviceWorker.register("./sw.js?v=6.0.0-design-foundation").catch(function (error) {
+        navigator.serviceWorker.register("./sw.js?v=6.0.0-design-foundation-ui-hotfix").catch(function (error) {
           console.warn("Service worker registration failed", error);
         });
       }
+
+      const ILLUSTRATION_DB = [
+        "./illus/i01.jpg",
+        "./illus/i02.jpg",
+        "./illus/i03.jpg",
+        "./illus/i04.jpg",
+        "./illus/i05.jpg",
+        "./illus/i06.jpg",
+        "./illus/i07.jpg",
+        "./illus/i08.jpg",
+        "./illus/i09.jpg",
+        "./illus/i10.jpg",
+        "./illus/i11.jpg",
+        "./illus/i12.jpg",
+        "./illus/i13.jpg",
+        "./illus/i14.jpg",
+        "./illus/i15.jpg",
+        "./illus/i16.jpg",
+        "./illus/i17.jpg",
+        "./illus/i18.jpg",
+        "./illus/i19.jpg",
+        "./illus/i20.jpg",
+        "./illus/i21.jpg",
+        "./illus/i22.jpg",
+        "./illus/i23.jpg",
+        "./illus/i24.jpg"
+      ];
+      const WALLPAPER_DENSITY_COUNTS = { low: 4, normal: 6, high: 8 };
+
+      function shuffleIllustrationSlots(items) {
+        const copy = items.slice();
+        for (let index = copy.length - 1; index > 0; index -= 1) {
+          const swapIndex = Math.floor(Math.random() * (index + 1));
+          const temp = copy[index];
+          copy[index] = copy[swapIndex];
+          copy[swapIndex] = temp;
+        }
+        return copy;
+      }
+
+      function pickRandomIllustrations(count) {
+        if (!ILLUSTRATION_DB.length || count < 1) return [];
+        const shuffled = shuffleIllustrationSlots(ILLUSTRATION_DB);
+        if (count <= shuffled.length) return shuffled.slice(0, count);
+        const picked = shuffled.slice();
+        while (picked.length < count) {
+          picked.push(ILLUSTRATION_DB[Math.floor(Math.random() * ILLUSTRATION_DB.length)]);
+        }
+        return picked;
+      }
+
+      function paintRandomIllustrations() {
+        const slots = Array.from(document.querySelectorAll(".illustration-slot"));
+        if (!slots.length) return;
+        const densityInput = document.getElementById("wallpaperDensityInput");
+        const density = densityInput ? densityInput.value : "normal";
+        const visibleCount = Math.min(slots.length, WALLPAPER_DENSITY_COUNTS[density] || WALLPAPER_DENSITY_COUNTS.normal);
+        const picked = pickRandomIllustrations(visibleCount);
+        slots.forEach(function (slot, index) {
+          slot.classList.toggle("is-hidden", index >= visibleCount || !picked[index]);
+          slot.style.backgroundImage = "";
+          if (index >= visibleCount || !picked[index]) return;
+          const imagePath = picked[index];
+          const probe = new Image();
+          probe.onload = function () {
+            slot.style.backgroundImage = "url('" + imagePath.replace(/'/g, "\\'") + "')";
+          };
+          probe.onerror = function () {
+            slot.classList.add("is-hidden");
+          };
+          probe.src = imagePath;
+        });
+      }
+
+      function initializeWallpaperTweaks() {
+        const opacityInput = document.getElementById("wallpaperOpacityInput");
+        const densityInput = document.getElementById("wallpaperDensityInput");
+        const shuffleButton = document.getElementById("shuffleWallpaperButton");
+        if (opacityInput) {
+          document.documentElement.style.setProperty("--illustration-opacity", opacityInput.value);
+          opacityInput.addEventListener("input", function () {
+            document.documentElement.style.setProperty("--illustration-opacity", opacityInput.value);
+          });
+        }
+        if (densityInput) densityInput.addEventListener("change", paintRandomIllustrations);
+        if (shuffleButton) shuffleButton.addEventListener("click", paintRandomIllustrations);
+        paintRandomIllustrations();
+      }
+
+      initializeWallpaperTweaks();
 
       const STORAGE_KEY = "baby_life_log_app_v2";
       const LEGACY_STORAGE_KEY = "baby_life_records_v1";
@@ -8721,9 +8971,9 @@
 
       function buildPhase4DiagnosticText(result) {
         const d = result || phase4FinalDiagnosticState;
-        if (!d) return "Baby Life Log PWA - Phase 4.9.2 Diagnostic\n- Result: not run";
+        if (!d) return "Baby Life Log PWA - v" + APP_VERSION + " Diagnostic\n- Result: not run";
         return [
-          "Baby Life Log PWA - Phase 4.9.2 Diagnostic",
+          "Baby Life Log PWA - v" + APP_VERSION + " Diagnostic",
           "Generated: " + d.generatedAt,
           "",
           "App:",
