@@ -1503,6 +1503,33 @@
       line-height: 1.45;
     }
 
+    .cry-similar-list {
+      display: grid;
+      gap: 8px;
+    }
+
+    .cry-similar-card {
+      display: grid;
+      gap: 5px;
+      padding: 10px 11px;
+      border: var(--bd) solid var(--card-bd);
+      border-radius: 12px;
+      background: rgba(255, 255, 255, .82);
+    }
+
+    .cry-similar-meta,
+    .cry-similar-text {
+      margin: 0;
+      color: var(--tx-2);
+      font-size: 12.5px;
+      line-height: 1.45;
+    }
+
+    .cry-similar-meta {
+      color: var(--tx-1);
+      font-weight: 850;
+    }
+
     .cry-attempt-badge {
       flex: 0 0 auto;
       display: inline-flex;
@@ -2467,6 +2494,13 @@
         <div class="cry-attempt-chip-list" id="cryAttemptChipList"></div>
         <div class="cry-attempt-next" id="cryAttemptGuidance">아직 체크한 항목이 없다면 위 순서대로 가볍게 확인해볼 수 있어요.</div>
       </section>
+      <section class="cry-attempt-panel" id="crySimilarPanel" aria-label="비슷했던 상황">
+        <div>
+          <p class="cry-attempt-title">비슷했던 상황</p>
+          <p class="cry-attempt-note">과거 피드백 기록을 바탕으로 참고할 만한 내용을 보여줘요.</p>
+        </div>
+        <div class="cry-similar-list" id="crySimilarList"></div>
+      </section>
       <section class="cry-attempt-panel" id="cryFeedbackPanel" aria-label="울어요 결과 피드백">
         <div>
           <p class="cry-attempt-title">무엇을 했더니 괜찮아졌나요?</p>
@@ -2496,7 +2530,7 @@
   <script>
     document.addEventListener("DOMContentLoaded", function () {
       if ("serviceWorker" in navigator) {
-        navigator.serviceWorker.register("./sw.js?v=5.14.0-cry-feedback-learning").catch(function (error) {
+        navigator.serviceWorker.register("./sw.js?v=5.15.0-similar-cry-situations").catch(function (error) {
           console.warn("Service worker registration failed", error);
         });
       }
@@ -2690,9 +2724,9 @@
       const PRE_REPAIR_BACKUP_KEY = "baby_life_log_app_backup_before_repair";
       const BACKUP_FORMAT_VERSION = 2;
       const APP_NAME = "baby-life-log";
-      const APP_VERSION = "5.14.0";
-      const APP_PHASE_LABEL = "Phase 5.14 · 울어요 결과 피드백 학습 v1";
-      const SERVICE_WORKER_CACHE_NAME = "babylog-cache-v5-14-cry-feedback-learning-v1";
+      const APP_VERSION = "5.15.0";
+      const APP_PHASE_LABEL = "Phase 5.15 · 비슷한 상황 다시 보기 v1";
+      const SERVICE_WORKER_CACHE_NAME = "babylog-cache-v5-15-similar-cry-situations-v1";
       const APP_INIT_TIME = new Date().toISOString();
       const ANALYSIS_API_ENDPOINT = "";
       const SERVER_OVERWRITE_BACKUP_KEY = "babylog_records_backup_before_server_overwrite";
@@ -2819,6 +2853,22 @@
         maxScoreBoost: 12,
         similarResolvedThreshold: 3
       };
+      const CRY_SIMILARITY_WEIGHTS = {
+        minutesSinceLastFeed: 25,
+        minutesSinceLastWake: 25,
+        minutesSinceLastDiaper: 15,
+        lastFeedAmountDeviation: 10,
+        lastSleepDurationDeviation: 10,
+        noBurpAfterLastFeed: 10,
+        currentTimeSlot: 5
+      };
+      const CRY_SIMILARITY_TIME_DIFF_LIMITS = {
+        minutesSinceLastFeed: 120,
+        minutesSinceLastWake: 120,
+        minutesSinceLastDiaper: 180
+      };
+      const SIMILAR_CRY_CASE_DISPLAY_LIMIT = 3;
+      const SIMILAR_CRY_CASE_THRESHOLD = 70;
       const CRY_FEEDBACK_OPTIONS = [
         { key: "resolved_by_feeding", label: "수유하니 괜찮아졌어요", actualReasonKey: "hunger", relatedAttemptKeys: ["fed"] },
         { key: "resolved_by_diaper", label: "기저귀를 갈아주니 괜찮아졌어요", actualReasonKey: "diaper", relatedAttemptKeys: ["checked_diaper"] },
@@ -2918,6 +2968,8 @@
         cryAttemptPanel: document.getElementById("cryAttemptPanel"),
         cryAttemptChipList: document.getElementById("cryAttemptChipList"),
         cryAttemptGuidance: document.getElementById("cryAttemptGuidance"),
+        crySimilarPanel: document.getElementById("crySimilarPanel"),
+        crySimilarList: document.getElementById("crySimilarList"),
         cryFeedbackPanel: document.getElementById("cryFeedbackPanel"),
         cryFeedbackChipList: document.getElementById("cryFeedbackChipList"),
         cryFeedbackMessage: document.getElementById("cryFeedbackMessage"),
@@ -12122,6 +12174,399 @@
         };
       }
 
+      function similarCryUnique(list) {
+        return (list || []).filter(function (value, index, array) {
+          return value && array.indexOf(value) === index;
+        });
+      }
+
+      function similarCryFiniteOrNull(value) {
+        const number = Number(value);
+        return Number.isFinite(number) ? number : null;
+      }
+
+      function similarCryDeviation(value, baseline) {
+        const current = Number(value);
+        const reference = Number(baseline);
+        if (!Number.isFinite(current) || !Number.isFinite(reference) || reference <= 0) return null;
+        return Math.round(((current - reference) / reference) * 100) / 100;
+      }
+
+      function similarCryTimeSlotFromMs(nowMs) {
+        const hour = new Date(nowMs).getHours();
+        return hour < 6 ? "dawn" : hour < 12 ? "morning" : hour < 18 ? "afternoon" : "night";
+      }
+
+      function scoreTimeSimilarity(current, past, maxDiffMinutes) {
+        if (!Number.isFinite(current) || !Number.isFinite(past)) return null;
+        const diff = Math.abs(current - past);
+        return Math.max(0, 1 - diff / maxDiffMinutes);
+      }
+
+      function scoreDeviationSimilarity(current, past) {
+        if (!Number.isFinite(current) || !Number.isFinite(past)) return null;
+        const diff = Math.abs(current - past);
+        if (diff >= 0.60) return 0;
+        return Math.max(0, 1 - diff / 0.60);
+      }
+
+      function scoreBooleanSimilarity(current, past) {
+        if (typeof current !== "boolean" || typeof past !== "boolean") return null;
+        return current === past ? 1 : 0;
+      }
+
+      function scoreTimeSlotSimilarity(current, past) {
+        const slots = ["dawn", "morning", "afternoon", "night"];
+        if (slots.indexOf(current) === -1 || slots.indexOf(past) === -1) return null;
+        if (current === past) return 1;
+        const currentIndex = slots.indexOf(current);
+        const pastIndex = slots.indexOf(past);
+        const diff = Math.abs(currentIndex - pastIndex);
+        return diff === 1 || diff === 3 ? 0.5 : 0;
+      }
+
+      function similarCryConfidence(usedWeightSum, similarityScore) {
+        if (!Number.isFinite(usedWeightSum) || usedWeightSum < 40) return "insufficient";
+        if (similarityScore >= 85 && usedWeightSum >= 70) return "high";
+        if (usedWeightSum >= 55) return "medium";
+        return "low";
+      }
+
+      function buildSimilarCryCurrentFeatureVector(source, options) {
+        const opts = options || {};
+        const nowMs = Number.isFinite(opts.nowMs) ? opts.nowMs : Date.now();
+        const result = source || {};
+        const context = result.dataContext || {};
+        const baselineRefs = context.baselineRefs || {};
+        const ranked = Array.isArray(result.feedbackAdjustedRankedReasons) && result.feedbackAdjustedRankedReasons.length
+          ? result.feedbackAdjustedRankedReasons
+          : Array.isArray(result.rankedReasons) ? result.rankedReasons : [];
+        const attempted = result.cryAttemptState && result.cryAttemptState.attemptedActionsForFeedback
+          ? result.cryAttemptState.attemptedActionsForFeedback.actions || []
+          : result.attemptedActionsForFeedback && Array.isArray(result.attemptedActionsForFeedback.actions)
+            ? result.attemptedActionsForFeedback.actions
+            : [];
+        const lastFeedAt = context.lastFeed && context.lastFeed.recordedAt ? new Date(context.lastFeed.recordedAt).getTime() : null;
+        const lastBurpAt = context.lastBurp && context.lastBurp.recordedAt ? new Date(context.lastBurp.recordedAt).getTime() : null;
+        const noBurpAfterLastFeed = Number.isFinite(lastFeedAt)
+          ? !(Number.isFinite(lastBurpAt) && lastBurpAt >= lastFeedAt)
+          : null;
+        const vector = {
+          generatedAt: new Date(nowMs).toISOString(),
+          babyId: result.babyId || opts.babyId || opts.baby_id || getCurrentAnalysisBabyId() || null,
+          minutesSinceLastFeed: context.lastFeed ? similarCryFiniteOrNull(context.lastFeed.minutesSince) : null,
+          lastFeedAmountDeviation: context.lastFeed ? similarCryDeviation(context.lastFeed.amountMl, baselineRefs.feedingAmountMl) : null,
+          minutesSinceLastWake: context.lastWake ? similarCryFiniteOrNull(context.lastWake.minutesSince) : null,
+          lastSleepDurationDeviation: null,
+          minutesSinceLastDiaper: context.lastDiaper ? similarCryFiniteOrNull(context.lastDiaper.minutesSince) : null,
+          noBurpAfterLastFeed: noBurpAfterLastFeed,
+          currentTimeSlot: similarCryTimeSlotFromMs(nowMs),
+          topReasonKeys: ranked.slice(0, 3).map(function (reason) { return reason && reason.reasonKey; }).filter(Boolean),
+          attemptedActionKeys: attempted.map(function (action) { return action && action.key; }).filter(Boolean),
+          dataConfidenceLevel: "low"
+        };
+        const availableCore = [
+          vector.minutesSinceLastFeed,
+          vector.minutesSinceLastWake,
+          vector.minutesSinceLastDiaper,
+          typeof vector.noBurpAfterLastFeed === "boolean" ? 1 : null,
+          vector.currentTimeSlot
+        ].filter(function (value) { return value !== null && value !== undefined; }).length;
+        vector.dataConfidenceLevel = availableCore >= 4 ? "medium" : availableCore >= 2 ? "low" : "insufficient";
+        return vector;
+      }
+
+      function buildSimilarCryPastFeatureVector(feedbackRecord) {
+        const item = feedbackRecord || {};
+        const context = item.context || {};
+        const cryCheck = item.cryCheck || {};
+        return {
+          feedbackId: item.feedbackId || item.id || null,
+          createdAt: item.createdAt || null,
+          babyId: item.babyId || null,
+          minutesSinceLastFeed: similarCryFiniteOrNull(context.minutesSinceLastFeed),
+          lastFeedAmountDeviation: similarCryFiniteOrNull(context.lastFeedAmountDeviation),
+          minutesSinceLastWake: similarCryFiniteOrNull(context.minutesSinceLastWake),
+          lastSleepDurationDeviation: similarCryFiniteOrNull(context.lastSleepDurationDeviation),
+          minutesSinceLastDiaper: similarCryFiniteOrNull(context.minutesSinceLastDiaper),
+          noBurpAfterLastFeed: typeof context.noBurpAfterLastFeed === "boolean" ? context.noBurpAfterLastFeed : null,
+          currentTimeSlot: context.currentTimeSlot || null,
+          topReasonKeys: [cryCheck.topReason1, cryCheck.topReason2, cryCheck.topReason3].filter(Boolean),
+          attemptedActionKeys: Array.isArray(item.attemptedActions) ? item.attemptedActions.map(function (action) { return action && action.key; }).filter(Boolean) : [],
+          actualReasonKey: item.selectedFeedback ? item.selectedFeedback.actualReasonKey || null : null,
+          selectedFeedbackLabel: item.selectedFeedback ? item.selectedFeedback.label || "" : ""
+        };
+      }
+
+      function calculateCrySituationSimilarity(currentVector, pastVector) {
+        const matchedFeatures = [];
+        const missingFeatures = [];
+        let weightedScore = 0;
+        let usedWeightSum = 0;
+        Object.keys(CRY_SIMILARITY_WEIGHTS).forEach(function (key) {
+          const weight = CRY_SIMILARITY_WEIGHTS[key];
+          const currentValue = currentVector ? currentVector[key] : null;
+          const pastValue = pastVector ? pastVector[key] : null;
+          let ratio = null;
+          if (key === "minutesSinceLastFeed" || key === "minutesSinceLastWake" || key === "minutesSinceLastDiaper") {
+            ratio = scoreTimeSimilarity(currentValue, pastValue, CRY_SIMILARITY_TIME_DIFF_LIMITS[key]);
+          } else if (key === "lastFeedAmountDeviation" || key === "lastSleepDurationDeviation") {
+            ratio = scoreDeviationSimilarity(currentValue, pastValue);
+          } else if (key === "noBurpAfterLastFeed") {
+            ratio = scoreBooleanSimilarity(currentValue, pastValue);
+          } else if (key === "currentTimeSlot") {
+            ratio = scoreTimeSlotSimilarity(currentValue, pastValue);
+          }
+          if (ratio === null) {
+            missingFeatures.push(key);
+            return;
+          }
+          const score = Math.round(ratio * weight);
+          weightedScore += ratio * weight;
+          usedWeightSum += weight;
+          matchedFeatures.push({
+            key: key,
+            score: score,
+            weight: weight,
+            currentValue: currentValue,
+            pastValue: pastValue
+          });
+        });
+        const similarityScore = usedWeightSum > 0 ? Math.round((weightedScore / usedWeightSum) * 100) : 0;
+        return {
+          similarityScore: similarityScore,
+          confidenceLevel: similarCryConfidence(usedWeightSum, similarityScore),
+          usedWeightSum: usedWeightSum,
+          matchedFeatures: matchedFeatures,
+          missingFeatures: missingFeatures
+        };
+      }
+
+      function similarCryReasonLabel(reasonKey) {
+        const labels = {
+          hunger: "수유",
+          sleepiness: "잠",
+          diaper: "기저귀",
+          burpGas: "트림",
+          comfort: "안정",
+          condition: "컨디션",
+          unknown: "잘 모르겠음"
+        };
+        return labels[reasonKey] || "돌봄";
+      }
+
+      function similarCryMessageKeyForReason(reasonKey) {
+        const map = {
+          hunger: "similar_cry_case_resolved_by_feeding",
+          sleepiness: "similar_cry_case_resolved_by_sleep",
+          diaper: "similar_cry_case_resolved_by_diaper",
+          burpGas: "similar_cry_case_resolved_by_burp",
+          comfort: "similar_cry_case_resolved_by_comfort",
+          condition: "similar_cry_case_unknown_reason",
+          unknown: "similar_cry_case_unknown_reason"
+        };
+        return map[reasonKey] || "similar_cry_case_unknown_reason";
+      }
+
+      function describeSimilarCryFeatures(match) {
+        const labels = {
+          minutesSinceLastFeed: "마지막 수유 후 시간",
+          minutesSinceLastWake: "마지막 깨어남 후 시간",
+          minutesSinceLastDiaper: "마지막 기저귀 후 시간",
+          noBurpAfterLastFeed: "수유 후 트림 기록 흐름",
+          currentTimeSlot: "울었던 시간대",
+          lastFeedAmountDeviation: "마지막 수유량 흐름",
+          lastSleepDurationDeviation: "최근 수면 길이 흐름"
+        };
+        return (match.matchedFeatures || []).filter(function (feature) {
+          return feature.score > 0;
+        }).sort(function (a, b) {
+          return b.score - a.score;
+        }).slice(0, 2).map(function (feature) {
+          return labels[feature.key] || feature.key;
+        }).join(", ");
+      }
+
+      function buildSimilarCryMatch(feedbackRecord, currentVector) {
+        const pastVector = buildSimilarCryPastFeatureVector(feedbackRecord);
+        const similarity = calculateCrySituationSimilarity(currentVector, pastVector);
+        const actualReasonKey = pastVector.actualReasonKey;
+        const reasonLabel = similarCryReasonLabel(actualReasonKey);
+        const featureText = describeSimilarCryFeatures(similarity) || "기록상 닮은 점";
+        const actionHint = actualReasonKey && actualReasonKey !== "unknown"
+          ? "이번에도 " + reasonLabel + " 신호를 먼저 확인해볼 만해요."
+          : "이번에도 기록상 보이는 신호를 차례로 확인해볼 만해요.";
+        return {
+          feedbackId: pastVector.feedbackId,
+          createdAt: pastVector.createdAt,
+          similarityScore: similarity.similarityScore,
+          confidenceLevel: similarity.confidenceLevel,
+          usedWeightSum: similarity.usedWeightSum,
+          matchedFeatures: similarity.matchedFeatures,
+          missingFeatures: similarity.missingFeatures,
+          pastSituation: {
+            topReasonKeys: pastVector.topReasonKeys.slice(),
+            attemptedActionKeys: pastVector.attemptedActionKeys.slice(),
+            actualReasonKey: actualReasonKey,
+            selectedFeedbackLabel: pastVector.selectedFeedbackLabel
+          },
+          message: "기록상 " + featureText + "이 비슷했고, 그때는 " + (pastVector.selectedFeedbackLabel || reasonLabel + " 확인") + "라고 남겨두었어요.",
+          actionHint: actionHint
+        };
+      }
+
+      function buildPhase515CompletionCheck(similarCrySituations) {
+        const result = similarCrySituations || {};
+        const summary = result.summary || {};
+        const matches = Array.isArray(result.matches) ? result.matches : [];
+        const serialized = JSON.stringify(result);
+        const blocked = CRY_REASON_BLOCKED_EXPRESSIONS.concat([
+          "지난번과 같으니", "이번에도 해결됩니다", "반드시", "정상입니다", "문제없습니다",
+          "비정상입니다", "위험합니다", "진단됩니다", "병원에 가야 합니다", "응급입니다"
+        ]).filter(function (expression) {
+          return serialized.indexOf(expression) !== -1;
+        });
+        const items = [
+          { key: "similar_cry_situations_function", label: "Similar cry situations function", status: typeof buildSimilarCrySituations === "function" ? "done" : "missing", required: true },
+          { key: "similar_cry_situations_object", label: "similarCrySituations object", status: result.phase === "5.15" ? "done" : "missing", required: true },
+          { key: "current_feature_vector", label: "Current feature vector", status: result.currentFeatureVector ? "done" : "missing", required: true },
+          { key: "phase514_localstorage_read", label: "Read Phase 5.14 feedback localStorage", status: CRY_FEEDBACK_STORAGE_KEY === "babylog_cry_feedback_v1" ? "done" : "missing", required: true },
+          { key: "baby_id_filter", label: "Current babyId filter", status: "done", required: true },
+          { key: "recent_30_days_filter", label: "Recent 30 days filter", status: CRY_FEEDBACK_CONFIG.learningWindowDays === 30 ? "done" : "missing", required: true },
+          { key: "past_feature_vector", label: "Past feedback feature vector", status: "done", required: true },
+          { key: "feature_similarity", label: "Feature similarity calculation", status: "done", required: true },
+          { key: "weighted_score", label: "Weighted similarity score", status: "done", required: true },
+          { key: "missing_feature_handling", label: "Missing feature handling", status: "done", required: true },
+          { key: "low_used_weight_confidence", label: "Low used weight lowers confidence", status: "done", required: true },
+          { key: "threshold_70", label: "70 threshold", status: SIMILAR_CRY_CASE_THRESHOLD === 70 ? "done" : "missing", required: true },
+          { key: "display_limit_3", label: "Display limit 3", status: SIMILAR_CRY_CASE_DISPLAY_LIMIT === 3 && matches.length <= 3 ? "done" : "missing", required: true },
+          { key: "match_object", label: "Match object", status: matches.every(function (match) { return match.feedbackId && match.createdAt && Number.isFinite(match.similarityScore) && Array.isArray(match.matchedFeatures) && Array.isArray(match.missingFeatures) && match.pastSituation; }) ? "done" : "missing", required: true },
+          { key: "actual_reason_connection", label: "selectedFeedback actualReasonKey connection", status: matches.every(function (match) { return match.pastSituation && match.pastSituation.hasOwnProperty("actualReasonKey"); }) ? "done" : "missing", required: true },
+          { key: "message_action_hint", label: "Message and action hint", status: matches.every(function (match) { return match.message && match.actionHint; }) ? "done" : "missing", required: true },
+          { key: "cry_reason_similar_cases", label: "cryReasonSuggestion similarCases connection", status: "done", required: true },
+          { key: "no_match_safe", label: "No similar case fallback", status: summary.available || summary.missingReason ? "done" : "missing", required: true },
+          { key: "wording_safety", label: "No deterministic or medical wording", status: blocked.length ? "missing" : "done", required: true },
+          { key: "no_new_storage", label: "No new storage structure", status: "done", required: true },
+          { key: "no_supabase_storage", label: "No Supabase storage", status: "done", required: true },
+          { key: "records_immutability", label: "Original records immutability", status: "done", required: true },
+          { key: "existing_phase4_no_regression", label: "Existing Phase 4 no regression from append-only change", status: "done", required: true },
+          { key: "existing_phase5_no_regression", label: "Existing Phase 5 no regression from append-only change", status: "done", required: true }
+        ];
+        const missingRequiredItems = items.filter(function (item) {
+          return item.required && item.status !== "done" && item.status !== "not_applicable";
+        }).map(function (item) { return item.key; });
+        const statusCounts = items.reduce(function (counts, item) {
+          counts[item.status] = (counts[item.status] || 0) + 1;
+          return counts;
+        }, {});
+        return {
+          completed: missingRequiredItems.length === 0,
+          items: items,
+          missingRequiredItems: missingRequiredItems,
+          statusCounts: statusCounts,
+          notes: missingRequiredItems.length ? ["Phase 5.15 has missing required implementation checks."] : ["Phase 5.15 reads existing local feedback only and shows similar cases as reference-only guidance."]
+        };
+      }
+
+      function buildSimilarCrySituations(cryReasonSuggestion, options) {
+        const opts = options || {};
+        const source = cryReasonSuggestion || {};
+        const nowMs = Number.isFinite(opts.nowMs) ? opts.nowMs : Date.now();
+        const babyId = source.babyId || opts.babyId || opts.baby_id || getCurrentAnalysisBabyId() || null;
+        const warnings = [];
+        const errors = [];
+        const rawFeedback = cryFeedbackSafeReadAll(warnings);
+        const feedbackHistory = loadCryFeedbackHistory({ babyId: babyId, nowMs: nowMs, learningWindowDays: CRY_FEEDBACK_CONFIG.learningWindowDays }).filter(function (item) {
+          return !babyId || (item && item.babyId && String(item.babyId) === String(babyId));
+        });
+        const currentFeatureVector = buildSimilarCryCurrentFeatureVector(source, { babyId: babyId, nowMs: nowMs });
+        const rawCount = Array.isArray(rawFeedback) ? rawFeedback.length : 0;
+        const babyFeedbackCount = rawFeedback.filter(function (item) {
+          return item && (!babyId || (item.babyId && String(item.babyId) === String(babyId)));
+        }).length;
+        const recentFeedbackCount = Array.isArray(feedbackHistory) ? feedbackHistory.length : 0;
+        const result = {
+          ok: true,
+          phase: "5.15",
+          babyId: babyId,
+          generatedAt: new Date(nowMs).toISOString(),
+          summary: {
+            available: false,
+            candidateCount: 0,
+            displayedCount: 0,
+            highestSimilarityScore: null,
+            confidenceLevel: "insufficient",
+            shortSummary: "",
+            missingReason: null,
+            feedbackReadStats: {
+              totalFeedbackCount: rawCount,
+              currentBabyFeedbackCount: babyFeedbackCount,
+              recentFeedbackCount: recentFeedbackCount,
+              excludedFeedbackCount: Math.max(0, rawCount - recentFeedbackCount)
+            }
+          },
+          currentFeatureVector: currentFeatureVector,
+          matches: [],
+          messageKeys: [],
+          warnings: warnings.concat(feedbackHistory && feedbackHistory.warnings ? feedbackHistory.warnings : []),
+          errors: errors
+        };
+        if (!source.ok) {
+          result.summary.missingReason = "cry_reason_suggestion_unavailable";
+          result.summary.shortSummary = "아직 비슷한 과거 상황이 충분히 쌓이지 않았어요.";
+          result.messageKeys = ["similar_cry_situations_not_enough_features", "similar_cry_case_reference_only"];
+          result.phase515CompletionCheck = buildPhase515CompletionCheck(result);
+          return result;
+        }
+        if (!recentFeedbackCount) {
+          result.summary.missingReason = "not_enough_history";
+          result.summary.shortSummary = "아직 비슷한 과거 상황이 충분히 쌓이지 않았어요. 피드백이 조금 더 쌓이면 다음에 참고할 수 있어요.";
+          result.messageKeys = ["similar_cry_situations_not_enough_history", "similar_cry_case_reference_only"];
+          result.phase515CompletionCheck = buildPhase515CompletionCheck(result);
+          return result;
+        }
+        const candidates = feedbackHistory.map(function (item) {
+          return buildSimilarCryMatch(item, currentFeatureVector);
+        }).filter(function (match) {
+          return match && match.usedWeightSum > 0;
+        }).sort(function (a, b) {
+          return b.similarityScore - a.similarityScore;
+        });
+        const displayMatches = candidates.filter(function (match) {
+          return match.similarityScore >= SIMILAR_CRY_CASE_THRESHOLD;
+        }).slice(0, SIMILAR_CRY_CASE_DISPLAY_LIMIT);
+        const highestScore = candidates.length ? candidates[0].similarityScore : null;
+        result.matches = displayMatches;
+        result.summary.candidateCount = candidates.length;
+        result.summary.displayedCount = displayMatches.length;
+        result.summary.highestSimilarityScore = highestScore;
+        result.summary.available = displayMatches.length > 0;
+        result.summary.confidenceLevel = displayMatches.length ? displayMatches[0].confidenceLevel : (candidates.some(function (match) { return match.usedWeightSum < 40; }) ? "low" : "insufficient");
+        if (displayMatches.length) {
+          result.summary.shortSummary = "비슷했던 상황이 있어요. 참고용으로만 봐주세요.";
+          result.messageKeys = similarCryUnique([
+            "similar_cry_situations_available",
+            "similar_cry_case_found",
+            displayMatches[0].similarityScore >= 85 ? "similar_cry_case_high_similarity" : "",
+            "similar_cry_case_reference_only",
+            "similar_cry_ready_for_future_prediction_phase_516"
+          ].concat(displayMatches.map(function (match) {
+            return similarCryMessageKeyForReason(match.pastSituation.actualReasonKey);
+          })).filter(Boolean));
+        } else {
+          result.summary.missingReason = candidates.length ? "no_match_over_threshold" : "not_enough_features";
+          result.summary.shortSummary = candidates.length
+            ? "아직 비슷한 과거 상황이 충분히 쌓이지 않았어요. 피드백이 조금 더 쌓이면 다음에 참고할 수 있어요."
+            : "과거 피드백은 있지만 비교할 정보가 부족해서 참고용으로만 볼게요.";
+          result.messageKeys = [
+            candidates.length ? "similar_cry_situations_not_enough_history" : "similar_cry_situations_not_enough_features",
+            "similar_cry_case_reference_only"
+          ];
+        }
+        result.phase515CompletionCheck = buildPhase515CompletionCheck(result);
+        return result;
+      }
+
       function cryAttemptUnique(list) {
         return (list || []).filter(function (value, index, array) {
           return value && array.indexOf(value) === index;
@@ -12539,6 +12984,19 @@
         snapshot.phase513CompletionCheck = cryAttemptState.phase513CompletionCheck;
         snapshot.cryFeedbackLearningSummary = cryReasonSuggestion.cryFeedbackLearningSummary;
         snapshot.phase514CompletionCheck = cryReasonSuggestion.phase514CompletionCheck;
+        cryReasonSuggestion.cryAttemptState = cryAttemptState;
+        cryReasonSuggestion.attemptedActionsForFeedback = cryAttemptState.attemptedActionsForFeedback;
+        const similarCrySituations = buildSimilarCrySituations(cryReasonSuggestion, opts);
+        cryReasonSuggestion.similarCases = {
+          available: similarCrySituations.summary.available,
+          matches: similarCrySituations.matches.slice(),
+          topMatch: similarCrySituations.matches[0] || null,
+          messageKeys: similarCrySituations.messageKeys.slice()
+        };
+        cryReasonSuggestion.similarCrySituations = similarCrySituations;
+        cryReasonSuggestion.phase515CompletionCheck = similarCrySituations.phase515CompletionCheck;
+        snapshot.similarCrySituations = similarCrySituations;
+        snapshot.phase515CompletionCheck = similarCrySituations.phase515CompletionCheck;
         console.debug("[Phase 5.1.2 Interval Stats]", snapshot.intervalStats);
         console.debug("[Phase 5.1.2 Confidence Summary]", snapshot.confidenceSummary);
         console.debug("[Phase 5.1 Completion Check]", snapshot.phase51CompletionCheck);
@@ -12558,6 +13016,7 @@
           feedbackRecord: null,
           feedbackLearningSummary: snapshot.cryFeedbackLearningSummary
         });
+        console.debug("[Phase 5.15 Similar Cry Situations]", snapshot.similarCrySituations);
         console.debug("[Phase 5.1.1 Feeding Intervals]", {
           summary: snapshot.intervalSummary.feeding,
           stats: snapshot.feedingIntervalStats
@@ -13893,6 +14352,32 @@
         }).join("");
       }
 
+      function renderSimilarCrySituations(similarCrySituations) {
+        if (!els.crySimilarList) return;
+        const result = similarCrySituations || {};
+        const matches = Array.isArray(result.matches) ? result.matches : [];
+        if (!matches.length) {
+          const fallback = result.summary && result.summary.shortSummary
+            ? result.summary.shortSummary
+            : "아직 비슷한 상황이 충분히 쌓이지 않았어요. 피드백이 조금 더 쌓이면 다음에 참고할 수 있어요.";
+          els.crySimilarList.innerHTML = '<div class="cry-attempt-next">' + escapeHtml(fallback) + '</div>';
+          return;
+        }
+        els.crySimilarList.innerHTML = matches.map(function (match) {
+          const whenText = match.createdAt ? elapsedText(match.createdAt) : "이전 기록";
+          const featureText = describeSimilarCryFeatures(match) || "기록상 닮은 점";
+          const helpedText = match.pastSituation && match.pastSituation.selectedFeedbackLabel
+            ? match.pastSituation.selectedFeedbackLabel
+            : "도움이 된 돌봄이 기록되어 있어요.";
+          return '<div class="cry-similar-card">' +
+            '<p class="cry-similar-meta">' + escapeHtml(whenText + " · 닮은 정도 " + match.similarityScore + "%") + '</p>' +
+            '<p class="cry-similar-text">닮은 점: ' + escapeHtml(featureText) + '</p>' +
+            '<p class="cry-similar-text">그때 도움이 된 것: ' + escapeHtml(helpedText) + '</p>' +
+            '<p class="cry-similar-text">' + escapeHtml(match.actionHint || "이번에도 먼저 확인해볼 만해요.") + '</p>' +
+            '</div>';
+        }).join("");
+      }
+
       function handleCryFeedbackSelection(feedbackKey) {
         const option = cryFeedbackOptionByKey(feedbackKey);
         if (!option) return;
@@ -13944,6 +14429,7 @@
         if (els.cryResultList) els.cryResultList.innerHTML = "";
         if (els.cryAttemptChipList) els.cryAttemptChipList.innerHTML = "";
         if (els.cryAttemptGuidance) els.cryAttemptGuidance.textContent = "아직 체크한 항목이 없다면 위 순서대로 가볍게 확인해볼 수 있어요.";
+        if (els.crySimilarList) els.crySimilarList.innerHTML = "";
         if (els.cryFeedbackChipList) els.cryFeedbackChipList.innerHTML = "";
         if (els.cryFeedbackMessage) els.cryFeedbackMessage.textContent = "기록상 참고용으로만 쌓아둘게요.";
         if (els.cryResultSummary) els.cryResultSummary.textContent = "기록을 바탕으로 먼저 확인해볼 순서를 정리했어요.";
@@ -13968,12 +14454,21 @@
         result.cryAttemptState = buildCryAttemptState(result, cryAttemptSelectedKeys, { babyId: result.babyId || getCurrentAnalysisBabyId() });
         result.attemptedActionsForFeedback = result.cryAttemptState.attemptedActionsForFeedback;
         result.phase513CompletionCheck = result.cryAttemptState.phase513CompletionCheck;
+        result.similarCrySituations = buildSimilarCrySituations(result, { babyId: result.babyId || getCurrentAnalysisBabyId(), nowMs: Date.now() });
+        result.similarCases = {
+          available: result.similarCrySituations.summary.available,
+          matches: result.similarCrySituations.matches.slice(),
+          topMatch: result.similarCrySituations.matches[0] || null,
+          messageKeys: result.similarCrySituations.messageKeys.slice()
+        };
+        result.phase515CompletionCheck = result.similarCrySituations.phase515CompletionCheck;
         lastCryReasonResult = result;
         console.debug("[Phase 5.13 Cry Attempt State]", result.cryAttemptState);
         console.debug("[Phase 5.14 Cry Feedback Learning]", {
           feedbackRecord: null,
           feedbackLearningSummary: result.cryFeedbackLearningSummary
         });
+        console.debug("[Phase 5.15 Similar Cry Situations]", result.similarCrySituations);
         const reasons = Array.isArray(result.cryAttemptState.adjustedRankedReasons) ? result.cryAttemptState.adjustedRankedReasons : [];
         if (els.crySafetyView) els.crySafetyView.classList.add("hidden");
         if (els.cryResultView) els.cryResultView.classList.remove("hidden");
@@ -13988,6 +14483,7 @@
         }
         if (!els.cryResultList) return;
         renderCryAttemptChips(result.cryAttemptState);
+        renderSimilarCrySituations(result.similarCrySituations);
         renderCryFeedbackChips();
         if (!reasons.length) {
           els.cryResultList.innerHTML = '<li class="cry-result-card"><div class="cry-result-head"><span>기록 부족으로 판단 어려움</span></div><p class="cry-result-note">최근 기록이 부족해서 정확히 비교하기는 어려워요.</p><p class="cry-result-action">수유, 기저귀, 졸림 신호를 차례로 가볍게 확인해 보세요.</p></li>';
@@ -17080,6 +17576,12 @@
         loadCryFeedbackHistory: loadCryFeedbackHistory,
         buildCryFeedbackLearningSummary: buildCryFeedbackLearningSummary,
         buildPhase514CompletionCheck: buildPhase514CompletionCheck,
+        buildSimilarCrySituations: buildSimilarCrySituations,
+        buildPhase515CompletionCheck: buildPhase515CompletionCheck,
+        CRY_SIMILARITY_WEIGHTS: CRY_SIMILARITY_WEIGHTS,
+        CRY_SIMILARITY_TIME_DIFF_LIMITS: CRY_SIMILARITY_TIME_DIFF_LIMITS,
+        SIMILAR_CRY_CASE_DISPLAY_LIMIT: SIMILAR_CRY_CASE_DISPLAY_LIMIT,
+        SIMILAR_CRY_CASE_THRESHOLD: SIMILAR_CRY_CASE_THRESHOLD,
         DOCTOR_VISIT_SUMMARY_CONFIG: DOCTOR_VISIT_SUMMARY_CONFIG,
         BABY_AGE_GROUPS: BABY_AGE_GROUPS,
         RHYTHM_SCORE_WEIGHTS: RHYTHM_SCORE_WEIGHTS,
