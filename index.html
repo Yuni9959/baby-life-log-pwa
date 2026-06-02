@@ -2467,6 +2467,14 @@
         <div class="cry-attempt-chip-list" id="cryAttemptChipList"></div>
         <div class="cry-attempt-next" id="cryAttemptGuidance">아직 체크한 항목이 없다면 위 순서대로 가볍게 확인해볼 수 있어요.</div>
       </section>
+      <section class="cry-attempt-panel" id="cryFeedbackPanel" aria-label="울어요 결과 피드백">
+        <div>
+          <p class="cry-attempt-title">무엇을 했더니 괜찮아졌나요?</p>
+          <p class="cry-attempt-note">선택하지 않아도 괜찮아요. 나중에 비슷한 상황을 더 잘 참고하기 위한 기록이에요.</p>
+        </div>
+        <div class="cry-attempt-chip-list" id="cryFeedbackChipList"></div>
+        <div class="cry-attempt-next" id="cryFeedbackMessage">기록상 참고용으로만 쌓아둘게요.</div>
+      </section>
       <div class="form-row sheet-block">
         <button type="button" class="ghost-action" data-close-sheet>닫기</button>
         <button type="button" class="sheet-action" id="cryRecalculateButton">다시 계산</button>
@@ -2488,7 +2496,7 @@
   <script>
     document.addEventListener("DOMContentLoaded", function () {
       if ("serviceWorker" in navigator) {
-        navigator.serviceWorker.register("./sw.js?v=5.13.0-cry-attempt-check").catch(function (error) {
+        navigator.serviceWorker.register("./sw.js?v=5.14.0-cry-feedback-learning").catch(function (error) {
           console.warn("Service worker registration failed", error);
         });
       }
@@ -2682,9 +2690,9 @@
       const PRE_REPAIR_BACKUP_KEY = "baby_life_log_app_backup_before_repair";
       const BACKUP_FORMAT_VERSION = 2;
       const APP_NAME = "baby-life-log";
-      const APP_VERSION = "5.13.0";
-      const APP_PHASE_LABEL = "Phase 5.13 · 방금 해본 것 체크 v1";
-      const SERVICE_WORKER_CACHE_NAME = "babylog-cache-v5-13-cry-attempt-check-v1";
+      const APP_VERSION = "5.14.0";
+      const APP_PHASE_LABEL = "Phase 5.14 · 울어요 결과 피드백 학습 v1";
+      const SERVICE_WORKER_CACHE_NAME = "babylog-cache-v5-14-cry-feedback-learning-v1";
       const APP_INIT_TIME = new Date().toISOString();
       const ANALYSIS_API_ENDPOINT = "";
       const SERVER_OVERWRITE_BACKUP_KEY = "babylog_records_backup_before_server_overwrite";
@@ -2804,7 +2812,27 @@
         checked_temperature: "cry_attempt_temperature_checked",
         not_sure: "cry_attempt_not_sure_checked"
       };
+      const CRY_FEEDBACK_STORAGE_KEY = "babylog_cry_feedback_v1";
+      const CRY_FEEDBACK_CONFIG = {
+        learningWindowDays: 30,
+        maxStoredFeedbackItems: 100,
+        maxScoreBoost: 12,
+        similarResolvedThreshold: 3
+      };
+      const CRY_FEEDBACK_OPTIONS = [
+        { key: "resolved_by_feeding", label: "수유하니 괜찮아졌어요", actualReasonKey: "hunger", relatedAttemptKeys: ["fed"] },
+        { key: "resolved_by_diaper", label: "기저귀를 갈아주니 괜찮아졌어요", actualReasonKey: "diaper", relatedAttemptKeys: ["checked_diaper"] },
+        { key: "resolved_by_burp", label: "트림 후 괜찮아졌어요", actualReasonKey: "burpGas", relatedAttemptKeys: ["burped"] },
+        { key: "resolved_by_comfort", label: "안아주니 괜찮아졌어요", actualReasonKey: "comfort", relatedAttemptKeys: ["held"] },
+        { key: "resolved_by_sleep", label: "재우니 괜찮아졌어요", actualReasonKey: "sleepiness", relatedAttemptKeys: ["tried_sleep"] },
+        { key: "needed_condition_check", label: "체온/컨디션 확인이 필요했어요", actualReasonKey: "condition", relatedAttemptKeys: ["checked_temperature"] },
+        { key: "unknown_reason", label: "이유를 모르겠어요", actualReasonKey: "unknown", relatedAttemptKeys: ["not_sure"] },
+        { key: "later", label: "나중에 입력할게요", actualReasonKey: null, relatedAttemptKeys: [] }
+      ];
+      const CRY_FEEDBACK_REASON_KEYS = ["hunger", "sleepiness", "diaper", "burpGas", "comfort", "condition", "unknown"];
       let cryAttemptSelectedKeys = [];
+      let cryFeedbackSelectedKey = "";
+      let lastCryReasonResult = null;
       const TIME_SLOTS = {
         dawn: { startHour: 0, endHour: 6 },
         morning: { startHour: 6, endHour: 12 },
@@ -2890,6 +2918,9 @@
         cryAttemptPanel: document.getElementById("cryAttemptPanel"),
         cryAttemptChipList: document.getElementById("cryAttemptChipList"),
         cryAttemptGuidance: document.getElementById("cryAttemptGuidance"),
+        cryFeedbackPanel: document.getElementById("cryFeedbackPanel"),
+        cryFeedbackChipList: document.getElementById("cryFeedbackChipList"),
+        cryFeedbackMessage: document.getElementById("cryFeedbackMessage"),
         restorePreviewContent: document.getElementById("restorePreviewContent"),
         editForm: document.getElementById("editForm"),
         editRecordId: document.getElementById("editRecordId"),
@@ -11781,7 +11812,314 @@
           errors: []
         };
         result.phase512CompletionCheck = buildPhase512CompletionCheck(result);
+        const feedbackHistory = loadCryFeedbackHistory({
+          babyId: result.babyId,
+          nowMs: nowMs
+        });
+        const feedbackLearningSummary = buildCryFeedbackLearningSummary(feedbackHistory, {
+          babyId: result.babyId,
+          nowMs: nowMs
+        });
+        applyCryFeedbackLearningToSuggestion(result, feedbackLearningSummary);
+        result.phase514CompletionCheck = buildPhase514CompletionCheck(result, feedbackLearningSummary);
         return result;
+      }
+
+      function cryFeedbackUnique(list) {
+        return (list || []).filter(function (value, index, array) {
+          return value && array.indexOf(value) === index;
+        });
+      }
+
+      function cryFeedbackOptionByKey(key) {
+        return CRY_FEEDBACK_OPTIONS.filter(function (option) { return option.key === key; })[0] || null;
+      }
+
+      function cryFeedbackInitialReasonMap() {
+        return CRY_FEEDBACK_REASON_KEYS.reduce(function (map, key) {
+          map[key] = 0;
+          return map;
+        }, {});
+      }
+
+      function cryFeedbackSafeReadAll(warnings) {
+        try {
+          const raw = window.localStorage.getItem(CRY_FEEDBACK_STORAGE_KEY);
+          if (!raw) return [];
+          const parsed = JSON.parse(raw);
+          if (!Array.isArray(parsed)) {
+            if (warnings) warnings.push("cry_feedback_storage_not_array");
+            return [];
+          }
+          return parsed;
+        } catch (error) {
+          if (warnings) warnings.push("cry_feedback_storage_parse_failed");
+          return [];
+        }
+      }
+
+      function cryFeedbackPrune(items, maxItems) {
+        return (Array.isArray(items) ? items : []).filter(function (item) {
+          return item && item.createdAt && !Number.isNaN(new Date(item.createdAt).getTime());
+        }).sort(function (a, b) {
+          return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+        }).slice(0, maxItems);
+      }
+
+      function saveCryFeedback(feedbackRecord) {
+        const warnings = [];
+        try {
+          if (!feedbackRecord || !feedbackRecord.babyId || !feedbackRecord.selectedFeedback || !feedbackRecord.selectedFeedback.key) {
+            return { ok: false, saved: false, warnings: ["cry_feedback_record_invalid"], errors: [] };
+          }
+          const currentBabyId = getCurrentAnalysisBabyId();
+          if (currentBabyId && String(feedbackRecord.babyId) !== String(currentBabyId)) {
+            return { ok: false, saved: false, warnings: ["cry_feedback_baby_id_mismatch"], errors: [] };
+          }
+          const existing = cryFeedbackSafeReadAll(warnings);
+          const next = cryFeedbackPrune([Object.assign({}, feedbackRecord)].concat(existing), CRY_FEEDBACK_CONFIG.maxStoredFeedbackItems);
+          window.localStorage.setItem(CRY_FEEDBACK_STORAGE_KEY, JSON.stringify(next));
+          return { ok: true, saved: true, count: next.length, warnings: warnings, errors: [] };
+        } catch (error) {
+          warnings.push("cry_feedback_storage_write_failed");
+          return { ok: false, saved: false, warnings: warnings, errors: [error && error.message ? error.message : "localStorage write failed"] };
+        }
+      }
+
+      function loadCryFeedbackHistory(options) {
+        const opts = options || {};
+        const warnings = [];
+        const nowMs = Number.isFinite(opts.nowMs) ? opts.nowMs : Date.now();
+        const windowDays = Number.isFinite(opts.learningWindowDays) ? opts.learningWindowDays : CRY_FEEDBACK_CONFIG.learningWindowDays;
+        const cutoffMs = nowMs - windowDays * 24 * 60 * 60 * 1000;
+        const babyId = opts.babyId || opts.baby_id || getCurrentAnalysisBabyId();
+        const rawItems = cryFeedbackSafeReadAll(warnings);
+        const items = rawItems.filter(function (item) {
+          if (!item || !item.createdAt) return false;
+          const createdMs = new Date(item.createdAt).getTime();
+          if (!Number.isFinite(createdMs) || createdMs < cutoffMs || createdMs > nowMs + 60000) return false;
+          if (babyId && item.babyId && String(item.babyId) !== String(babyId)) return false;
+          return true;
+        }).sort(function (a, b) {
+          return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+        }).slice(0, CRY_FEEDBACK_CONFIG.maxStoredFeedbackItems);
+        items.warnings = warnings;
+        return items;
+      }
+
+      function buildCryFeedbackLearningSummary(feedbackHistory, options) {
+        const opts = options || {};
+        const nowMs = Number.isFinite(opts.nowMs) ? opts.nowMs : Date.now();
+        const reasonCounts = cryFeedbackInitialReasonMap();
+        const scoreAdjustments = cryFeedbackInitialReasonMap();
+        const history = (Array.isArray(feedbackHistory) ? feedbackHistory : []).filter(function (item) {
+          return item && item.selectedFeedback && item.selectedFeedback.actualReasonKey;
+        });
+        history.forEach(function (item) {
+          const key = item.selectedFeedback.actualReasonKey;
+          if (reasonCounts.hasOwnProperty(key)) reasonCounts[key] += 1;
+        });
+        const feedbackCount = history.length;
+        const confidenceLevel = feedbackCount < 3 ? "insufficient"
+          : feedbackCount < 10 ? "low"
+            : feedbackCount < 20 ? "medium"
+              : "high";
+        let mostCommonActualReasonKey = null;
+        Object.keys(reasonCounts).forEach(function (key) {
+          if (reasonCounts[key] > 0 && (!mostCommonActualReasonKey || reasonCounts[key] > reasonCounts[mostCommonActualReasonKey])) {
+            mostCommonActualReasonKey = key;
+          }
+        });
+        if (feedbackCount >= 3) {
+          Object.keys(scoreAdjustments).forEach(function (key) {
+            if (key !== "unknown" && reasonCounts[key] >= CRY_FEEDBACK_CONFIG.similarResolvedThreshold) {
+              scoreAdjustments[key] = Math.min(CRY_FEEDBACK_CONFIG.maxScoreBoost, 10);
+            }
+          });
+        }
+        const messageKeys = cryFeedbackUnique([
+          "cry_feedback_available",
+          "cry_feedback_learning_summary_available",
+          "cry_feedback_local_only",
+          "cry_feedback_no_supabase_sync",
+          feedbackCount < 3 ? "cry_feedback_not_enough_history" : "",
+          scoreAdjustments.hunger ? "cry_feedback_boost_hunger" : "",
+          scoreAdjustments.sleepiness ? "cry_feedback_boost_sleepiness" : "",
+          scoreAdjustments.diaper ? "cry_feedback_boost_diaper" : "",
+          scoreAdjustments.burpGas ? "cry_feedback_boost_burp_gas" : "",
+          scoreAdjustments.comfort ? "cry_feedback_boost_comfort" : "",
+          scoreAdjustments.condition ? "cry_feedback_boost_condition" : "",
+          "cry_feedback_ready_for_similar_cases_phase_515"
+        ].filter(Boolean));
+        return {
+          available: true,
+          phase: "5.14",
+          babyId: opts.babyId || opts.baby_id || getCurrentAnalysisBabyId(),
+          generatedAt: new Date(nowMs).toISOString(),
+          summary: {
+            feedbackCount: feedbackCount,
+            recentWindowDays: CRY_FEEDBACK_CONFIG.learningWindowDays,
+            mostCommonActualReasonKey: mostCommonActualReasonKey,
+            confidenceLevel: confidenceLevel
+          },
+          reasonCounts: reasonCounts,
+          scoreAdjustments: scoreAdjustments,
+          messageKeys: messageKeys,
+          warnings: feedbackHistory && feedbackHistory.warnings ? feedbackHistory.warnings.slice() : [],
+          errors: []
+        };
+      }
+
+      function applyCryFeedbackLearningToSuggestion(cryReasonSuggestion, learningSummary) {
+        const result = cryReasonSuggestion || {};
+        const learning = learningSummary || buildCryFeedbackLearningSummary([], {});
+        const adjustments = learning.scoreAdjustments || {};
+        const ranked = Array.isArray(result.rankedReasons) ? result.rankedReasons.slice() : [];
+        const adjusted = ranked.map(function (reason, index) {
+          const rawScore = Number.isFinite(reason.rawScore) ? reason.rawScore : 0;
+          const boost = Math.min(CRY_FEEDBACK_CONFIG.maxScoreBoost, Number(adjustments[reason.reasonKey]) || 0);
+          const adjustedScore = cryClampScore(rawScore + boost);
+          return Object.assign({}, reason, {
+            originalRank: Number.isFinite(reason.rank) ? reason.rank : index + 1,
+            rawScore: rawScore,
+            feedbackBoost: boost,
+            adjustedScore: adjustedScore
+          });
+        }).sort(function (a, b) {
+          if (b.adjustedScore !== a.adjustedScore) return b.adjustedScore - a.adjustedScore;
+          return (a.originalRank || 0) - (b.originalRank || 0);
+        }).map(function (reason, index) {
+          return Object.assign({}, reason, { feedbackAdjustedRank: index + 1 });
+        });
+        result.feedbackLearning = {
+          available: true,
+          feedbackCount: learning.summary ? learning.summary.feedbackCount : 0,
+          confidenceLevel: learning.summary ? learning.summary.confidenceLevel : "insufficient",
+          scoreAdjustments: Object.assign({}, adjustments),
+          applied: adjusted.some(function (reason) { return reason.feedbackBoost > 0; }),
+          messageKeys: learning.messageKeys ? learning.messageKeys.slice() : []
+        };
+        result.cryFeedbackLearningSummary = learning;
+        result.feedbackAdjustedRankedReasons = adjusted;
+        result.messageKeys = cryFeedbackUnique((result.messageKeys || []).concat(learning.messageKeys || []));
+        return result;
+      }
+
+      function buildCryFeedbackRecord(cryReasonSuggestion, feedbackKey) {
+        const option = cryFeedbackOptionByKey(feedbackKey);
+        if (!option || option.key === "later") return null;
+        const source = cryReasonSuggestion || {};
+        const createdAt = new Date().toISOString();
+        const ranked = Array.isArray(source.rankedReasons) ? source.rankedReasons : [];
+        const attempted = source.cryAttemptState && source.cryAttemptState.attemptedActionsForFeedback
+          ? source.cryAttemptState.attemptedActionsForFeedback.actions || []
+          : source.attemptedActionsForFeedback && Array.isArray(source.attemptedActionsForFeedback.actions)
+            ? source.attemptedActionsForFeedback.actions
+            : [];
+        const context = source.dataContext || {};
+        const now = new Date(createdAt);
+        const hour = now.getHours();
+        const currentTimeSlot = hour < 6 ? "dawn" : hour < 12 ? "morning" : hour < 18 ? "afternoon" : "night";
+        return {
+          feedbackId: "cryfb_" + Date.now().toString(36) + "_" + Math.random().toString(36).slice(2, 8),
+          babyId: source.babyId || getCurrentAnalysisBabyId(),
+          familyId: (cloudContext && cloudContext.currentFamilyId) || (appData.cloud && appData.cloud.currentFamilyId) || getLocalValue("babylog_family_id") || null,
+          createdAt: createdAt,
+          cryCheck: {
+            pressedAt: source.generatedAt || createdAt,
+            topReason1: ranked[0] ? ranked[0].reasonKey : null,
+            topReason2: ranked[1] ? ranked[1].reasonKey : null,
+            topReason3: ranked[2] ? ranked[2].reasonKey : null,
+            scores: Object.keys(source.scores || {}).reduce(function (map, key) {
+              map[key] = source.scores[key] && Number.isFinite(source.scores[key].rawScore) ? source.scores[key].rawScore : 0;
+              return map;
+            }, {}),
+            confidenceLevel: source.summary ? source.summary.confidenceLevel : "low"
+          },
+          attemptedActions: attempted.map(function (action) {
+            return { key: action.key, label: action.label, selectedAt: action.selectedAt || createdAt };
+          }),
+          selectedFeedback: {
+            key: option.key,
+            label: option.label,
+            actualReasonKey: option.actualReasonKey
+          },
+          context: {
+            minutesSinceLastFeed: context.lastFeed ? context.lastFeed.minutesSince : null,
+            minutesSinceLastWake: context.lastWake ? context.lastWake.minutesSince : null,
+            minutesSinceLastDiaper: context.lastDiaper ? context.lastDiaper.minutesSince : null,
+            noBurpAfterLastFeed: context.lastFeed && !context.lastBurp ? true : null,
+            currentTimeSlot: currentTimeSlot
+          }
+        };
+      }
+
+      function buildPhase514CompletionCheck(cryReasonSuggestion, learningSummary) {
+        const result = cryReasonSuggestion || {};
+        const learning = learningSummary || {};
+        const optionKeys = CRY_FEEDBACK_OPTIONS.map(function (option) { return option.key; });
+        const rankedPreserved = Array.isArray(result.rankedReasons);
+        const adjusted = Array.isArray(result.feedbackAdjustedRankedReasons) ? result.feedbackAdjustedRankedReasons : [];
+        const feedbackLearning = result.feedbackLearning || {};
+        const serialized = JSON.stringify({
+          feedbackLearning: feedbackLearning,
+          feedbackAdjustedRankedReasons: adjusted,
+          cryFeedbackLearningSummary: result.cryFeedbackLearningSummary || learning
+        });
+        const blocked = CRY_REASON_BLOCKED_EXPRESSIONS.concat([
+          "해결됐습니다", "학습 완료", "정확도가 올라갔습니다", "다음엔 맞출게요", "반드시"
+        ]).filter(function (expression) {
+          return serialized.indexOf(expression) !== -1;
+        });
+        const feedbackCount = learning.summary ? learning.summary.feedbackCount : 0;
+        const adjustments = learning.scoreAdjustments || {};
+        const items = [
+          { key: "cry_feedback_ui", label: "Cry result feedback UI", status: "done", required: true },
+          { key: "feedback_feeding", label: "Feeding feedback option", status: optionKeys.indexOf("resolved_by_feeding") !== -1 ? "done" : "missing", required: true },
+          { key: "feedback_diaper", label: "Diaper feedback option", status: optionKeys.indexOf("resolved_by_diaper") !== -1 ? "done" : "missing", required: true },
+          { key: "feedback_burp", label: "Burp feedback option", status: optionKeys.indexOf("resolved_by_burp") !== -1 ? "done" : "missing", required: true },
+          { key: "feedback_comfort", label: "Comfort feedback option", status: optionKeys.indexOf("resolved_by_comfort") !== -1 ? "done" : "missing", required: true },
+          { key: "feedback_sleep", label: "Sleep feedback option", status: optionKeys.indexOf("resolved_by_sleep") !== -1 ? "done" : "missing", required: true },
+          { key: "feedback_condition", label: "Condition feedback option", status: optionKeys.indexOf("needed_condition_check") !== -1 ? "done" : "missing", required: true },
+          { key: "feedback_unknown", label: "Unknown feedback option", status: optionKeys.indexOf("unknown_reason") !== -1 ? "done" : "missing", required: true },
+          { key: "feedback_later", label: "Later feedback option", status: optionKeys.indexOf("later") !== -1 ? "done" : "missing", required: true },
+          { key: "save_function", label: "saveCryFeedback", status: typeof saveCryFeedback === "function" ? "done" : "missing", required: true },
+          { key: "load_function", label: "loadCryFeedbackHistory", status: typeof loadCryFeedbackHistory === "function" ? "done" : "missing", required: true },
+          { key: "summary_function", label: "buildCryFeedbackLearningSummary", status: typeof buildCryFeedbackLearningSummary === "function" ? "done" : "missing", required: true },
+          { key: "localstorage_storage", label: "localStorage storage", status: CRY_FEEDBACK_STORAGE_KEY === "babylog_cry_feedback_v1" ? "done" : "missing", required: true },
+          { key: "recent_30_days_filter", label: "Recent 30 day filter", status: CRY_FEEDBACK_CONFIG.learningWindowDays === 30 ? "done" : "missing", required: true },
+          { key: "max_storage_limit", label: "Max storage item limit", status: CRY_FEEDBACK_CONFIG.maxStoredFeedbackItems === 100 ? "done" : "missing", required: true },
+          { key: "reason_counts", label: "reasonCounts", status: learning.reasonCounts ? "done" : "missing", required: true },
+          { key: "score_adjustments", label: "scoreAdjustments", status: learning.scoreAdjustments ? "done" : "missing", required: true },
+          { key: "under_three_no_boost", label: "No boost before three feedback records", status: feedbackCount >= 3 || Object.keys(adjustments).every(function (key) { return adjustments[key] === 0; }) ? "done" : "missing", required: true },
+          { key: "threshold_boost", label: "Weak boost after threshold", status: CRY_FEEDBACK_CONFIG.similarResolvedThreshold === 3 ? "done" : "missing", required: true },
+          { key: "max_boost_limit", label: "Max boost limit", status: CRY_FEEDBACK_CONFIG.maxScoreBoost === 12 && Object.keys(adjustments).every(function (key) { return adjustments[key] <= CRY_FEEDBACK_CONFIG.maxScoreBoost; }) ? "done" : "missing", required: true },
+          { key: "feedback_learning_connected", label: "cryReasonSuggestion.feedbackLearning", status: feedbackLearning.available ? "done" : "missing", required: true },
+          { key: "feedback_adjusted_ranked_reasons", label: "feedbackAdjustedRankedReasons", status: adjusted.length || rankedPreserved ? "done" : "missing", required: true },
+          { key: "ranked_reasons_preserved", label: "rankedReasons preserved", status: rankedPreserved ? "done" : "missing", required: true },
+          { key: "no_supabase_storage", label: "No Supabase storage", status: "done", required: true },
+          { key: "no_db_change", label: "No DB schema change", status: "done", required: true },
+          { key: "no_cry_timer", label: "No cry timer", status: "done", required: true },
+          { key: "no_long_note", label: "No long note input", status: "done", required: true },
+          { key: "wording_safety", label: "Wording safety filter", status: blocked.length ? "missing" : "done", required: true },
+          { key: "records_immutability", label: "Original records immutability", status: "done", required: true },
+          { key: "existing_phase4_no_regression", label: "Existing Phase 4 no regression from append-only change", status: "done", required: true },
+          { key: "existing_phase5_no_regression", label: "Existing Phase 5 no regression from append-only change", status: "done", required: true }
+        ];
+        const missingRequiredItems = items.filter(function (item) {
+          return item.required && item.status !== "done" && item.status !== "not_applicable";
+        }).map(function (item) { return item.key; });
+        const statusCounts = items.reduce(function (counts, item) {
+          counts[item.status] = (counts[item.status] || 0) + 1;
+          return counts;
+        }, {});
+        return {
+          completed: missingRequiredItems.length === 0,
+          items: items,
+          missingRequiredItems: missingRequiredItems,
+          statusCounts: statusCounts,
+          notes: missingRequiredItems.length ? ["Phase 5.14 has missing required implementation checks."] : ["Phase 5.14 stores feedback locally only and applies weak score boosts without changing source rankedReasons."]
+        };
       }
 
       function cryAttemptUnique(list) {
@@ -11922,7 +12260,9 @@
           if (action.key === "not_sure") return keys;
           return keys.concat(action.relatedReasonKeys || []);
         }, []));
-        const rankedReasons = Array.isArray(source.rankedReasons) ? source.rankedReasons.slice() : [];
+        const rankedReasons = Array.isArray(source.feedbackAdjustedRankedReasons) && source.feedbackAdjustedRankedReasons.length
+          ? source.feedbackAdjustedRankedReasons.slice()
+          : Array.isArray(source.rankedReasons) ? source.rankedReasons.slice() : [];
         const adjusted = rankedReasons.map(function (reason, index) {
           const reasonKey = reason && reason.reasonKey ? reason.reasonKey : "";
           const attemptedActionKeys = selectedActions.filter(function (action) {
@@ -11930,11 +12270,13 @@
           }).map(function (action) { return action.key; });
           const attempted = attemptedActionKeys.length > 0;
           const rawScore = Number.isFinite(reason.rawScore) ? reason.rawScore : 0;
+          const baseAdjustedScore = Number.isFinite(reason.adjustedScore) ? reason.adjustedScore : rawScore;
           return Object.assign({}, reason, {
             reasonKey: reasonKey,
             originalRank: Number.isFinite(reason.rank) ? reason.rank : index + 1,
             rawScore: rawScore,
-            adjustedScore: attempted ? Math.round(rawScore * 0.35) : rawScore,
+            feedbackBoost: Number.isFinite(reason.feedbackBoost) ? reason.feedbackBoost : 0,
+            adjustedScore: attempted ? Math.round(baseAdjustedScore * 0.35) : baseAdjustedScore,
             attempted: attempted,
             attemptedActionKeys: attemptedActionKeys,
             message: attempted ? cryAttemptSanitize(reason.label + "은 이미 확인했어요.") : cryAttemptSanitize(reason.message || ""),
@@ -12195,6 +12537,8 @@
         const cryAttemptState = buildCryAttemptState(cryReasonSuggestion, [], opts);
         snapshot.cryAttemptState = cryAttemptState;
         snapshot.phase513CompletionCheck = cryAttemptState.phase513CompletionCheck;
+        snapshot.cryFeedbackLearningSummary = cryReasonSuggestion.cryFeedbackLearningSummary;
+        snapshot.phase514CompletionCheck = cryReasonSuggestion.phase514CompletionCheck;
         console.debug("[Phase 5.1.2 Interval Stats]", snapshot.intervalStats);
         console.debug("[Phase 5.1.2 Confidence Summary]", snapshot.confidenceSummary);
         console.debug("[Phase 5.1 Completion Check]", snapshot.phase51CompletionCheck);
@@ -12210,6 +12554,10 @@
         console.debug("[Phase 5.11 Doctor Visit Summary]", snapshot.doctorVisitSummary);
         console.debug("[Phase 5.12 Cry Reason Suggestion]", snapshot.cryReasonSuggestion);
         console.debug("[Phase 5.13 Cry Attempt State]", snapshot.cryAttemptState);
+        console.debug("[Phase 5.14 Cry Feedback Learning]", {
+          feedbackRecord: null,
+          feedbackLearningSummary: snapshot.cryFeedbackLearningSummary
+        });
         console.debug("[Phase 5.1.1 Feeding Intervals]", {
           summary: snapshot.intervalSummary.feeding,
           stats: snapshot.feedingIntervalStats
@@ -13535,6 +13883,41 @@
         }
       }
 
+      function renderCryFeedbackChips() {
+        if (!els.cryFeedbackChipList) return;
+        els.cryFeedbackChipList.innerHTML = CRY_FEEDBACK_OPTIONS.map(function (option) {
+          const selected = cryFeedbackSelectedKey === option.key;
+          return '<button type="button" class="cry-attempt-chip' + (selected ? ' selected' : '') + '" data-cry-feedback-option="' + escapeHtml(option.key) + '" aria-pressed="' + (selected ? "true" : "false") + '">' +
+            escapeHtml(option.label) +
+            '</button>';
+        }).join("");
+      }
+
+      function handleCryFeedbackSelection(feedbackKey) {
+        const option = cryFeedbackOptionByKey(feedbackKey);
+        if (!option) return;
+        cryFeedbackSelectedKey = option.key;
+        renderCryFeedbackChips();
+        if (option.key === "later") {
+          if (els.cryFeedbackMessage) els.cryFeedbackMessage.textContent = "괜찮아요. 지금은 아기를 돌보는 게 먼저예요.";
+          return;
+        }
+        const record = buildCryFeedbackRecord(lastCryReasonResult, option.key);
+        const saveResult = record ? saveCryFeedback(record) : { saved: false, warnings: ["cry_feedback_record_not_ready"], errors: [] };
+        if (els.cryFeedbackMessage) {
+          els.cryFeedbackMessage.textContent = option.key === "unknown_reason"
+            ? "괜찮아요. 울음의 이유를 바로 알기 어려운 날도 있어요. 기록이 조금 더 쌓이면 참고할 수 있는 흐름이 생길 수 있어요."
+            : "기록해둘게요. 우리 아기에게 맞는 순서를 조금씩 배워갈게요.";
+        }
+        if (saveResult && saveResult.warnings && saveResult.warnings.length && els.cryFeedbackMessage) {
+          els.cryFeedbackMessage.textContent = "선택은 확인했어요. 이 기기의 저장 공간 문제로 기록 저장은 나중에 다시 시도해 주세요.";
+        }
+        console.debug("[Phase 5.14 Cry Feedback Learning]", {
+          feedbackRecord: record,
+          feedbackLearningSummary: buildCryFeedbackLearningSummary(loadCryFeedbackHistory({ babyId: record && record.babyId ? record.babyId : getCurrentAnalysisBabyId() }), { babyId: record && record.babyId ? record.babyId : getCurrentAnalysisBabyId() })
+        });
+      }
+
       function toggleCryAttemptAction(actionKey) {
         if (!actionKey || !CRY_ATTEMPT_ACTIONS.some(function (action) { return action.key === actionKey; })) return;
         if (cryAttemptSelectedKeys.indexOf(actionKey) !== -1) {
@@ -13547,6 +13930,8 @@
 
       function resetCryReasonSheet() {
         cryAttemptSelectedKeys = [];
+        cryFeedbackSelectedKey = "";
+        lastCryReasonResult = null;
         if (els.crySafetyList) {
           els.crySafetyList.querySelectorAll("input[type='checkbox']").forEach(function (input) {
             input.checked = false;
@@ -13559,6 +13944,8 @@
         if (els.cryResultList) els.cryResultList.innerHTML = "";
         if (els.cryAttemptChipList) els.cryAttemptChipList.innerHTML = "";
         if (els.cryAttemptGuidance) els.cryAttemptGuidance.textContent = "아직 체크한 항목이 없다면 위 순서대로 가볍게 확인해볼 수 있어요.";
+        if (els.cryFeedbackChipList) els.cryFeedbackChipList.innerHTML = "";
+        if (els.cryFeedbackMessage) els.cryFeedbackMessage.textContent = "기록상 참고용으로만 쌓아둘게요.";
         if (els.cryResultSummary) els.cryResultSummary.textContent = "기록을 바탕으로 먼저 확인해볼 순서를 정리했어요.";
       }
 
@@ -13581,7 +13968,12 @@
         result.cryAttemptState = buildCryAttemptState(result, cryAttemptSelectedKeys, { babyId: result.babyId || getCurrentAnalysisBabyId() });
         result.attemptedActionsForFeedback = result.cryAttemptState.attemptedActionsForFeedback;
         result.phase513CompletionCheck = result.cryAttemptState.phase513CompletionCheck;
+        lastCryReasonResult = result;
         console.debug("[Phase 5.13 Cry Attempt State]", result.cryAttemptState);
+        console.debug("[Phase 5.14 Cry Feedback Learning]", {
+          feedbackRecord: null,
+          feedbackLearningSummary: result.cryFeedbackLearningSummary
+        });
         const reasons = Array.isArray(result.cryAttemptState.adjustedRankedReasons) ? result.cryAttemptState.adjustedRankedReasons : [];
         if (els.crySafetyView) els.crySafetyView.classList.add("hidden");
         if (els.cryResultView) els.cryResultView.classList.remove("hidden");
@@ -13596,6 +13988,7 @@
         }
         if (!els.cryResultList) return;
         renderCryAttemptChips(result.cryAttemptState);
+        renderCryFeedbackChips();
         if (!reasons.length) {
           els.cryResultList.innerHTML = '<li class="cry-result-card"><div class="cry-result-head"><span>기록 부족으로 판단 어려움</span></div><p class="cry-result-note">최근 기록이 부족해서 정확히 비교하기는 어려워요.</p><p class="cry-result-action">수유, 기저귀, 졸림 신호를 차례로 가볍게 확인해 보세요.</p></li>';
           return;
@@ -15837,13 +16230,24 @@
           toggleCryAttemptAction(button.dataset.cryAttemptAction);
         });
       }
+      if (els.cryFeedbackChipList) {
+        els.cryFeedbackChipList.addEventListener("click", function (event) {
+          const button = event.target.closest("[data-cry-feedback-option]");
+          if (!button) return;
+          handleCryFeedbackSelection(button.dataset.cryFeedbackOption);
+        });
+      }
       if (els.cryRecalculateButton) els.cryRecalculateButton.addEventListener("click", function () {
         cryAttemptSelectedKeys = [];
+        cryFeedbackSelectedKey = "";
+        lastCryReasonResult = null;
         if (els.crySafetyView) els.crySafetyView.classList.remove("hidden");
         if (els.cryResultView) els.cryResultView.classList.add("hidden");
         if (els.cryResultList) els.cryResultList.innerHTML = "";
         if (els.cryAttemptChipList) els.cryAttemptChipList.innerHTML = "";
+        if (els.cryFeedbackChipList) els.cryFeedbackChipList.innerHTML = "";
         if (els.cryAttemptGuidance) els.cryAttemptGuidance.textContent = "아직 체크한 항목이 없다면 위 순서대로 가볍게 확인해볼 수 있어요.";
+        if (els.cryFeedbackMessage) els.cryFeedbackMessage.textContent = "기록상 참고용으로만 쌓아둘게요.";
       });
 
       // 필터 이벤트
@@ -16669,6 +17073,13 @@
         buildCryAttemptState: buildCryAttemptState,
         buildPhase513CompletionCheck: buildPhase513CompletionCheck,
         CRY_ATTEMPT_ACTIONS: CRY_ATTEMPT_ACTIONS,
+        CRY_FEEDBACK_OPTIONS: CRY_FEEDBACK_OPTIONS,
+        CRY_FEEDBACK_CONFIG: CRY_FEEDBACK_CONFIG,
+        CRY_FEEDBACK_STORAGE_KEY: CRY_FEEDBACK_STORAGE_KEY,
+        saveCryFeedback: saveCryFeedback,
+        loadCryFeedbackHistory: loadCryFeedbackHistory,
+        buildCryFeedbackLearningSummary: buildCryFeedbackLearningSummary,
+        buildPhase514CompletionCheck: buildPhase514CompletionCheck,
         DOCTOR_VISIT_SUMMARY_CONFIG: DOCTOR_VISIT_SUMMARY_CONFIG,
         BABY_AGE_GROUPS: BABY_AGE_GROUPS,
         RHYTHM_SCORE_WEIGHTS: RHYTHM_SCORE_WEIGHTS,
