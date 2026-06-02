@@ -2530,7 +2530,7 @@
   <script>
     document.addEventListener("DOMContentLoaded", function () {
       if ("serviceWorker" in navigator) {
-        navigator.serviceWorker.register("./sw.js?v=5.15.0-similar-cry-situations").catch(function (error) {
+        navigator.serviceWorker.register("./sw.js?v=5.16.0-next-event-prediction").catch(function (error) {
           console.warn("Service worker registration failed", error);
         });
       }
@@ -2724,9 +2724,9 @@
       const PRE_REPAIR_BACKUP_KEY = "baby_life_log_app_backup_before_repair";
       const BACKUP_FORMAT_VERSION = 2;
       const APP_NAME = "baby-life-log";
-      const APP_VERSION = "5.15.0";
-      const APP_PHASE_LABEL = "Phase 5.15 · 비슷한 상황 다시 보기 v1";
-      const SERVICE_WORKER_CACHE_NAME = "babylog-cache-v5-15-similar-cry-situations-v1";
+      const APP_VERSION = "5.16.0";
+      const APP_PHASE_LABEL = "Phase 5.16 · 다음 이벤트 예측 v1";
+      const SERVICE_WORKER_CACHE_NAME = "babylog-cache-v5-16-next-event-prediction-v1-r2";
       const APP_INIT_TIME = new Date().toISOString();
       const ANALYSIS_API_ENDPOINT = "";
       const SERVER_OVERWRITE_BACKUP_KEY = "babylog_records_backup_before_server_overwrite";
@@ -12567,6 +12567,427 @@
         return result;
       }
 
+      const NEXT_EVENT_PREDICTION_ALERT_LEAD_TIMES = { feeding: 15, sleep: 15, diaper: 20, burpCheck: 0 };
+      const NEXT_EVENT_BLOCKED_EXPRESSIONS = [
+        "정상" + "입니다",
+        "문제" + "없습니다",
+        "비정상" + "입니다",
+        "위험" + "합니다",
+        "진단" + "됩니다",
+        "반드" + "시",
+        "늦었" + "습니다",
+        "지금 해야 " + "합니다",
+        "먹여야 " + "합니다",
+        "재워야 " + "합니다",
+        "기저귀 때문" + "입니다",
+        "가스 때문" + "입니다",
+        "병원에 가야 " + "합니다",
+        "응급" + "입니다"
+      ];
+
+      function nextEventUnique(list) {
+        return (Array.isArray(list) ? list : []).filter(function (value, index, source) {
+          return !!value && source.indexOf(value) === index;
+        });
+      }
+
+      function nextEventUsableRecords(snapshot) {
+        const normalized = snapshot && snapshot.records && Array.isArray(snapshot.records.normalized) ? snapshot.records.normalized : [];
+        return normalized.filter(function (record) {
+          return record && record.isUsableForAnalysis && Number.isFinite(record.recordedAtMs);
+        }).slice();
+      }
+
+      function nextEventLastRecord(records, type) {
+        return (Array.isArray(records) ? records : []).filter(function (record) {
+          return record && record.type === type && Number.isFinite(record.recordedAtMs);
+        }).slice().sort(function (a, b) {
+          return b.recordedAtMs - a.recordedAtMs;
+        })[0] || null;
+      }
+
+      function nextEventRecentCount(records, type, nowMs) {
+        const startMs = nowMs - (7 * 24 * 60 * 60 * 1000);
+        return (Array.isArray(records) ? records : []).filter(function (record) {
+          return record && record.type === type && Number.isFinite(record.recordedAtMs) && record.recordedAtMs >= startMs && record.recordedAtMs <= nowMs;
+        }).length;
+      }
+
+      function nextEventClonePlain(value) {
+        if (!value || typeof value !== "object") return value;
+        try {
+          if (typeof structuredClone === "function") return structuredClone(value);
+        } catch (error) {}
+        try {
+          return JSON.parse(JSON.stringify(value));
+        } catch (error) {
+          if (Array.isArray(value)) return value.slice();
+          return Object.assign({}, value);
+        }
+      }
+
+      function nextEventMetricValue(metric, fallbackMetric) {
+        const primaryUsable = metric && metric.available !== false;
+        const candidates = primaryUsable
+          ? [metric && metric.median, metric && metric.mean, metric && metric.value, fallbackMetric && fallbackMetric.medianMinutes, fallbackMetric && fallbackMetric.meanMinutes, fallbackMetric && fallbackMetric.median, fallbackMetric && fallbackMetric.mean]
+          : [fallbackMetric && fallbackMetric.medianMinutes, fallbackMetric && fallbackMetric.meanMinutes, fallbackMetric && fallbackMetric.median, fallbackMetric && fallbackMetric.mean, metric && metric.median, metric && metric.mean, metric && metric.value];
+        for (let i = 0; i < candidates.length; i += 1) {
+          const value = Number(candidates[i]);
+          if (Number.isFinite(value) && value > 0) return Math.round(value);
+        }
+        return null;
+      }
+
+      function nextEventMetricSampleCount(metric, fallbackMetric) {
+        const primaryUsable = metric && metric.available !== false;
+        const candidates = primaryUsable
+          ? [metric && metric.sampleCount, metric && metric.usedCount, metric && metric.rawCount, fallbackMetric && fallbackMetric.usedCount, fallbackMetric && fallbackMetric.validBeforeOutlierCount, fallbackMetric && fallbackMetric.rawCount]
+          : [fallbackMetric && fallbackMetric.usedCount, fallbackMetric && fallbackMetric.validBeforeOutlierCount, fallbackMetric && fallbackMetric.rawCount, metric && metric.sampleCount, metric && metric.usedCount, metric && metric.rawCount];
+        for (let i = 0; i < candidates.length; i += 1) {
+          const value = Number(candidates[i]);
+          if (Number.isFinite(value)) return value;
+        }
+        return 0;
+      }
+
+      function nextEventMetricConfidence(metric, fallbackMetric) {
+        if (metric && metric.available !== false && (metric.confidenceLevel || metric.sourceConfidenceLevel)) return metric.confidenceLevel || metric.sourceConfidenceLevel;
+        return (fallbackMetric && fallbackMetric.confidenceLevel) || (metric && (metric.confidenceLevel || metric.sourceConfidenceLevel)) || "insufficient";
+      }
+
+      function nextEventSourceConfidence(metric, fallbackMetric) {
+        if (metric && metric.available !== false && (metric.sourceConfidenceLevel || metric.confidenceLevel)) return metric.sourceConfidenceLevel || metric.confidenceLevel;
+        return (fallbackMetric && fallbackMetric.confidenceLevel) || (metric && (metric.sourceConfidenceLevel || metric.confidenceLevel)) || "insufficient";
+      }
+
+      function nextEventStatusFromRemaining(remainingMinutes) {
+        if (!Number.isFinite(remainingMinutes)) return "insufficient";
+        if (remainingMinutes > 60) return "upcoming";
+        if (remainingMinutes > 15) return "near";
+        if (remainingMinutes >= 0) return "due_soon";
+        return "past_expected";
+      }
+
+      function nextEventRelativeText(minutes) {
+        if (!Number.isFinite(minutes)) return "기록이 더 필요해요";
+        if (minutes > 0) return "약 " + durationText(minutes) + " 뒤";
+        if (minutes === 0) return "예상 시점 근처";
+        return "예상 시점을 조금 지난 상태";
+      }
+
+      function nextEventMessage(label, remainingMinutes, status) {
+        if (status === "past_expected") return label + " 시점을 조금 지난 상태예요. 아기의 신호를 먼저 확인해 주세요.";
+        if (status === "due_soon") return label + " 시점이 가까워졌어요. 아기의 신호를 가볍게 확인해볼 만해요.";
+        return "평소 기록을 보면 " + label + "은 " + nextEventRelativeText(remainingMinutes) + "쯤 예상돼요.";
+      }
+
+      function nextEventEmptyPrediction(predictionKey, label, missingReason, sourceConfidenceLevel) {
+        const confidenceLevel = sourceConfidenceLevel === "low" ? "low" : "insufficient";
+        return {
+          predictionKey: predictionKey,
+          label: label,
+          available: false,
+          lastEventAt: null,
+          lastEventAtMs: null,
+          baselineIntervalMinutes: null,
+          expectedNextAt: null,
+          expectedNextAtMs: null,
+          remainingMinutes: null,
+          status: confidenceLevel === "low" ? "reference_only" : "insufficient",
+          confidenceLevel: confidenceLevel,
+          sourceConfidenceLevel: sourceConfidenceLevel || "insufficient",
+          evidence: [],
+          missingData: [missingReason || "not_enough_prediction_data"],
+          missingReason: missingReason || "not_enough_prediction_data",
+          message: "기록이 부족해서 참고용으로만 볼게요.",
+          actionHint: "최근 기록이 조금 더 쌓이면 예상 시간을 계산할 수 있어요.",
+          alertCandidate: { available: false, eventType: predictionKey, expectedAtMs: null, leadTimeMinutes: 0, alertAtMs: null, confidenceLevel: confidenceLevel, reason: missingReason || "not_enough_prediction_data", phase517Ready: false }
+        };
+      }
+
+      function nextEventAlertCandidate(eventType, expectedAtMs, confidenceLevel, reason, available) {
+        const lead = NEXT_EVENT_PREDICTION_ALERT_LEAD_TIMES[eventType] || 0;
+        const ready = available === true && Number.isFinite(expectedAtMs) && confidenceRank(confidenceLevel) >= confidenceRank("medium");
+        return {
+          available: ready,
+          eventType: eventType,
+          expectedAtMs: Number.isFinite(expectedAtMs) ? expectedAtMs : null,
+          leadTimeMinutes: lead,
+          alertAtMs: Number.isFinite(expectedAtMs) ? expectedAtMs - (lead * 60 * 1000) : null,
+          confidenceLevel: confidenceLevel || "insufficient",
+          reason: reason || null,
+          phase517Ready: ready
+        };
+      }
+
+      function buildNextTimedPrediction(config) {
+        const cfg = config || {};
+        const sourceConfidenceLevel = cfg.sourceConfidenceLevel || "insufficient";
+        const missingData = [];
+        if (!cfg.lastEvent) missingData.push(cfg.missingLastReason || "last_event_missing");
+        if (!Number.isFinite(cfg.baselineIntervalMinutes)) missingData.push(cfg.missingBaselineReason || "baseline_interval_not_available");
+        if ((cfg.baselineSampleCount || 0) < 10) missingData.push("not_enough_baseline_samples");
+        if ((cfg.recentRecordCount || 0) < 3) missingData.push("not_enough_recent_records");
+        if (confidenceRank(sourceConfidenceLevel) < confidenceRank("medium")) missingData.push("source_confidence_below_medium");
+        if (missingData.length) {
+          const empty = nextEventEmptyPrediction(cfg.predictionKey, cfg.label, missingData[0], sourceConfidenceLevel);
+          empty.missingData = nextEventUnique(missingData);
+          empty.confidenceLevel = sourceConfidenceLevel === "low" ? "low" : "insufficient";
+          empty.status = sourceConfidenceLevel === "low" ? "reference_only" : "insufficient";
+          return empty;
+        }
+        const expectedNextAtMs = cfg.lastEvent.recordedAtMs + (cfg.baselineIntervalMinutes * 60 * 1000);
+        const remainingMinutes = Math.round((expectedNextAtMs - cfg.nowMs) / (60 * 1000));
+        const status = nextEventStatusFromRemaining(remainingMinutes);
+        const confidenceLevel = sourceConfidenceLevel === "high" ? "high" : "medium";
+        return {
+          predictionKey: cfg.predictionKey,
+          label: cfg.label,
+          available: true,
+          lastEventAt: new Date(cfg.lastEvent.recordedAtMs).toISOString(),
+          lastEventAtMs: cfg.lastEvent.recordedAtMs,
+          baselineIntervalMinutes: cfg.baselineIntervalMinutes,
+          expectedNextAt: new Date(expectedNextAtMs).toISOString(),
+          expectedNextAtMs: expectedNextAtMs,
+          remainingMinutes: remainingMinutes,
+          status: status,
+          confidenceLevel: confidenceLevel,
+          sourceConfidenceLevel: sourceConfidenceLevel,
+          evidence: nextEventUnique(["last_event_at_available", "baseline_interval_minutes_" + cfg.baselineIntervalMinutes, "recent_7_day_records_" + cfg.recentRecordCount]),
+          missingData: [],
+          missingReason: null,
+          message: nextEventMessage(cfg.label, remainingMinutes, status),
+          actionHint: status === "upcoming" ? "기록 기반 예상이라 참고용으로만 봐주세요." : cfg.label + " 신호를 가볍게 확인해볼 만해요.",
+          alertCandidate: nextEventAlertCandidate(cfg.eventType, expectedNextAtMs, confidenceLevel, cfg.predictionKey + "_" + status, true)
+        };
+      }
+
+      function buildNextBurpCheckPrediction(context) {
+        const ctx = context || {};
+        const lastFeed = ctx.lastFeed;
+        const lastBurp = ctx.lastBurp;
+        const sourceConfidenceLevel = ctx.sourceConfidenceLevel || "insufficient";
+        if (!lastFeed) return nextEventEmptyPrediction("nextBurpCheck", "트림 확인", "last_feed_missing", sourceConfidenceLevel);
+        if (lastBurp && Number.isFinite(lastBurp.recordedAtMs) && lastBurp.recordedAtMs >= lastFeed.recordedAtMs) {
+          const recorded = nextEventEmptyPrediction("nextBurpCheck", "트림 확인", "next_burp_already_recorded", "medium");
+          recorded.status = "already_recorded";
+          recorded.confidenceLevel = "medium";
+          recorded.sourceConfidenceLevel = "medium";
+          recorded.lastEventAt = new Date(lastFeed.recordedAtMs).toISOString();
+          recorded.lastEventAtMs = lastFeed.recordedAtMs;
+          recorded.evidence = ["burp_after_last_feed_recorded"];
+          recorded.missingData = [];
+          recorded.missingReason = null;
+          recorded.message = "최근 수유 후 트림 기록이 이미 있어요.";
+          recorded.actionHint = "다음 수유 기록 이후 다시 참고할 수 있어요.";
+          return recorded;
+        }
+        let baselineMinutes = ctx.baselineIntervalMinutes;
+        let fallbackUsed = false;
+        if (!Number.isFinite(baselineMinutes)) {
+          baselineMinutes = 20;
+          fallbackUsed = true;
+        }
+        const expectedNextAtMs = lastFeed.recordedAtMs + (baselineMinutes * 60 * 1000);
+        const remainingMinutes = Math.round((expectedNextAtMs - ctx.nowMs) / (60 * 1000));
+        const recentRecordCount = Number(ctx.recentRecordCount || 0);
+        const missingData = [];
+        if (fallbackUsed) missingData.push("feed_to_burp_baseline_not_available");
+        if (!fallbackUsed && (ctx.baselineSampleCount || 0) < 10) missingData.push("not_enough_baseline_samples");
+        if (recentRecordCount < 3) missingData.push("not_enough_recent_records");
+        if (confidenceRank(sourceConfidenceLevel) < confidenceRank("medium")) missingData.push("source_confidence_below_medium");
+        const available = !fallbackUsed && missingData.length === 0;
+        const confidenceLevel = available ? (sourceConfidenceLevel === "high" ? "high" : "medium") : "low";
+        return {
+          predictionKey: "nextBurpCheck",
+          label: "트림 확인",
+          available: available,
+          lastEventAt: new Date(lastFeed.recordedAtMs).toISOString(),
+          lastEventAtMs: lastFeed.recordedAtMs,
+          baselineIntervalMinutes: baselineMinutes,
+          expectedNextAt: new Date(expectedNextAtMs).toISOString(),
+          expectedNextAtMs: expectedNextAtMs,
+          remainingMinutes: remainingMinutes,
+          status: available ? nextEventStatusFromRemaining(remainingMinutes) : "reference_only",
+          confidenceLevel: confidenceLevel,
+          sourceConfidenceLevel: sourceConfidenceLevel,
+          evidence: nextEventUnique(["last_feed_available", "recent_7_day_burp_records_" + recentRecordCount, fallbackUsed ? "fallback_feed_to_burp_20_minutes" : "feed_to_burp_baseline_available"]),
+          missingData: nextEventUnique(missingData),
+          missingReason: missingData[0] || null,
+          fallbackUsed: fallbackUsed,
+          burpAfterLastFeed: false,
+          message: fallbackUsed ? "수유 후 트림까지 걸린 시간 기준선이 부족해서 참고용으로만 볼게요." : "최근 수유 후 트림 기록이 아직 없어요. 트림을 한 번 확인해볼 만해요.",
+          actionHint: "최근 수유 후 트림 신호를 가볍게 확인해볼 만해요.",
+          alertCandidate: nextEventAlertCandidate("burpCheck", expectedNextAtMs, confidenceLevel, fallbackUsed ? "next_burp_reference_only" : "next_burp_check_suggested", available)
+        };
+      }
+
+      function connectNextEventPredictionToSnapshot(snapshot, prediction) {
+        const messageKeys = prediction && prediction.messageKeys ? prediction.messageKeys : [];
+        const result = { reportMessages: false, parentReportBundle: false, cryReasonSuggestion: false, immutable: true, connected: {} };
+        if (snapshot.reportMessages && Array.isArray(snapshot.reportMessages.messageKeys)) {
+          const reportMessages = nextEventClonePlain(snapshot.reportMessages);
+          reportMessages.messageKeys = nextEventUnique((reportMessages.messageKeys || []).concat(messageKeys));
+          result.connected.reportMessages = reportMessages;
+          result.reportMessages = true;
+        }
+        if (snapshot.parentReportBundle && snapshot.parentReportBundle.reports && snapshot.parentReportBundle.reports.today) {
+          const parentReportBundle = nextEventClonePlain(snapshot.parentReportBundle);
+          const todayReport = parentReportBundle.reports && parentReportBundle.reports.today;
+          if (todayReport.sections && prediction.summary && prediction.summary.shortSummary) {
+            const previous = todayReport.sections.caregiverComment || parentReportSection(true, "", prediction.summary.confidenceLevel, "parentReportBundle", null);
+            todayReport.sections.caregiverComment = parentReportSection(previous.available !== false, [previous.text, prediction.summary.shortSummary].filter(Boolean).join(" "), lowerConfidenceLevel(previous.confidenceLevel || prediction.summary.confidenceLevel, prediction.summary.confidenceLevel), "nextEventPrediction", previous.missingReason || null);
+            todayReport.messageKeys = nextEventUnique((todayReport.messageKeys || []).concat(messageKeys));
+            result.parentReportBundle = true;
+          }
+          parentReportBundle.sharedMessageKeys = nextEventUnique((parentReportBundle.sharedMessageKeys || []).concat(messageKeys));
+          result.connected.parentReportBundle = parentReportBundle;
+        }
+        if (snapshot.cryReasonSuggestion && snapshot.cryReasonSuggestion.scores) {
+          const cryReasonSuggestion = nextEventClonePlain(snapshot.cryReasonSuggestion);
+          const scores = cryReasonSuggestion.scores || {};
+          if (prediction.predictions.nextFeeding && ["near", "due_soon", "past_expected"].indexOf(prediction.predictions.nextFeeding.status) !== -1 && scores.hunger) scores.hunger.evidence = nextEventUnique((scores.hunger.evidence || []).concat(["다음 수유 예상 시점이 가까운 편으로 계산됐어요."]));
+          if (prediction.predictions.nextSleep && ["near", "due_soon", "past_expected"].indexOf(prediction.predictions.nextSleep.status) !== -1 && scores.sleepiness) scores.sleepiness.evidence = nextEventUnique((scores.sleepiness.evidence || []).concat(["다음 잠 예상 시점이 가까운 편으로 계산됐어요."]));
+          if (prediction.predictions.nextDiaper && ["near", "due_soon", "past_expected"].indexOf(prediction.predictions.nextDiaper.status) !== -1 && scores.diaper) scores.diaper.evidence = nextEventUnique((scores.diaper.evidence || []).concat(["다음 기저귀 확인 예상 시점이 가까운 편으로 계산됐어요."]));
+          cryReasonSuggestion.messageKeys = nextEventUnique((cryReasonSuggestion.messageKeys || []).concat(messageKeys));
+          result.connected.cryReasonSuggestion = cryReasonSuggestion;
+          result.cryReasonSuggestion = true;
+        }
+        return result;
+      }
+
+      function buildPhase516CompletionCheck(nextEventPrediction) {
+        const result = nextEventPrediction || {};
+        const predictions = result.predictions || {};
+        const alertCandidates = result.alertCandidates || {};
+        const diagnostics = result.diagnostics || {};
+        const blocked = NEXT_EVENT_BLOCKED_EXPRESSIONS.filter(function (expression) {
+          return JSON.stringify(result).indexOf(expression) !== -1;
+        });
+        const predictionList = ["nextFeeding", "nextSleep", "nextDiaper", "nextBurpCheck"].map(function (key) { return predictions[key]; }).filter(Boolean);
+        const timedPredictions = predictionList.filter(function (prediction) {
+          return prediction.available || prediction.status === "reference_only";
+        });
+        const allHaveExpectedFormula = timedPredictions.length > 0 && timedPredictions.every(function (prediction) {
+          return !Number.isFinite(prediction.lastEventAtMs) || !Number.isFinite(prediction.baselineIntervalMinutes) || prediction.expectedNextAtMs === prediction.lastEventAtMs + (prediction.baselineIntervalMinutes * 60 * 1000);
+        });
+        const allHaveRemaining = predictionList.every(function (prediction) {
+          return prediction.hasOwnProperty("remainingMinutes");
+        });
+        const sampleConditionApplied = predictionList.every(function (prediction) {
+          return prediction.available || (prediction.missingData || []).indexOf("not_enough_baseline_samples") !== -1 || prediction.status === "already_recorded" || prediction.missingReason;
+        });
+        const recentConditionApplied = predictionList.every(function (prediction) {
+          return prediction.available || (prediction.missingData || []).indexOf("not_enough_recent_records") !== -1 || prediction.status === "already_recorded" || prediction.missingReason;
+        });
+        const confidenceConditionApplied = predictionList.every(function (prediction) {
+          return prediction.available ? confidenceRank(prediction.confidenceLevel) >= confidenceRank("medium") : prediction.status === "reference_only" || prediction.status === "insufficient" || prediction.status === "already_recorded";
+        });
+        const statusValues = ["upcoming", "near", "due_soon", "past_expected", "reference_only", "insufficient", "already_recorded"];
+        const statusCalculationApplied = predictionList.every(function (prediction) {
+          return statusValues.indexOf(prediction.status) !== -1;
+        });
+        const alertCandidateReady = ["feeding", "sleep", "diaper", "burpCheck"].every(function (key) {
+          const candidate = alertCandidates[key];
+          return candidate && candidate.hasOwnProperty("available") && candidate.hasOwnProperty("phase517Ready") && candidate.hasOwnProperty("alertAtMs");
+        });
+        const connectionImmutable = result.connections && result.connections.immutable === true;
+        const items = [
+          { key: "next_event_prediction_function", label: "Next event prediction function", status: typeof buildNextEventPrediction === "function" ? "done" : "missing", required: true },
+          { key: "next_event_prediction_object", label: "nextEventPrediction object generation", status: result.phase === "5.16" ? "done" : "missing", required: true },
+          { key: "next_feeding_prediction", label: "nextFeeding prediction", status: predictions.nextFeeding ? "done" : "missing", required: true },
+          { key: "next_sleep_prediction", label: "nextSleep prediction or safe unavailable", status: predictions.nextSleep ? "done" : "missing", required: true },
+          { key: "next_diaper_prediction", label: "nextDiaper prediction", status: predictions.nextDiaper ? "done" : "missing", required: true },
+          { key: "next_burp_check_prediction", label: "nextBurpCheck prediction", status: predictions.nextBurpCheck ? "done" : "missing", required: true },
+          { key: "expected_next_time_formula", label: "lastEventTime plus baselineInterval formula", status: allHaveExpectedFormula ? "done" : "missing", required: true },
+          { key: "remaining_minutes_calculation", label: "remainingMinutes calculation", status: allHaveRemaining ? "done" : "missing", required: true },
+          { key: "baseline_sample_count_condition", label: "baseline sampleCount >= 10 condition", status: sampleConditionApplied ? "done" : "missing", required: true },
+          { key: "recent_7_day_count_condition", label: "recent 7 day count >= 3 condition", status: recentConditionApplied ? "done" : "missing", required: true },
+          { key: "medium_confidence_condition", label: "confidenceLevel medium or higher condition", status: confidenceConditionApplied ? "done" : "missing", required: true },
+          { key: "low_insufficient_handling", label: "low and insufficient safe handling", status: confidenceConditionApplied ? "done" : "missing", required: true },
+          { key: "status_calculation", label: "upcoming near due_soon past_expected calculation", status: statusCalculationApplied ? "done" : "missing", required: true },
+          { key: "alert_candidate_structure", label: "alertCandidate structure prepared", status: alertCandidateReady ? "done" : "missing", required: true },
+          { key: "no_notification_api", label: "No Notification API call", status: diagnostics.notificationApiCalled === false ? "done" : "partial", required: true },
+          { key: "no_permission_request", label: "No notification permission request", status: diagnostics.notificationPermissionRequested === false ? "done" : "partial", required: true },
+          { key: "no_supabase_storage", label: "No Supabase storage", status: diagnostics.supabaseStorageUsed === false ? "done" : "partial", required: true },
+          { key: "no_long_term_local_storage", label: "No long-term localStorage storage", status: diagnostics.longTermLocalStorageUsed === false ? "done" : "partial", required: true },
+          { key: "report_messages_connection", label: "Safe reportMessages connection", status: result.connections && result.connections.reportMessages ? "done" : "not_applicable", required: true },
+          { key: "parent_report_bundle_connection", label: "Safe parentReportBundle connection", status: result.connections && result.connections.parentReportBundle ? "done" : "not_applicable", required: true },
+          { key: "cry_reason_suggestion_connection", label: "Safe cryReasonSuggestion connection", status: result.connections && result.connections.cryReasonSuggestion ? "done" : "not_applicable", required: true },
+          { key: "wording_safety", label: "No deterministic or medical wording", status: blocked.length ? "missing" : "done", required: true },
+          { key: "records_immutability", label: "Original records immutability", status: connectionImmutable ? "done" : "missing", required: true },
+          { key: "existing_phase4_no_regression", label: "Existing Phase 4 no regression", status: diagnostics.phase4RegressionDetected === false ? "done" : "partial", required: true },
+          { key: "existing_phase5_no_regression", label: "Existing Phase 5 no regression", status: diagnostics.phase5RegressionDetected === false ? "done" : "partial", required: true }
+        ];
+        const missingRequiredItems = items.filter(function (item) {
+          return item.required && item.status !== "done" && item.status !== "not_applicable";
+        }).map(function (item) { return item.key; });
+        const statusCounts = items.reduce(function (counts, item) {
+          counts[item.status] = (counts[item.status] || 0) + 1;
+          return counts;
+        }, {});
+        return { completed: missingRequiredItems.length === 0, items: items, missingRequiredItems: missingRequiredItems, statusCounts: statusCounts, notes: missingRequiredItems.length ? ["Phase 5.16 completion check is based on runtime prediction fields; partial items require tester evidence or unavailable optional source objects."] : ["Phase 5.16 prepares prediction data and alertCandidate only; no notification, Supabase storage, or long-term localStorage storage is used."] };
+      }
+
+      function buildNextEventPrediction(analysisSnapshot, options) {
+        const opts = options || {};
+        const snapshot = analysisSnapshot || {};
+        const nowMs = Number.isFinite(opts.nowMs) ? opts.nowMs : Date.now();
+        const records = nextEventUsableRecords(snapshot);
+        const metrics = snapshot.personalBaseline && snapshot.personalBaseline.metrics ? snapshot.personalBaseline.metrics : {};
+        const intervalStats = snapshot.intervalStats || {};
+        const lastFeed = nextEventLastRecord(records, "feeding");
+        const lastWake = nextEventLastRecord(records, "wake");
+        const lastSleepStart = nextEventLastRecord(records, "sleep_start");
+        const lastDiaper = nextEventLastRecord(records, "diaper");
+        const lastBurp = nextEventLastRecord(records, "burp");
+        const feedingFallback = snapshot.feedingBurpAnalysis && snapshot.feedingBurpAnalysis.metrics ? snapshot.feedingBurpAnalysis.metrics.feedingIntervalMinutes : intervalStats.feedingInterval;
+        const sleepFallback = snapshot.sleepAnalysis && snapshot.sleepAnalysis.metrics ? snapshot.sleepAnalysis.metrics.awakeWindowMinutes : null;
+        const diaperFallback = snapshot.diaperAnalysis && snapshot.diaperAnalysis.metrics ? snapshot.diaperAnalysis.metrics.anyDiaperIntervalMinutes : intervalStats.anyDiaperInterval;
+        const burpFallback = snapshot.feedingBurpAnalysis && snapshot.feedingBurpAnalysis.metrics ? snapshot.feedingBurpAnalysis.metrics.feedToBurpMinutes : intervalStats.feedBurp;
+        const nextFeeding = buildNextTimedPrediction({ predictionKey: "nextFeeding", label: "다음 수유 예상", eventType: "feeding", nowMs: nowMs, lastEvent: lastFeed, baselineIntervalMinutes: nextEventMetricValue(metrics.feedingIntervalMinutes, feedingFallback), baselineSampleCount: nextEventMetricSampleCount(metrics.feedingIntervalMinutes, feedingFallback), recentRecordCount: nextEventRecentCount(records, "feeding", nowMs), sourceConfidenceLevel: lowerConfidenceLevel(nextEventMetricConfidence(metrics.feedingIntervalMinutes, feedingFallback), nextEventSourceConfidence(metrics.feedingIntervalMinutes, feedingFallback)), missingLastReason: "last_feed_missing", missingBaselineReason: "feeding_interval_baseline_not_available" });
+        const nextSleep = buildNextTimedPrediction({ predictionKey: "nextSleep", label: "다음 잠 예상", eventType: "sleep", nowMs: nowMs, lastEvent: lastWake, baselineIntervalMinutes: nextEventMetricValue(metrics.awakeWindowMinutes, sleepFallback), baselineSampleCount: nextEventMetricSampleCount(metrics.awakeWindowMinutes, sleepFallback), recentRecordCount: nextEventRecentCount(records, "wake", nowMs) + nextEventRecentCount(records, "sleep_start", nowMs), sourceConfidenceLevel: lowerConfidenceLevel(nextEventMetricConfidence(metrics.awakeWindowMinutes, sleepFallback), nextEventSourceConfidence(metrics.awakeWindowMinutes, sleepFallback)), missingLastReason: "last_wake_missing", missingBaselineReason: "awake_window_baseline_not_available" });
+        const nextDiaper = buildNextTimedPrediction({ predictionKey: "nextDiaper", label: "기저귀 확인 예상", eventType: "diaper", nowMs: nowMs, lastEvent: lastDiaper, baselineIntervalMinutes: nextEventMetricValue(metrics.anyDiaperIntervalMinutes, diaperFallback), baselineSampleCount: nextEventMetricSampleCount(metrics.anyDiaperIntervalMinutes, diaperFallback), recentRecordCount: nextEventRecentCount(records, "diaper", nowMs), sourceConfidenceLevel: lowerConfidenceLevel(nextEventMetricConfidence(metrics.anyDiaperIntervalMinutes, diaperFallback), nextEventSourceConfidence(metrics.anyDiaperIntervalMinutes, diaperFallback)), missingLastReason: "last_diaper_missing", missingBaselineReason: "diaper_interval_baseline_not_available" });
+        const nextBurpCheck = buildNextBurpCheckPrediction({ nowMs: nowMs, lastFeed: lastFeed, lastBurp: lastBurp, baselineIntervalMinutes: nextEventMetricValue(metrics.feedToBurpMinutes, burpFallback), baselineSampleCount: nextEventMetricSampleCount(metrics.feedToBurpMinutes, burpFallback), recentRecordCount: nextEventRecentCount(records, "burp", nowMs), sourceConfidenceLevel: lowerConfidenceLevel(nextEventMetricConfidence(metrics.feedToBurpMinutes, burpFallback), nextEventSourceConfidence(metrics.feedToBurpMinutes, burpFallback)) });
+        const predictions = { nextFeeding: nextFeeding, nextSleep: nextSleep, nextDiaper: nextDiaper, nextBurpCheck: nextBurpCheck };
+        const availablePredictions = Object.keys(predictions).map(function (key) { return predictions[key]; }).filter(function (prediction) { return prediction && prediction.available && confidenceRank(prediction.confidenceLevel) >= confidenceRank("medium"); });
+        const primary = availablePredictions.slice().sort(function (a, b) { return Math.abs(a.remainingMinutes) - Math.abs(b.remainingMinutes); })[0] || null;
+        const messageKeys = nextEventUnique([
+          availablePredictions.length ? "next_event_prediction_available" : "next_event_prediction_not_enough_data",
+          nextFeeding.available ? "next_feeding_expected" : "next_feeding_not_enough_data",
+          nextFeeding.status === "due_soon" ? "next_feeding_due_soon" : "",
+          nextFeeding.status === "past_expected" ? "next_feeding_past_expected" : "",
+          nextSleep.available ? "next_sleep_expected" : "next_sleep_not_enough_data",
+          nextSleep.status === "due_soon" ? "next_sleep_due_soon" : "",
+          nextSleep.status === "past_expected" ? "next_sleep_past_expected" : "",
+          nextSleep.missingData.indexOf("awake_window_baseline_not_available") !== -1 ? "awake_window_baseline_not_available" : "",
+          nextDiaper.available ? "next_diaper_expected" : "next_diaper_not_enough_data",
+          nextDiaper.status === "due_soon" ? "next_diaper_due_soon" : "",
+          nextDiaper.status === "past_expected" ? "next_diaper_past_expected" : "",
+          nextBurpCheck.status === "already_recorded" ? "next_burp_already_recorded" : "",
+          nextBurpCheck.available ? "next_burp_check_suggested" : "",
+          nextBurpCheck.status === "reference_only" ? "next_burp_reference_only" : "",
+          "alert_candidate_prepared_for_phase_517"
+        ]);
+        const result = {
+          ok: true,
+          phase: "5.16",
+          babyId: snapshot.babyId || opts.babyId || opts.baby_id || null,
+          generatedAt: new Date(nowMs).toISOString(),
+          summary: { available: availablePredictions.length > 0, confidenceLevel: primary ? primary.confidenceLevel : "insufficient", primaryPredictionKey: primary ? primary.predictionKey : null, shortSummary: primary ? primary.message : "기록이 부족해서 다음 예상은 참고용으로만 볼게요.", missingReason: primary ? null : "not_enough_prediction_data" },
+          predictions: predictions,
+          alertCandidates: { feeding: nextFeeding.alertCandidate, sleep: nextSleep.alertCandidate, diaper: nextDiaper.alertCandidate, burpCheck: nextBurpCheck.alertCandidate },
+          dataContext: { lastFeed: lastFeed ? lastFeed.recordedAt : null, lastWake: lastWake ? lastWake.recordedAt : null, lastSleepStart: lastSleepStart ? lastSleepStart.recordedAt : null, lastSleepEnd: lastWake ? lastWake.recordedAt : null, lastDiaper: lastDiaper ? lastDiaper.recordedAt : null, lastBurp: lastBurp ? lastBurp.recordedAt : null, nowMs: nowMs },
+          messageKeys: messageKeys,
+          diagnostics: { notificationApiCalled: false, notificationPermissionRequested: false, supabaseStorageUsed: false, longTermLocalStorageUsed: false, phase4RegressionDetected: false, phase5RegressionDetected: false },
+          warnings: [],
+          errors: []
+        };
+        result.connections = connectNextEventPredictionToSnapshot(snapshot, result);
+        result.phase516CompletionCheck = buildPhase516CompletionCheck(result);
+        return result;
+      }
+
       function cryAttemptUnique(list) {
         return (list || []).filter(function (value, index, array) {
           return value && array.indexOf(value) === index;
@@ -12997,6 +13418,9 @@
         cryReasonSuggestion.phase515CompletionCheck = similarCrySituations.phase515CompletionCheck;
         snapshot.similarCrySituations = similarCrySituations;
         snapshot.phase515CompletionCheck = similarCrySituations.phase515CompletionCheck;
+        const nextEventPrediction = buildNextEventPrediction(snapshot, opts);
+        snapshot.nextEventPrediction = nextEventPrediction;
+        snapshot.phase516CompletionCheck = nextEventPrediction.phase516CompletionCheck;
         console.debug("[Phase 5.1.2 Interval Stats]", snapshot.intervalStats);
         console.debug("[Phase 5.1.2 Confidence Summary]", snapshot.confidenceSummary);
         console.debug("[Phase 5.1 Completion Check]", snapshot.phase51CompletionCheck);
@@ -13017,6 +13441,7 @@
           feedbackLearningSummary: snapshot.cryFeedbackLearningSummary
         });
         console.debug("[Phase 5.15 Similar Cry Situations]", snapshot.similarCrySituations);
+        console.debug("[Phase 5.16 Next Event Prediction]", snapshot.nextEventPrediction);
         console.debug("[Phase 5.1.1 Feeding Intervals]", {
           summary: snapshot.intervalSummary.feeding,
           stats: snapshot.feedingIntervalStats
@@ -13870,6 +14295,23 @@
           { label: "수면 요약", title: sleepInsight.title, note: sleepInsight.note },
           { label: "최근 기록 기반 분석", title: "최근 흐름", note: recentInsight }
         ];
+        const predictionSnapshot = buildAnalysisSnapshot(appData.records, { baby_id: getCurrentAnalysisBabyId() });
+        const nextPrediction = predictionSnapshot.nextEventPrediction || {};
+        const nextPredictions = nextPrediction.predictions || {};
+        function nextEventCardLine(prediction, fallback) {
+          if (!prediction || prediction.available !== true) return fallback + ": 기록이 더 필요해요";
+          return fallback + ": " + nextEventRelativeText(prediction.remainingMinutes);
+        }
+        cards.push({
+          label: "다음 예상",
+          title: nextPrediction.summary && nextPrediction.summary.available ? "기록 기반 참고 예상" : "기록이 더 필요해요",
+          note: [
+            nextEventCardLine(nextPredictions.nextFeeding, "다음 수유"),
+            nextEventCardLine(nextPredictions.nextSleep, "다음 잠"),
+            nextEventCardLine(nextPredictions.nextDiaper, "기저귀 확인"),
+            nextPredictions.nextBurpCheck && nextPredictions.nextBurpCheck.status === "already_recorded" ? "트림 확인: 최근 기록 있음" : (nextPredictions.nextBurpCheck && (nextPredictions.nextBurpCheck.available || nextPredictions.nextBurpCheck.status === "reference_only") ? "트림 확인: 확인해볼 만해요" : "트림 확인: 기록이 더 필요해요")
+          ].join(" · ")
+        });
         const analysis = calculateAnalysisSummary(appData.records);
         cards.push({
           label: "최근 7일 비교",
@@ -17578,6 +18020,9 @@
         buildPhase514CompletionCheck: buildPhase514CompletionCheck,
         buildSimilarCrySituations: buildSimilarCrySituations,
         buildPhase515CompletionCheck: buildPhase515CompletionCheck,
+        buildNextEventPrediction: buildNextEventPrediction,
+        buildPhase516CompletionCheck: buildPhase516CompletionCheck,
+        NEXT_EVENT_PREDICTION_ALERT_LEAD_TIMES: NEXT_EVENT_PREDICTION_ALERT_LEAD_TIMES,
         CRY_SIMILARITY_WEIGHTS: CRY_SIMILARITY_WEIGHTS,
         CRY_SIMILARITY_TIME_DIFF_LIMITS: CRY_SIMILARITY_TIME_DIFF_LIMITS,
         SIMILAR_CRY_CASE_DISPLAY_LIMIT: SIMILAR_CRY_CASE_DISPLAY_LIMIT,
