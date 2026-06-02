@@ -11,46 +11,69 @@
   <link rel="apple-touch-icon" href="./icons/icon-192.png">
   <title>아기 생활 기록</title>
   <style>
+    @import url("https://fonts.googleapis.com/css2?family=Gaegu:wght@400;700&display=swap");
+    @import url("https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css");
+
     :root {
-      color-scheme: light dark;
+      color-scheme: light;
       --bg: #FAF6EF;
+      --bg-2: #F3ECE0;
+      --card: #FFFFFF;
+      --card-bd: #EFE5D5;
+      --tx: #5C534A;
+      --tx-2: #A99E90;
+      --tx-3: #C3B9AC;
+      --brand-ink: #FFFFFF;
+      --brand-soft: #E9F0E2;
+      --brand-soft-bd: #CFDDC6;
+      --brand-soft-tx: #637E58;
+      --feed-bg: #FBEEE6;
+      --feed-bd: #EFD8C8;
+      --feed-tx: #AC6B45;
+      --feed-strong: #CF8155;
+      --dia-bg: #FAF3DF;
+      --dia-bd: #ECDFBB;
+      --dia-tx: #94791F;
+      --dia-strong: #BC9437;
+      --burp-bg: #DFE8D1;
+      --burp-bd: #CADAB8;
+      --burp-tx: #6B7C50;
+      --burp-strong: #7C9159;
+      --sleep-bg: #E5DEED;
+      --sleep-bd: #D2C8E2;
+      --sleep-tx: #6C5E8C;
+      --sleep-strong: #8676AC;
+      --wake-bg: #D9E6EA;
+      --wake-bd: #C2D7DD;
+      --wake-tx: #587684;
+      --wake-strong: #6E94A2;
+      --warn-bg: #F6E1DA;
+      --warn-bd: #EEBCB1;
+      --warn-tx: #B65F51;
       --panel: #FFFDF8;
       --panel-strong: #FFFFFF;
       --surface-soft: #F6EFE4;
-      --text: #2D2924;
-      --muted: #746B60;
-      --line: #E8DED0;
+      --text: var(--tx);
+      --muted: var(--tx-2);
+      --line: var(--card-bd);
       --line-strong: #D8C9B8;
       --brand: #7DA37F;
-      --brand-strong: #4F7E55;
-      --accent: #CF8155;
+      --brand-strong: var(--brand-soft-tx);
+      --accent: var(--feed-strong);
       --accent-soft: #F4E0D1;
       --rose: #D27768;
-      --danger: #B95A51;
-      --shadow: 0 12px 28px rgba(77, 61, 42, 0.11);
-      --radius: 8px;
+      --danger: var(--warn-tx);
+      --r-card: 16px;
+      --r-btn: 14px;
+      --r-chip: 15px;
+      --bd: 1.5px;
+      --bd-btn: 2px;
+      --sh-card: 0 1px 2px rgba(92,83,74,.04);
+      --sh-pop: 0 18px 50px rgba(92,83,74,.22);
+      --shadow: var(--sh-card);
+      --radius: var(--r-card);
       --sheet-offset: 0px;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans KR", sans-serif;
-    }
-
-    @media (prefers-color-scheme: dark) {
-      :root {
-        --bg: #171A18;
-        --panel: #20251F;
-        --panel-strong: #252B24;
-        --surface-soft: #1B211D;
-        --text: #F4EFE7;
-        --muted: #C7BBAE;
-        --line: #3D463A;
-        --line-strong: #56604F;
-        --brand: #9BC69D;
-        --brand-strong: #B6DDB7;
-        --accent: #E1A276;
-        --accent-soft: #3C2E27;
-        --rose: #E09A90;
-        --danger: #EF8A80;
-        --shadow: 0 16px 34px rgba(0, 0, 0, 0.38);
-      }
+      font-family: "Pretendard", -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans KR", system-ui, sans-serif;
     }
 
     * { box-sizing: border-box; }
@@ -58,7 +81,7 @@
     body { margin: 0; color: var(--text); font-size: 16px; line-height: 1.5; letter-spacing: 0; }
     button, input, textarea, select { font: inherit; }
     button { border: 0; cursor: pointer; -webkit-tap-highlight-color: transparent; }
-    button:active { transform: translateY(1px); }
+    button:active { transform: scale(.98); }
 
     button,
     [role="button"],
@@ -977,17 +1000,587 @@
       font-weight: 800;
     }
 
+    /* Phase 5.5.3 UI match-photo1 overrides */
+    body {
+      background: var(--bg);
+      color: var(--tx);
+      font-variant-numeric: tabular-nums;
+    }
+
+    .app-shell {
+      width: min(calc(100% - 24px), 1000px);
+      padding: 22px 0 calc(38px + env(safe-area-inset-bottom));
+    }
+
+    .topbar {
+      align-items: center;
+      padding: 12px 4px 20px;
+    }
+
+    .version-badge {
+      min-height: 25px;
+      margin-bottom: 4px;
+      padding: 0 10px;
+      border: var(--bd) solid var(--brand-soft-bd);
+      border-radius: 999px;
+      background: rgba(255, 255, 255, .86);
+      color: var(--brand-soft-tx);
+      box-shadow: var(--sh-card);
+      font-size: 11.5px;
+      font-weight: 700;
+    }
+
+    h1,
+    #babyTitle {
+      color: var(--tx);
+      font-family: "Gaegu", "Pretendard", "Noto Sans KR", system-ui, sans-serif;
+      font-size: 34px;
+      font-weight: 700;
+      line-height: 1.05;
+    }
+
+    .baby-days {
+      margin-top: 7px;
+      color: var(--tx-2);
+      font-size: 12.5px;
+      font-weight: 600;
+    }
+
+    .today-line {
+      color: var(--tx-3);
+      font-size: 11.5px;
+      font-weight: 500;
+    }
+
+    .small-action,
+    .danger-action,
+    .sheet-action,
+    .ghost-action {
+      min-height: 42px;
+      border-radius: var(--r-btn);
+      border: var(--bd-btn) solid var(--brand-soft-bd);
+      background: var(--brand-soft);
+      color: var(--brand-soft-tx);
+      box-shadow: none;
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    #managementButton {
+      width: 48px;
+      min-width: 48px;
+      padding: 0;
+      border-color: var(--card-bd);
+      background: rgba(255, 255, 255, .9);
+      color: var(--tx);
+      font-size: 0;
+    }
+
+    #managementButton::before {
+      content: "...";
+      display: block;
+      margin-top: -9px;
+      font-size: 25px;
+      line-height: 1;
+      letter-spacing: 1px;
+    }
+
+    .danger-action {
+      border-color: var(--warn-bd);
+      background: var(--warn-bg);
+      color: var(--warn-tx);
+    }
+
+    .profile-card,
+    .section,
+    .status-card {
+      margin-bottom: 16px;
+      padding: 16px;
+      border: var(--bd) solid var(--card-bd);
+      border-radius: var(--r-card);
+      background: rgba(255, 255, 255, .94);
+      box-shadow: var(--sh-card);
+      backdrop-filter: blur(8px);
+    }
+
+    .section-head {
+      margin-bottom: 11px;
+    }
+
+    .status-card h2,
+    .section h2,
+    .quick-actions-title,
+    .filter-title {
+      margin: 0;
+      color: var(--tx);
+      font-size: 15px;
+      font-weight: 600;
+      line-height: 1.3;
+    }
+
+    .section-kicker,
+    .filter-subtitle {
+      color: var(--tx-3);
+      font-size: 11.5px;
+      font-weight: 600;
+    }
+
+    .status-card > h2::after {
+      content: "실시간";
+      margin-left: 8px;
+      color: var(--tx-3);
+      font-size: 11.5px;
+      font-weight: 600;
+    }
+
+    .status-grid {
+      gap: 10px;
+      margin-top: 10px;
+    }
+
+    .status-item,
+    .stat,
+    .report-card,
+    .analysis-card {
+      border: var(--bd) solid var(--card-bd);
+      border-radius: var(--r-card);
+      background: var(--card);
+      box-shadow: var(--sh-card);
+    }
+
+    .status-item {
+      min-height: 96px;
+      padding: 13px 12px;
+    }
+
+    .status-item.is-sleeping .status-label::before,
+    .status-item.is-awake .status-label::before {
+      content: "";
+      display: inline-block;
+      width: 7px;
+      height: 7px;
+      margin-right: 5px;
+      border-radius: 999px;
+      background: currentColor;
+      vertical-align: 1px;
+    }
+
+    .status-item.is-sleeping { color: var(--sleep-tx); }
+    .status-item.is-awake { color: var(--wake-tx); }
+    .status-item.is-feeding { color: var(--feed-tx); }
+    .status-item.is-diaper { color: var(--dia-tx); }
+    .status-item.is-sleeping .status-value,
+    .status-item.is-awake .status-value,
+    .status-item.is-feeding .status-value,
+    .status-item.is-diaper .status-value { color: var(--tx); }
+
+    .status-label {
+      color: var(--tx-2);
+      font-size: 11.5px;
+      font-weight: 600;
+    }
+
+    .status-value {
+      color: var(--tx);
+      font-size: 15px;
+      font-weight: 600;
+    }
+
+    .status-detail,
+    .stat-note,
+    .report-note,
+    .analysis-note,
+    .analysis-empty,
+    .report-copy,
+    .record-count,
+    .last-record,
+    .log-meta {
+      color: var(--tx-2);
+    }
+
+    .main-actions {
+      gap: 12px;
+      margin: 0 0 16px;
+      padding: 16px;
+      border: var(--bd) solid var(--card-bd);
+      border-radius: var(--r-card);
+      background: rgba(255, 255, 255, .9);
+      box-shadow: var(--sh-card);
+      backdrop-filter: blur(8px);
+    }
+
+    .quick-actions-title::after {
+      content: "한 손으로 톡";
+      margin-left: 8px;
+      color: var(--tx-3);
+      font-size: 11.5px;
+      font-weight: 600;
+    }
+
+    .quick-row-primary,
+    .quick-row-secondary {
+      gap: 10px;
+    }
+
+    .record-action {
+      min-height: 124px;
+      padding: 17px;
+      border: var(--bd-btn) solid var(--card-bd);
+      border-radius: var(--r-btn);
+      background: var(--card);
+      color: var(--tx);
+      box-shadow: none;
+      transition: transform 120ms ease, filter 120ms ease;
+    }
+
+    .quick-row-primary .record-action {
+      min-height: 132px;
+    }
+
+    .quick-row-secondary .record-action {
+      min-height: 104px;
+      padding: 14px 12px;
+    }
+
+    .record-action:hover {
+      filter: saturate(1.03);
+      background: var(--card);
+    }
+
+    .record-action[data-record-type="feeding"] {
+      border-color: var(--feed-bd);
+      background: var(--feed-bg);
+      color: var(--feed-tx);
+    }
+
+    .record-action[data-record-type="diaper"] {
+      border-color: var(--dia-bd);
+      background: var(--dia-bg);
+      color: var(--dia-tx);
+    }
+
+    .record-action[data-record-type="burp"] {
+      border-color: var(--burp-bd);
+      background: var(--burp-bg);
+      color: var(--burp-tx);
+    }
+
+    .record-action[data-record-type="sleep"] {
+      border-color: var(--sleep-bd);
+      background: var(--sleep-bg);
+      color: var(--sleep-tx);
+    }
+
+    .record-action[data-record-type="wake"] {
+      border-color: var(--wake-bd);
+      background: var(--wake-bg);
+      color: var(--wake-tx);
+    }
+
+    .action-title {
+      display: grid;
+      gap: 4px;
+      color: currentColor;
+      font-size: 16px;
+      font-weight: 600;
+      line-height: 1.2;
+    }
+
+    .quick-row-secondary .record-action .action-title {
+      display: grid;
+      gap: 4px;
+      font-size: 16px;
+    }
+
+    .action-title small {
+      justify-self: start;
+      padding: 3px 8px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, .54);
+      color: currentColor;
+      font-size: 11.5px;
+      font-weight: 700;
+    }
+
+    .record-action[data-record-type="feeding"] .action-title::before { content: "ml"; }
+    .record-action[data-record-type="diaper"] .action-title::before { content: "▣"; }
+    .record-action[data-record-type="burp"] .action-title::before { content: "♪"; }
+    .record-action[data-record-type="sleep"] .action-title::before { content: "☾"; }
+    .record-action[data-record-type="wake"] .action-title::before { content: "☼"; }
+
+    .record-action .action-title::before {
+      font-size: 19px;
+      line-height: 1;
+    }
+
+    .last-record {
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    .feeding-detail-button {
+      min-height: 42px;
+      border: var(--bd-btn) solid var(--feed-bd);
+      border-radius: var(--r-btn);
+      background: rgba(255,255,255,.56);
+      color: var(--feed-tx);
+      box-shadow: none;
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    .collapsible-head {
+      align-items: start;
+    }
+
+    .collapsible-head h2::before {
+      content: "◦";
+      margin-right: 7px;
+      color: var(--brand);
+    }
+
+    .collapse-mark {
+      width: 28px;
+      height: 28px;
+      display: grid;
+      place-items: center;
+      border: var(--bd) solid var(--card-bd);
+      border-radius: 999px;
+      background: var(--card);
+      color: var(--tx-2);
+      font-size: 14px;
+    }
+
+    .record-controls {
+      gap: 12px;
+      margin-bottom: 16px;
+      padding: 16px;
+      border: var(--bd) solid var(--card-bd);
+      border-radius: var(--r-card);
+      background: rgba(255, 255, 255, .92);
+      box-shadow: var(--sh-card);
+      backdrop-filter: blur(8px);
+    }
+
+    .filter-head {
+      display: flex;
+      align-items: baseline;
+      gap: 8px;
+    }
+
+    .filter-row {
+      gap: 8px;
+    }
+
+    .filter-chip {
+      min-height: 36px;
+      padding: 0 13px;
+      border: var(--bd) solid var(--card-bd);
+      border-radius: var(--r-chip);
+      background: var(--card);
+      color: var(--tx);
+      font-size: 12.5px;
+      font-weight: 600;
+      box-shadow: none;
+    }
+
+    .filter-chip.active {
+      border-color: var(--brand);
+      background: var(--brand);
+      color: var(--brand-ink);
+      box-shadow: none;
+    }
+
+    .search-input,
+    .custom-date-input,
+    .form-field input,
+    .form-field select,
+    .form-field textarea {
+      border: var(--bd) solid var(--card-bd);
+      border-radius: var(--r-btn);
+      background: var(--card);
+      color: var(--tx);
+      font-weight: 600;
+    }
+
+    .search-input::placeholder,
+    .form-field input::placeholder,
+    .form-field textarea::placeholder {
+      color: var(--tx-3);
+    }
+
+    .log-list {
+      gap: 10px;
+    }
+
+    .log-item {
+      grid-template-columns: auto minmax(0, 1fr) auto auto;
+      gap: 10px;
+      padding: 12px;
+      border: var(--bd) solid var(--card-bd);
+      border-radius: var(--r-card);
+      background: var(--card);
+      box-shadow: var(--sh-card);
+    }
+
+    .log-select {
+      width: 24px;
+      height: 24px;
+      border-radius: 8px;
+      accent-color: var(--brand);
+    }
+
+    .log-main {
+      color: var(--tx);
+      font-weight: 600;
+    }
+
+    .type-pill,
+    .sync-badge {
+      border: var(--bd) solid var(--brand-soft-bd);
+      background: var(--brand-soft);
+      color: var(--brand-soft-tx);
+      font-size: 11.5px;
+      font-weight: 700;
+    }
+
+    .type-pill.type-feeding { border-color: var(--feed-bd); background: var(--feed-bg); color: var(--feed-tx); }
+    .type-pill.type-diaper { border-color: var(--dia-bd); background: var(--dia-bg); color: var(--dia-tx); }
+    .type-pill.type-burp { border-color: var(--burp-bd); background: var(--burp-bg); color: var(--burp-tx); }
+    .type-pill.type-sleep { border-color: var(--sleep-bd); background: var(--sleep-bg); color: var(--sleep-tx); }
+    .type-pill.type-wake { border-color: var(--wake-bd); background: var(--wake-bg); color: var(--wake-tx); }
+
+    .sync-badge.ok {
+      border-color: var(--brand-soft-bd);
+      background: var(--brand-soft);
+      color: var(--brand-soft-tx);
+    }
+
+    .sync-badge.waiting {
+      border-color: var(--dia-bd);
+      background: var(--dia-bg);
+      color: var(--dia-tx);
+    }
+
+    .sync-badge.error,
+    .sync-badge.deleted {
+      border-color: var(--warn-bd);
+      background: var(--warn-bg);
+      color: var(--warn-tx);
+    }
+
+    .edit-record,
+    .delete-record {
+      min-height: 38px;
+      padding: 0 12px;
+      border-radius: var(--r-btn);
+      border: var(--bd-btn) solid var(--brand-soft-bd);
+      background: var(--brand-soft);
+      color: var(--brand-soft-tx);
+      box-shadow: none;
+      font-size: 12.5px;
+      font-weight: 700;
+    }
+
+    .delete-record {
+      border-color: var(--warn-bd);
+      background: var(--warn-bg);
+      color: var(--warn-tx);
+    }
+
+    .bottom-sheet {
+      width: min(calc(100% - 18px), 720px);
+      border: var(--bd) solid var(--card-bd);
+      border-bottom: 0;
+      border-radius: 20px 20px 0 0;
+      background: var(--card);
+      box-shadow: var(--sh-pop);
+    }
+
+    .bottom-sheet::before {
+      content: "";
+      display: block;
+      width: 46px;
+      height: 5px;
+      margin: 0 auto 12px;
+      border-radius: 999px;
+      background: var(--card-bd);
+    }
+
+    .sheet-action {
+      border-color: var(--brand);
+      background: var(--brand);
+      color: var(--brand-ink);
+    }
+
+    .ghost-action,
+    .chip,
+    .stepper-btn,
+    .selected-amount,
+    .sheet-close,
+    .management-tab {
+      border: var(--bd) solid var(--card-bd);
+      border-radius: var(--r-btn);
+      background: var(--card);
+      color: var(--tx);
+      box-shadow: none;
+    }
+
+    .chip.active,
+    .chip.primary,
+    .management-tab.active {
+      border-color: var(--brand);
+      background: var(--brand-soft);
+      color: var(--brand-soft-tx);
+      box-shadow: none;
+    }
+
+    .toast {
+      border: var(--bd) solid var(--card-bd);
+      border-radius: 999px;
+      background: rgba(255,255,255,.96);
+      color: var(--tx);
+      box-shadow: var(--sh-pop);
+      font-size: 13px;
+      font-weight: 600;
+    }
+
     @media (min-width: 768px) {
-      .app-shell { padding-top: 24px; padding-bottom: 44px; }
+      .app-shell { padding-top: 26px; padding-bottom: 48px; }
+      #babyTitle { font-size: 42px; }
+      .status-value { font-size: 17px; }
       .illustration-slot { width: clamp(120px, 15vw, 190px); }
+    }
+
+    @media (min-width: 720px) {
+      .quick-row-primary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .quick-row-secondary { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+      .main-actions,
+      .record-controls,
+      .section,
+      .status-card { padding: 18px; }
+    }
+
+    @media (min-width: 1080px) {
+      .app-shell {
+        width: min(calc(100% - 48px), 1040px);
+      }
     }
 
     @media (max-width: 430px) {
       .app-shell { padding-inline: 12px; }
+      .status-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
       .illustration-slot { width: clamp(82px, 28vw, 128px); }
       .slot-3 { left: -12%; }
       .slot-4 { right: -12%; }
       .slot-7, .slot-8 { display: none; }
+    }
+
+    @media (max-width: 390px) {
+      .log-item { grid-template-columns: auto minmax(0, 1fr); }
+      .edit-record,
+      .delete-record { grid-column: 2; justify-self: start; }
+      .status-item { padding: 11px 9px; }
     }
   </style>
 </head>
@@ -1013,7 +1606,7 @@
         <div class="today-line" id="todayLine"></div>
       </div>
       <div class="icon-actions">
-        <button type="button" class="small-action" id="managementButton">관리</button>
+        <button type="button" class="small-action" id="managementButton" aria-label="관리 열기">관리</button>
       </div>
     </header>
 
@@ -1122,7 +1715,7 @@
           <button type="button" class="feeding-detail-button" data-sheet-only="feeding">상세설정</button>
         </div>
         <button type="button" class="record-action" data-record-type="diaper" data-sheet-only="diaper">
-          <span class="action-title">기저귀 <small>종류 선택</small></span>
+          <span class="action-title">기저귀 <small>종류 선택 ›</small></span>
           <span class="last-record" id="last-diaper">마지막 기록: 없음</span>
         </button>
       </div>
@@ -1167,6 +1760,10 @@
 
     <!-- 필터 / 날짜 / 검색 컨트롤 -->
     <div class="record-controls" aria-label="기록 필터 및 검색">
+      <div class="filter-head">
+        <h2 class="filter-title">필터</h2>
+        <span class="filter-subtitle">날짜 · 종류 · 검색</span>
+      </div>
       <div class="filter-row" id="dateFilterRow">
         <button type="button" class="filter-chip active" data-date-filter="today">오늘</button>
         <button type="button" class="filter-chip" data-date-filter="yesterday">어제</button>
@@ -1563,12 +2160,12 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="./cloud-config.js?v=6.0.0-design-foundation-ui-ripple"></script>
-  <script src="./cloud-supabase.js?v=6.0.0-design-foundation-ui-ripple"></script>
+  <script src="./cloud-config.js?v=5.5.3-ui-match-photo1"></script>
+  <script src="./cloud-supabase.js?v=5.5.3-ui-match-photo1"></script>
   <script>
     document.addEventListener("DOMContentLoaded", function () {
       if ("serviceWorker" in navigator) {
-        navigator.serviceWorker.register("./sw.js?v=6.0.0-design-foundation-ui-ripple").catch(function (error) {
+        navigator.serviceWorker.register("./sw.js?v=5.5.3-ui-match-photo1").catch(function (error) {
           console.warn("Service worker registration failed", error);
         });
       }
@@ -1762,8 +2359,9 @@
       const PRE_REPAIR_BACKUP_KEY = "baby_life_log_app_backup_before_repair";
       const BACKUP_FORMAT_VERSION = 2;
       const APP_NAME = "baby-life-log";
-      const APP_VERSION = "6.0.0-design-foundation";
-      const APP_PHASE_LABEL = "";
+      const APP_VERSION = "5.5.3";
+      const APP_PHASE_LABEL = "가족 workspace · UI match-photo1";
+      const SERVICE_WORKER_CACHE_NAME = "babylog-cache-v5-5-3-ui-match-photo1";
       const APP_INIT_TIME = new Date().toISOString();
       const ANALYSIS_API_ENDPOINT = "";
       const SERVER_OVERWRITE_BACKUP_KEY = "babylog_records_backup_before_server_overwrite";
@@ -7755,12 +8353,12 @@
         const lastDiaper = getRecords("diaper")[0];
         const sleep = getSleepState();
         const items = [
-          { label: "마지막 수유", value: lastFeeding ? elapsedText(lastFeeding.createdAt) : "기록 없음", detail: lastFeeding ? feedingSummary(lastFeeding) : "수유를 기록하면 표시됩니다." },
-          { label: "마지막 기저귀", value: lastDiaper ? elapsedText(lastDiaper.createdAt) : "기록 없음", detail: lastDiaper && lastDiaper.subtype ? subtypeLabels[lastDiaper.subtype] : "기저귀를 기록하면 표시됩니다." },
-          { label: "현재 수면", value: sleep.label, detail: sleep.detail }
+          { label: "마지막 수유", value: lastFeeding ? elapsedText(lastFeeding.createdAt) : "기록 없음", detail: lastFeeding ? feedingSummary(lastFeeding) : "수유를 기록하면 표시됩니다.", tone: "feeding" },
+          { label: "마지막 기저귀", value: lastDiaper ? elapsedText(lastDiaper.createdAt) : "기록 없음", detail: lastDiaper && lastDiaper.subtype ? subtypeLabels[lastDiaper.subtype] : "기저귀를 기록하면 표시됩니다.", tone: "diaper" },
+          { label: "현재 수면", value: sleep.label, detail: sleep.detail, tone: sleep.sleeping ? "sleeping" : "awake" }
         ];
         els.currentStatusGrid.innerHTML = items.map(function (item) {
-          return '<div class="status-item"><div class="status-label">' + escapeHtml(item.label) +
+          return '<div class="status-item is-' + escapeHtml(item.tone) + '"><div class="status-label">' + escapeHtml(item.label) +
             '</div><div class="status-value">' + escapeHtml(item.value) +
             '</div><div class="status-detail">' + escapeHtml(item.detail) + "</div></div>";
         }).join("");
@@ -8095,7 +8693,7 @@
         const memo = record.memo ? '<span class="log-memo">메모: ' + escapeHtml(record.memo) + '</span>' : "";
         const cloudStatus = getRecordCloudStatus(record);
         const cloud = '<span class="sync-badge ' + escapeHtml(cloudStatus.tone) + '">' + escapeHtml(recordCloudLabel(record)) + '</span>';
-        return '<span class="log-main"><span class="type-pill">' + escapeHtml(type) +
+        return '<span class="log-main"><span class="type-pill type-' + escapeHtml(record.type) + '">' + escapeHtml(type) +
           '</span><span>' + escapeHtml(value) + '</span></span><span class="log-meta">' +
           escapeHtml(when + " · " + elapsedText(record.createdAt)) + '</span>' + memo + cloud;
       }
@@ -8908,7 +9506,7 @@
           generatedAt: nowIso(),
           app: {
             appVersion: APP_VERSION,
-            cacheName: "babylog-cache-" + APP_VERSION,
+            cacheName: SERVICE_WORKER_CACHE_NAME,
             configVersion: (window.BABY_APP_CLOUD_CONFIG && window.BABY_APP_CLOUD_CONFIG.appVersion) || "-",
             babyCloudVersion: (window.BabyCloud && window.BabyCloud.appVersion) || (getFullConnectionDiagnostic() && getFullConnectionDiagnostic().babyCloudAppVersion) || "-",
             serviceWorkerSupported: serviceWorkerSupported,

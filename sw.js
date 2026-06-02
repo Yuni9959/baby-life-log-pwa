@@ -1,4 +1,4 @@
-const CACHE_NAME = "babylog-cache-6.0.0-design-foundation-ui-ripple";
+const CACHE_NAME = "babylog-cache-v5-5-3-ui-match-photo1";
 const CACHE_PREFIX = "babylog-cache-";
 const OLD_CACHE_PREFIX = "baby-life-log-";
 const PRIMARY_CACHE_NAME = CACHE_NAME;
