@@ -1,7 +1,7 @@
-const CACHE_NAME = "babylog-cache-5.2.1";
+const CACHE_NAME = "babylog-cache-6.0.0-design-foundation";
 const CACHE_PREFIX = "babylog-cache-";
 const OLD_CACHE_PREFIX = "baby-life-log-";
-const PRIMARY_CACHE_NAME = "babylog-cache-5.2.1";
+const PRIMARY_CACHE_NAME = "babylog-cache-6.0.0-design-foundation";
 const ASSETS_TO_CACHE = [
   "./index.html",
   "./manifest.json",

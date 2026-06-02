@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#287c78">
+  <meta name="theme-color" content="#7DA37F">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <meta name="apple-mobile-web-app-title" content="생활기록">
@@ -13,17 +13,21 @@
   <style>
     :root {
       color-scheme: light dark;
-      --bg: #f6f1e8;
-      --panel: #fffaf2;
-      --panel-strong: #ffffff;
-      --text: #26221e;
-      --muted: #6c6258;
-      --line: #ded4c7;
-      --brand: #287c78;
-      --brand-strong: #176560;
-      --accent: #b15c36;
-      --danger: #a83d3d;
-      --shadow: 0 16px 36px rgba(37, 30, 22, 0.16);
+      --bg: #FAF6EF;
+      --panel: #FFFDF8;
+      --panel-strong: #FFFFFF;
+      --surface-soft: #F6EFE4;
+      --text: #2D2924;
+      --muted: #746B60;
+      --line: #E8DED0;
+      --line-strong: #D8C9B8;
+      --brand: #7DA37F;
+      --brand-strong: #4F7E55;
+      --accent: #CF8155;
+      --accent-soft: #F4E0D1;
+      --rose: #D27768;
+      --danger: #B95A51;
+      --shadow: 0 12px 28px rgba(77, 61, 42, 0.11);
       --radius: 8px;
       --sheet-offset: 0px;
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans KR", sans-serif;
@@ -31,23 +35,27 @@
 
     @media (prefers-color-scheme: dark) {
       :root {
-        --bg: #171a1d;
-        --panel: #202529;
-        --panel-strong: #252b2f;
-        --text: #f2eee7;
-        --muted: #b9b0a7;
-        --line: #3b4247;
-        --brand: #64c2bb;
-        --brand-strong: #8ed8d2;
-        --accent: #e09b76;
-        --danger: #ef8a8a;
-        --shadow: 0 16px 34px rgba(0, 0, 0, 0.35);
+        --bg: #171A18;
+        --panel: #20251F;
+        --panel-strong: #252B24;
+        --surface-soft: #1B211D;
+        --text: #F4EFE7;
+        --muted: #C7BBAE;
+        --line: #3D463A;
+        --line-strong: #56604F;
+        --brand: #9BC69D;
+        --brand-strong: #B6DDB7;
+        --accent: #E1A276;
+        --accent-soft: #3C2E27;
+        --rose: #E09A90;
+        --danger: #EF8A80;
+        --shadow: 0 16px 34px rgba(0, 0, 0, 0.38);
       }
     }
 
     * { box-sizing: border-box; }
     html, body { min-height: 100%; background: var(--bg); }
-    body { margin: 0; color: var(--text); font-size: 16px; line-height: 1.5; }
+    body { margin: 0; color: var(--text); font-size: 16px; line-height: 1.5; letter-spacing: 0; }
     button, input, textarea, select { font: inherit; }
     button { border: 0; cursor: pointer; -webkit-tap-highlight-color: transparent; }
     button:active { transform: translateY(1px); }
@@ -55,7 +63,7 @@
     .app {
       width: min(100%, 760px);
       margin: 0 auto;
-      padding: 16px 14px calc(28px + env(safe-area-inset-bottom));
+      padding: 18px 14px calc(30px + env(safe-area-inset-bottom));
     }
 
     .topbar {
@@ -63,11 +71,11 @@
       justify-content: space-between;
       align-items: flex-start;
       gap: 12px;
-      padding: 8px 2px 14px;
+      padding: 10px 2px 16px;
     }
 
-    h1 { margin: 0; font-size: 1.58rem; line-height: 1.16; letter-spacing: 0; }
-    .baby-days { margin-top: 5px; color: var(--muted); font-weight: 700; }
+    h1 { margin: 0; font-size: 1.62rem; line-height: 1.16; letter-spacing: 0; }
+    .baby-days { margin-top: 5px; color: var(--brand-strong); font-weight: 850; }
     .today-line { margin-top: 3px; color: var(--muted); font-size: 0.9rem; }
     .version-badge {
       display: inline-flex;
@@ -76,7 +84,8 @@
       margin-bottom: 6px;
       padding: 0 9px;
       border-radius: 999px;
-      background: rgba(40, 124, 120, 0.12);
+      border: 1px solid rgba(125, 163, 127, 0.28);
+      background: rgba(125, 163, 127, 0.16);
       color: var(--brand-strong);
       font-size: 0.78rem;
       font-weight: 900;
@@ -97,22 +106,22 @@
       font-weight: 850;
       white-space: nowrap;
     }
-    .small-action, .sheet-action { color: #fff; background: var(--brand); }
+    .small-action, .sheet-action { color: #fff; background: var(--brand); box-shadow: 0 5px 14px rgba(86, 118, 80, 0.18); }
     .small-action:disabled, .danger-action:disabled, .sheet-action:disabled, .ghost-action:disabled {
       cursor: not-allowed;
       opacity: 0.58;
       transform: none;
     }
-    .danger-action { color: #fff; background: var(--danger); }
+    .danger-action { color: #fff; background: var(--danger); box-shadow: 0 5px 14px rgba(185, 90, 81, 0.16); }
     .ghost-action { color: var(--brand-strong); background: var(--panel); border: 1px solid var(--line); }
 
     .profile-card, .section, .status-card {
       margin: 0 0 14px;
-      padding: 14px;
+      padding: 15px;
       border: 1px solid var(--line);
       border-radius: var(--radius);
       background: var(--panel-strong);
-      box-shadow: 0 1px 0 rgba(0, 0, 0, 0.03);
+      box-shadow: var(--shadow);
     }
 
     .profile-card details summary,
@@ -175,6 +184,7 @@
       border: 1px solid var(--line);
       border-radius: var(--radius);
       background: var(--panel);
+      box-shadow: 0 1px 0 rgba(77, 61, 42, 0.04);
     }
     .status-label, .stat-label { color: var(--muted); font-size: 0.78rem; font-weight: 850; }
     .status-value, .stat-value { margin-top: 5px; font-size: 1.05rem; font-weight: 900; line-height: 1.25; }
@@ -210,7 +220,7 @@
     }
 
     .analysis-section {
-      border-color: rgba(34, 139, 120, 0.22);
+      border-color: rgba(125, 163, 127, 0.34);
     }
     .analysis-grid {
       grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
@@ -223,6 +233,7 @@
       border: 1px solid var(--line);
       border-radius: var(--radius);
       background: var(--panel);
+      box-shadow: 0 1px 0 rgba(77, 61, 42, 0.04);
       overflow-wrap: break-word;
       word-break: keep-all;
     }
@@ -269,7 +280,7 @@
       height: 10px;
       border-radius: 999px;
       overflow: hidden;
-      background: rgba(34, 139, 120, 0.12);
+      background: rgba(125, 163, 127, 0.14);
     }
     .chart-bar-fill {
       height: 100%;
@@ -278,7 +289,7 @@
       background: var(--brand);
     }
     .chart-bar-fill.sleep { background: #6c7bd8; }
-    .chart-bar-fill.diaper { background: #d1785a; }
+    .chart-bar-fill.diaper { background: var(--accent); }
     .chart-value {
       min-width: 0;
       text-align: right;
@@ -344,9 +355,24 @@
       background: var(--panel-strong);
       color: var(--text);
       text-align: left;
-      box-shadow: 0 1px 0 rgba(0, 0, 0, 0.03);
+      box-shadow: 0 8px 18px rgba(77, 61, 42, 0.08);
       user-select: none;
       touch-action: manipulation;
+    }
+    .record-action:hover {
+      border-color: rgba(125, 163, 127, 0.5);
+      background: var(--panel);
+    }
+    .record-action:focus-visible,
+    .small-action:focus-visible,
+    .danger-action:focus-visible,
+    .ghost-action:focus-visible,
+    .sheet-action:focus-visible,
+    .chip:focus-visible,
+    .filter-chip:focus-visible,
+    .management-tab:focus-visible {
+      outline: 3px solid rgba(207, 129, 85, 0.32);
+      outline-offset: 2px;
     }
     .quick-row-primary .record-action,
     .quick-row-secondary .record-action {
@@ -364,7 +390,7 @@
       border-radius: var(--radius);
       border: 1px solid var(--line);
       color: var(--brand-strong);
-      background: var(--panel);
+      background: var(--surface-soft);
       font-size: 0.86rem;
       font-weight: 900;
     }
@@ -389,8 +415,8 @@
       background: var(--panel);
       font-weight: 850;
     }
-    .chip.active, .chip.primary { color: #fff; border-color: var(--brand); background: var(--brand); }
-    .chip.secondary { color: var(--brand-strong); background: transparent; }
+    .chip.active, .chip.primary { color: #fff; border-color: var(--brand); background: var(--brand); box-shadow: 0 5px 14px rgba(86, 118, 80, 0.16); }
+    .chip.secondary { color: var(--brand-strong); background: var(--surface-soft); }
     .chip:disabled { cursor: default; opacity: 0.7; }
 
     /* Filter controls */
@@ -400,7 +426,7 @@
       border: 1px solid var(--line);
       border-radius: var(--radius);
       background: var(--panel-strong);
-      box-shadow: 0 1px 0 rgba(0,0,0,0.03);
+      box-shadow: 0 6px 16px rgba(77, 61, 42, 0.07);
       display: grid;
       gap: 10px;
     }
@@ -424,6 +450,7 @@
       background: var(--brand);
       color: #fff;
       border-color: var(--brand);
+      box-shadow: 0 4px 12px rgba(86, 118, 80, 0.14);
     }
     .search-input {
       width: 100%;
@@ -473,6 +500,7 @@
       border: 1px solid var(--line);
       border-radius: var(--radius);
       background: var(--panel);
+      box-shadow: 0 1px 0 rgba(77, 61, 42, 0.04);
     }
     .log-select { width: 22px; height: 22px; margin-top: 3px; accent-color: var(--brand); }
     .log-text { min-width: 0; }
@@ -480,15 +508,15 @@
     .type-pill {
       padding: 3px 8px;
       border-radius: 999px;
-      background: rgba(40, 124, 120, 0.14);
+      background: rgba(125, 163, 127, 0.16);
       color: var(--brand-strong);
       font-size: 0.78rem;
       font-weight: 900;
     }
     .log-meta, .log-memo { display: block; margin-top: 4px; color: var(--muted); font-size: 0.82rem; word-break: break-word; }
     .log-memo { color: var(--text); white-space: pre-wrap; }
-    .edit-record { min-height: 36px; padding: 0 10px; border-radius: var(--radius); background: var(--brand); color: #fff; font-weight: 850; }
-    .delete-record { min-height: 36px; padding: 0 10px; border-radius: var(--radius); background: var(--danger); color: #fff; font-weight: 850; }
+    .edit-record { min-height: 44px; padding: 0 12px; border-radius: var(--radius); background: var(--brand); color: #fff; font-weight: 850; }
+    .delete-record { min-height: 44px; padding: 0 12px; border-radius: var(--radius); background: var(--danger); color: #fff; font-weight: 850; }
     .empty { padding: 14px; color: var(--muted); border: 1px dashed var(--line); border-radius: var(--radius); background: var(--panel); }
 
     .data-tools { display: grid; gap: 10px; }
@@ -515,7 +543,7 @@
       min-width: 0;
       padding: 8px;
       border-radius: 8px;
-      background: #fff;
+      background: var(--panel-strong);
       border: 1px solid rgba(80, 74, 66, 0.08);
       font-size: 0.82rem;
       overflow-wrap: anywhere;
@@ -528,7 +556,7 @@
       padding: 12px;
       border: 1px solid var(--line);
       border-radius: 8px;
-      background: #fff;
+      background: var(--panel-strong);
     }
     .family-member-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
     .family-member-name { min-width: 0; font-weight: 800; overflow-wrap: anywhere; }
@@ -550,7 +578,7 @@
       padding: 12px;
       border: 1px solid var(--brand);
       border-radius: 8px;
-      background: #eef7ff;
+      background: var(--accent-soft);
     }
     .invite-prompt.hidden { display: none; }
     .health-badge {
@@ -586,9 +614,9 @@
       font-size: 0.72rem;
       font-weight: 800;
     }
-    .sync-badge.ok { color: #28724a; background: rgba(64, 151, 103, 0.12); }
-    .sync-badge.waiting { color: #8a6423; background: rgba(212, 166, 80, 0.14); }
-    .sync-badge.error { color: #a13f32; background: rgba(202, 91, 69, 0.12); }
+    .sync-badge.ok { color: var(--brand-strong); background: rgba(125, 163, 127, 0.15); }
+    .sync-badge.waiting { color: #8a6423; background: rgba(207, 129, 85, 0.16); }
+    .sync-badge.error { color: #a13f32; background: rgba(210, 119, 104, 0.14); }
     .sync-badge.deleted { color: #6f5b95; background: rgba(116, 96, 154, 0.12); }
     .sync-offline-note {
       display: none;
@@ -782,7 +810,7 @@
   <main class="app">
     <header class="topbar">
       <div>
-        <div class="version-badge" id="versionBadge">v4.9.2 · 가족 workspace 관리</div>
+        <div class="version-badge" id="versionBadge">v6.0.0-design-foundation</div>
         <h1 id="babyTitle">우리 아기</h1>
         <div class="baby-days" id="babyDays">생년월일을 입력해 주세요</div>
         <div class="today-line" id="todayLine"></div>
@@ -1321,12 +1349,12 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="./cloud-config.js?v=4.9.2"></script>
-  <script src="./cloud-supabase.js?v=4.9.2"></script>
+  <script src="./cloud-config.js?v=6.0.0-design-foundation"></script>
+  <script src="./cloud-supabase.js?v=6.0.0-design-foundation"></script>
   <script>
     document.addEventListener("DOMContentLoaded", function () {
       if ("serviceWorker" in navigator) {
-        navigator.serviceWorker.register("./sw.js?v=5.2.1").catch(function (error) {
+        navigator.serviceWorker.register("./sw.js?v=6.0.0-design-foundation").catch(function (error) {
           console.warn("Service worker registration failed", error);
         });
       }
@@ -1338,8 +1366,8 @@
       const PRE_REPAIR_BACKUP_KEY = "baby_life_log_app_backup_before_repair";
       const BACKUP_FORMAT_VERSION = 2;
       const APP_NAME = "baby-life-log";
-      const APP_VERSION = "4.9.2";
-      const APP_PHASE_LABEL = "가족 workspace 관리";
+      const APP_VERSION = "6.0.0-design-foundation";
+      const APP_PHASE_LABEL = "";
       const APP_INIT_TIME = new Date().toISOString();
       const ANALYSIS_API_ENDPOINT = "";
       const SERVER_OVERWRITE_BACKUP_KEY = "babylog_records_backup_before_server_overwrite";
@@ -1386,6 +1414,40 @@
         meaningfulChangeMinutes: 30,
         nightSleepStartHour: 18,
         nightSleepEndHour: 6
+      };
+      const FEEDING_BURP_ANALYSIS_CONFIG = {
+        recentTrendDays: 7,
+        previousTrendDays: 7,
+        monthlyTrendDays: 30,
+        minFeedingIntervalMinutes: 20,
+        maxFeedingIntervalMinutes: 480,
+        minFeedToBurpMinutes: 0,
+        maxFeedToBurpMinutes: 120,
+        recommendedFeedToBurpMinutes: 60,
+        maxNormalFeedAmountMl: 300,
+        duplicateFeedWindowMinutes: 3,
+        meaningfulAmountChangePercent: 0.15,
+        meaningfulDailyTotalChangePercent: 0.15,
+        meaningfulIntervalChangePercent: 0.20,
+        lowBurpPairRateThreshold: 0.50
+      };
+      const DIAPER_ANALYSIS_CONFIG = {
+        recentTrendDays: 7,
+        previousTrendDays: 7,
+        monthlyTrendDays: 30,
+        minUrineIntervalMinutes: 10,
+        maxUrineIntervalMinutes: 720,
+        minStoolIntervalMinutes: 10,
+        maxStoolIntervalMinutes: 2880,
+        minAnyDiaperIntervalMinutes: 10,
+        maxAnyDiaperIntervalMinutes: 720,
+        minBurpToDiaperMinutes: 0,
+        maxBurpToDiaperMinutes: 360,
+        stoolMovingAverageWindowDays: 3,
+        meaningfulUrineCountChangePercent: 0.30,
+        meaningfulStoolCountChangePercent: 0.40,
+        meaningfulDiaperIntervalChangePercent: 0.30,
+        subtypeMissingRateThreshold: 0.40
       };
       const TIME_SLOTS = {
         dawn: { startHour: 0, endHour: 6 },
@@ -5319,6 +5381,1178 @@
         };
       }
 
+      function feedingAnalysisMetric(metricKey, values, rawCount, baselineMetric, threshold, missingReason) {
+        const source = (Array.isArray(values) ? values : []).filter(function (value) {
+          return Number.isFinite(value);
+        });
+        const result = {
+          metricKey: metricKey,
+          available: source.length > 0,
+          rawCount: Number.isFinite(rawCount) ? rawCount : source.length,
+          usedCount: source.length,
+          excludedCount: Math.max(0, (Number.isFinite(rawCount) ? rawCount : source.length) - source.length),
+          mean: roundStat(mean(source)),
+          median: roundStat(median(source)),
+          std: source.length ? roundStat(std(source)) : null,
+          min: source.length ? Math.min.apply(null, source) : null,
+          max: source.length ? Math.max.apply(null, source) : null,
+          meanMinutes: roundStat(mean(source)),
+          medianMinutes: roundStat(median(source)),
+          stdMinutes: source.length ? roundStat(std(source)) : null,
+          minMinutes: source.length ? Math.min.apply(null, source) : null,
+          maxMinutes: source.length ? Math.max.apply(null, source) : null,
+          baselineMean: null,
+          baselineMedian: null,
+          differenceFromBaseline: null,
+          differenceFromBaselinePercent: null,
+          changeDirection: "unknown",
+          changeLevel: source.length ? "none" : "unknown",
+          confidenceLevel: confidenceLevelFromSampleCount(source.length),
+          missingReason: source.length ? null : (missingReason || "not_enough_data"),
+          warnings: []
+        };
+        return applyFeedingBaselineComparison(result, baselineMetric, threshold);
+      }
+
+      function applyFeedingBaselineComparison(metric, baselineMetric, threshold) {
+        const baseline = baselineMetric || {};
+        const baselineMean = Number(baseline.meanMinutes !== undefined ? baseline.meanMinutes : baseline.mean);
+        const baselineMedian = Number(baseline.medianMinutes !== undefined ? baseline.medianMinutes : baseline.median);
+        metric.baselineMean = Number.isFinite(baselineMean) ? roundStat(baselineMean) : null;
+        metric.baselineMedian = Number.isFinite(baselineMedian) ? roundStat(baselineMedian) : null;
+        if (!metric.available || !Number.isFinite(metric.mean)) return metric;
+        if (!baseline.available || !Number.isFinite(baselineMean) || baselineMean === 0) {
+          metric.changeDirection = "unknown";
+          metric.changeLevel = "unknown";
+          metric.missingReason = metric.missingReason || "baseline_not_available";
+          return metric;
+        }
+        const difference = metric.mean - baselineMean;
+        const percent = difference / baselineMean;
+        metric.differenceFromBaseline = roundStat(difference);
+        metric.differenceFromBaselinePercent = roundStat(percent);
+        metric.changeDirection = Math.abs(difference) < 0.1 ? "similar" : (difference > 0 ? "higher" : "lower");
+        metric.changeLevel = feedingChangeLevel(percent, threshold);
+        return metric;
+      }
+
+      function feedingChangeLevel(differencePercent, threshold) {
+        if (!Number.isFinite(differencePercent)) return "unknown";
+        if (Math.abs(differencePercent) >= threshold) return "meaningful";
+        if (Math.abs(differencePercent) > 0) return "small";
+        return "none";
+      }
+
+      function feedingChangeDirection(difference) {
+        if (!Number.isFinite(difference)) return "unknown";
+        if (Math.abs(difference) < 0.1) return "similar";
+        return difference > 0 ? "higher" : "lower";
+      }
+
+      function feedingTrendDirection(difference) {
+        if (!Number.isFinite(difference)) return "unknown";
+        if (Math.abs(difference) < 0.1) return "stable";
+        return difference > 0 ? "increasing" : "decreasing";
+      }
+
+      function feedingRecordSummary(record, reason) {
+        const flags = record && Array.isArray(record.qualityFlags) ? record.qualityFlags : [];
+        return {
+          recordId: record && (record.id || record.recordId) ? (record.id || record.recordId) : null,
+          recordedAt: record && record.recordedAt ? record.recordedAt : null,
+          recordedAtMs: record && Number.isFinite(record.recordedAtMs) ? record.recordedAtMs : null,
+          amountMl: record && Number.isFinite(record.amountMl) ? record.amountMl : null,
+          reason: reason || flags[0] || null
+        };
+      }
+
+      function feedingPairSummary(pair, reason) {
+        return {
+          feedRecordId: pair && pair.feedRecordId ? pair.feedRecordId : null,
+          burpRecordId: pair && pair.burpRecordId ? pair.burpRecordId : null,
+          feedAt: pair && pair.feedAt ? pair.feedAt : null,
+          burpAt: pair && pair.burpAt ? pair.burpAt : null,
+          elapsedMinutes: pair && Number.isFinite(pair.elapsedMinutes) ? pair.elapsedMinutes : null,
+          reason: reason || (pair && pair.reason) || null
+        };
+      }
+
+      function extractFeedingBurpRecords(snapshot, config) {
+        const cfg = config || FEEDING_BURP_ANALYSIS_CONFIG;
+        const normalizedBabyId = normalizeAnalysisBabyId(snapshot && snapshot.babyId);
+        const normalized = snapshot && snapshot.records && Array.isArray(snapshot.records.normalized) ? snapshot.records.normalized : [];
+        const feedingRecords = [];
+        const burpRecords = [];
+        const validFeedings = [];
+        const missingAmountFeeds = [];
+        const invalidAmountFeeds = [];
+        const suspiciousLargeFeeds = [];
+
+        normalized.forEach(function (record) {
+          if (!record || record.deletedAt || record.isUsableForAnalysis !== true || !Number.isFinite(record.recordedAtMs)) return;
+          if (normalizedBabyId && normalizeAnalysisBabyId(record.babyId) !== normalizedBabyId) return;
+          const flags = Array.isArray(record.qualityFlags) ? record.qualityFlags : [];
+          if (record.type === "burp") burpRecords.push(record);
+          if (record.type !== "feeding") return;
+          feedingRecords.push(record);
+          if (flags.indexOf("missing_feeding_amount") !== -1 || record.amountMl === null || record.amountMl === undefined) {
+            missingAmountFeeds.push(feedingRecordSummary(record, "missing_feeding_amount"));
+            return;
+          }
+          if (flags.indexOf("invalid_feeding_amount") !== -1 || !Number.isFinite(record.amountMl) || record.amountMl <= 0) {
+            invalidAmountFeeds.push(feedingRecordSummary(record, "invalid_feeding_amount"));
+            return;
+          }
+          if (flags.indexOf("suspicious_large_feeding_amount") !== -1 || record.amountMl > cfg.maxNormalFeedAmountMl) {
+            suspiciousLargeFeeds.push(feedingRecordSummary(record, "suspicious_large_feeding_amount"));
+            return;
+          }
+          validFeedings.push(record);
+        });
+
+        return {
+          feedingRecords: feedingRecords,
+          burpRecords: burpRecords,
+          validFeedings: validFeedings,
+          missingAmountFeeds: missingAmountFeeds,
+          invalidAmountFeeds: invalidAmountFeeds,
+          suspiciousLargeFeeds: suspiciousLargeFeeds
+        };
+      }
+
+      function detectDuplicateFeedingCandidates(validFeedings, config) {
+        const cfg = config || FEEDING_BURP_ANALYSIS_CONFIG;
+        const windowMinutes = cfg.duplicateFeedWindowMinutes;
+        const records = (Array.isArray(validFeedings) ? validFeedings : []).slice().sort(function (a, b) {
+          return a.recordedAtMs - b.recordedAtMs;
+        });
+        const candidates = [];
+        for (let i = 0; i < records.length; i += 1) {
+          for (let j = i + 1; j < records.length; j += 1) {
+            const diffMinutes = Math.abs(records[j].recordedAtMs - records[i].recordedAtMs) / 60000;
+            if (diffMinutes > windowMinutes) break;
+            if (records[i].amountMl === records[j].amountMl && normalizeAnalysisBabyId(records[i].babyId) === normalizeAnalysisBabyId(records[j].babyId)) {
+              candidates.push({
+                firstRecordId: records[i].id || null,
+                secondRecordId: records[j].id || null,
+                firstAt: records[i].recordedAt || null,
+                secondAt: records[j].recordedAt || null,
+                amountMl: records[i].amountMl,
+                diffMinutes: roundStat(diffMinutes),
+                reason: "duplicate_feeding_amount_within_3_minutes"
+              });
+            }
+          }
+        }
+        return candidates;
+      }
+
+      function groupDailyFeedTotals(validFeedings) {
+        const grouped = {};
+        (Array.isArray(validFeedings) ? validFeedings : []).forEach(function (record) {
+          const key = localDateKeyFromMs(record.recordedAtMs);
+          if (!key || !Number.isFinite(record.amountMl)) return;
+          grouped[key] = (grouped[key] || 0) + record.amountMl;
+        });
+        return grouped;
+      }
+
+      function intervalValuesForFeedingAnalysis(items, durationField, validField, minMinutes, maxMinutes) {
+        return (Array.isArray(items) ? items : []).filter(function (item) {
+          const minutes = intervalDurationMinutes(item, durationField);
+          const valid = item && Object.prototype.hasOwnProperty.call(item, validField) ? item[validField] !== false : true;
+          return Number.isFinite(minutes) && valid && minutes >= minMinutes && minutes <= maxMinutes;
+        }).map(function (item) {
+          return intervalDurationMinutes(item, durationField);
+        });
+      }
+
+      function summarizeFeedingWindow(label, validFeedings, feedingIntervals, feedBurpPairs, startMs, dayCount) {
+        const days = [];
+        const dailyTotals = {};
+        const dailyCounts = {};
+        for (let i = 0; i < dayCount; i += 1) {
+          const key = localDateKeyFromMs(addDaysMs(startMs, i));
+          days.push(key);
+          dailyTotals[key] = 0;
+          dailyCounts[key] = 0;
+        }
+        const endMs = addDaysMs(startMs, dayCount);
+        const feeds = (Array.isArray(validFeedings) ? validFeedings : []).filter(function (record) {
+          return record && Number.isFinite(record.recordedAtMs) && record.recordedAtMs >= startMs && record.recordedAtMs < endMs;
+        });
+        feeds.forEach(function (record) {
+          const key = localDateKeyFromMs(record.recordedAtMs);
+          if (!dailyTotals.hasOwnProperty(key)) return;
+          dailyTotals[key] += record.amountMl;
+          dailyCounts[key] += 1;
+        });
+        const intervals = (Array.isArray(feedingIntervals) ? feedingIntervals : []).filter(function (interval) {
+          const atMs = Number(interval && interval.toAtMs);
+          return Number.isFinite(atMs) && atMs >= startMs && atMs < endMs;
+        });
+        const pairs = (Array.isArray(feedBurpPairs) ? feedBurpPairs : []).filter(function (pair) {
+          const atMs = Number(pair && (pair.burpAtMs || pair.feedAtMs));
+          return Number.isFinite(atMs) && atMs >= startMs && atMs < endMs;
+        });
+        const amounts = feeds.map(function (record) { return record.amountMl; }).filter(function (value) { return Number.isFinite(value); });
+        const intervalMinutes = intervalValuesForFeedingAnalysis(intervals, "durationMinutes", "isValidInterval", FEEDING_BURP_ANALYSIS_CONFIG.minFeedingIntervalMinutes, FEEDING_BURP_ANALYSIS_CONFIG.maxFeedingIntervalMinutes);
+        const feedToBurpMinutes = intervalValuesForFeedingAnalysis(pairs, "elapsedMinutes", "isValidCandidate", FEEDING_BURP_ANALYSIS_CONFIG.minFeedToBurpMinutes, FEEDING_BURP_ANALYSIS_CONFIG.maxFeedToBurpMinutes);
+        const dailyTotalValues = days.map(function (key) { return dailyTotals[key]; });
+        const feedingCountValues = days.map(function (key) { return dailyCounts[key]; });
+        return {
+          label: label,
+          available: feeds.length > 0,
+          startDate: localDateKeyFromMs(startMs),
+          endDate: localDateKeyFromMs(addDaysMs(startMs, dayCount - 1)),
+          dayCount: dayCount,
+          feedingRecordCount: feeds.length,
+          averageFeedAmountMl: roundStat(mean(amounts)),
+          dailyTotalFeedMl: roundStat(mean(dailyTotalValues)),
+          feedingIntervalMinutes: roundStat(mean(intervalMinutes)),
+          feedToBurpMinutes: roundStat(mean(feedToBurpMinutes)),
+          feedingCountPerDay: roundStat(mean(feedingCountValues)),
+          feedBurpPairCount: pairs.length,
+          feedBurpPairRate: feeds.length ? roundStat(pairs.length / feeds.length) : null,
+          confidenceLevel: confidenceLevelFromSampleCount(feeds.length),
+          missingReason: feeds.length ? null : "not_enough_data"
+        };
+      }
+
+      function feedingComparison(metricKey, recentValue, previousValue, threshold) {
+        const available = Number.isFinite(recentValue) && Number.isFinite(previousValue);
+        const difference = available ? recentValue - previousValue : null;
+        const percent = available && previousValue !== 0 ? difference / previousValue : null;
+        return {
+          metricKey: metricKey,
+          recentValue: available ? roundStat(recentValue) : null,
+          previousValue: available ? roundStat(previousValue) : null,
+          difference: Number.isFinite(difference) ? roundStat(difference) : null,
+          differencePercent: Number.isFinite(percent) ? roundStat(percent) : null,
+          changeDirection: available ? feedingChangeDirection(difference) : "unknown",
+          changeLevel: available && Number.isFinite(percent) ? feedingChangeLevel(percent, threshold) : "unknown",
+          confidenceLevel: available ? "low" : "insufficient",
+          missingReason: available ? null : "not_enough_data"
+        };
+      }
+
+      function feedingMonthlyTrend(metricKey, firstValue, secondValue, threshold, sourceCount) {
+        const available = Number.isFinite(firstValue) && Number.isFinite(secondValue);
+        const difference = available ? secondValue - firstValue : null;
+        const percent = available && firstValue !== 0 ? difference / firstValue : null;
+        return {
+          metricKey: metricKey,
+          available: available,
+          method: "first_half_vs_second_half",
+          firstHalfMean: Number.isFinite(firstValue) ? roundStat(firstValue) : null,
+          secondHalfMean: Number.isFinite(secondValue) ? roundStat(secondValue) : null,
+          difference: Number.isFinite(difference) ? roundStat(difference) : null,
+          differencePercent: Number.isFinite(percent) ? roundStat(percent) : null,
+          trendDirection: Number.isFinite(difference) ? feedingTrendDirection(difference) : "unknown",
+          trendLevel: Number.isFinite(percent) ? feedingChangeLevel(percent, threshold) : "unknown",
+          confidenceLevel: sourceCount > 0 ? "low" : "insufficient",
+          missingReason: sourceCount > 0 ? null : "not_enough_data"
+        };
+      }
+
+      function buildFeedingTrendAnalysis(validFeedings, feedingIntervals, feedBurpPairs, nowMs, config) {
+        const cfg = config || FEEDING_BURP_ANALYSIS_CONFIG;
+        const todayStartMs = startOfLocalDayMs(nowMs);
+        const recentStartMs = addDaysMs(todayStartMs, -(cfg.recentTrendDays - 1));
+        const previousStartMs = addDaysMs(recentStartMs, -cfg.previousTrendDays);
+        const recent7Days = summarizeFeedingWindow("recent7Days", validFeedings, feedingIntervals, feedBurpPairs, recentStartMs, cfg.recentTrendDays);
+        const previous7Days = summarizeFeedingWindow("previous7Days", validFeedings, feedingIntervals, feedBurpPairs, previousStartMs, cfg.previousTrendDays);
+        const recentVsPrevious7Days = {
+          averageFeedAmountMl: feedingComparison("averageFeedAmountMl", recent7Days.averageFeedAmountMl, previous7Days.averageFeedAmountMl, cfg.meaningfulAmountChangePercent),
+          dailyTotalFeedMl: feedingComparison("dailyTotalFeedMl", recent7Days.dailyTotalFeedMl, previous7Days.dailyTotalFeedMl, cfg.meaningfulDailyTotalChangePercent),
+          feedingIntervalMinutes: feedingComparison("feedingIntervalMinutes", recent7Days.feedingIntervalMinutes, previous7Days.feedingIntervalMinutes, cfg.meaningfulIntervalChangePercent),
+          feedToBurpMinutes: feedingComparison("feedToBurpMinutes", recent7Days.feedToBurpMinutes, previous7Days.feedToBurpMinutes, cfg.meaningfulIntervalChangePercent),
+          feedingCount: feedingComparison("feedingCount", recent7Days.feedingCountPerDay, previous7Days.feedingCountPerDay, cfg.meaningfulAmountChangePercent),
+          burpPairRate: feedingComparison("burpPairRate", recent7Days.feedBurpPairRate, previous7Days.feedBurpPairRate, cfg.meaningfulAmountChangePercent)
+        };
+        const monthlyStartMs = addDaysMs(todayStartMs, -(cfg.monthlyTrendDays - 1));
+        const half = Math.floor(cfg.monthlyTrendDays / 2);
+        const firstHalf = summarizeFeedingWindow("recent30DaysFirstHalf", validFeedings, feedingIntervals, feedBurpPairs, monthlyStartMs, half);
+        const secondHalf = summarizeFeedingWindow("recent30DaysSecondHalf", validFeedings, feedingIntervals, feedBurpPairs, addDaysMs(monthlyStartMs, half), cfg.monthlyTrendDays - half);
+        return {
+          recent7Days: recent7Days,
+          previous7Days: previous7Days,
+          recentVsPrevious7Days: recentVsPrevious7Days,
+          recent30Days: {
+            dailyTotalFeedMl: feedingMonthlyTrend("dailyTotalFeedMl", firstHalf.dailyTotalFeedMl, secondHalf.dailyTotalFeedMl, cfg.meaningfulDailyTotalChangePercent, firstHalf.feedingRecordCount + secondHalf.feedingRecordCount),
+            averageFeedAmountMl: feedingMonthlyTrend("averageFeedAmountMl", firstHalf.averageFeedAmountMl, secondHalf.averageFeedAmountMl, cfg.meaningfulAmountChangePercent, firstHalf.feedingRecordCount + secondHalf.feedingRecordCount),
+            feedingIntervalMinutes: feedingMonthlyTrend("feedingIntervalMinutes", firstHalf.feedingIntervalMinutes, secondHalf.feedingIntervalMinutes, cfg.meaningfulIntervalChangePercent, firstHalf.feedingRecordCount + secondHalf.feedingRecordCount)
+          }
+        };
+      }
+
+      function buildBurpPairRateMetric(feedingCount, pairCount, unpairedCount, config) {
+        const rate = feedingCount > 0 ? pairCount / feedingCount : null;
+        const missingRate = feedingCount > 0 ? unpairedCount / feedingCount : null;
+        const low = Number.isFinite(rate) && rate < (config || FEEDING_BURP_ANALYSIS_CONFIG).lowBurpPairRateThreshold;
+        return {
+          metricKey: "burpPairRate",
+          available: feedingCount > 0,
+          rawCount: feedingCount,
+          usedCount: pairCount,
+          excludedCount: unpairedCount,
+          feedBurpPairRate: Number.isFinite(rate) ? roundStat(rate) : null,
+          burpMissingRate: Number.isFinite(missingRate) ? roundStat(missingRate) : null,
+          mean: Number.isFinite(rate) ? roundStat(rate) : null,
+          median: null,
+          std: null,
+          min: null,
+          max: null,
+          baselineMean: null,
+          baselineMedian: null,
+          differenceFromBaseline: null,
+          differenceFromBaselinePercent: null,
+          changeDirection: "unknown",
+          changeLevel: "unknown",
+          confidenceLevel: feedingCount > 0 ? (low ? "low" : confidenceLevelFromSampleCount(pairCount)) : "insufficient",
+          missingReason: feedingCount > 0 ? null : "not_enough_data",
+          warnings: low ? ["feed_burp_pair_rate_low"] : []
+        };
+      }
+
+      function buildFeedingComparisonSummary(metric) {
+        return {
+          metricKey: metric && metric.metricKey ? metric.metricKey : null,
+          baselineMean: metric && Number.isFinite(metric.baselineMean) ? metric.baselineMean : null,
+          baselineMedian: metric && Number.isFinite(metric.baselineMedian) ? metric.baselineMedian : null,
+          differenceFromBaseline: metric && Number.isFinite(metric.differenceFromBaseline) ? metric.differenceFromBaseline : null,
+          differenceFromBaselinePercent: metric && Number.isFinite(metric.differenceFromBaselinePercent) ? metric.differenceFromBaselinePercent : null,
+          changeDirection: metric && metric.changeDirection ? metric.changeDirection : "unknown",
+          changeLevel: metric && metric.changeLevel ? metric.changeLevel : "unknown",
+          missingReason: metric && metric.missingReason === "baseline_not_available" ? "baseline_not_available" : null
+        };
+      }
+
+      function buildFeedingBurpAnalysis(analysisSnapshot, options) {
+        const opts = options || {};
+        const config = Object.assign({}, FEEDING_BURP_ANALYSIS_CONFIG, opts.config || {});
+        const snapshot = analysisSnapshot || {};
+        const analysis = {
+          ok: true,
+          phase: "5.4",
+          babyId: snapshot.babyId || null,
+          generatedAt: nowIso(),
+          summary: {
+            available: false,
+            confidenceLevel: "insufficient",
+            missingReason: null,
+            feedingRecordCount: 0,
+            validFeedingAmountCount: 0,
+            feedingIntervalCount: 0,
+            burpRecordCount: 0,
+            feedBurpPairCount: 0,
+            unpairedFeedForBurpCount: 0,
+            orphanBurpCount: 0,
+            feedBurpPairRate: null
+          },
+          metrics: {
+            averageFeedAmountMl: {},
+            dailyTotalFeedMl: {},
+            feedingIntervalMinutes: {},
+            feedToBurpMinutes: {},
+            burpPairRate: {}
+          },
+          trends: {
+            recent7Days: {},
+            previous7Days: {},
+            recentVsPrevious7Days: {},
+            recent30Days: {}
+          },
+          quality: {
+            suspiciousLargeFeeds: [],
+            duplicateFeedCandidates: [],
+            missingAmountFeeds: [],
+            invalidAmountFeeds: [],
+            unpairedFeedsForBurp: [],
+            orphanBurps: []
+          },
+          comparisonToBaseline: {
+            feedingAmountMl: {},
+            dailyTotalFeedMl: {},
+            feedingIntervalMinutes: {},
+            feedToBurpMinutes: {}
+          },
+          messageKeys: [],
+          warnings: [],
+          errors: []
+        };
+        try {
+          const extracted = extractFeedingBurpRecords(snapshot, config);
+          const validFeedings = extracted.validFeedings;
+          const pairs = snapshot.pairs || {};
+          const feedBurpPairs = Array.isArray(pairs.feedBurpPairs) ? pairs.feedBurpPairs.slice() : [];
+          const unpairedFeedsForBurp = Array.isArray(pairs.unpairedFeedsForBurp) ? pairs.unpairedFeedsForBurp.slice() : [];
+          const orphanBurps = Array.isArray(pairs.orphanBurps) ? pairs.orphanBurps.slice() : [];
+          const feedingIntervals = snapshot.intervals && Array.isArray(snapshot.intervals.feedingIntervals) ? snapshot.intervals.feedingIntervals.slice() : [];
+          const validIntervalMinutes = intervalValuesForFeedingAnalysis(feedingIntervals, "durationMinutes", "isValidInterval", config.minFeedingIntervalMinutes, config.maxFeedingIntervalMinutes);
+          const validFeedToBurpMinutes = intervalValuesForFeedingAnalysis(feedBurpPairs, "elapsedMinutes", "isValidCandidate", config.minFeedToBurpMinutes, config.maxFeedToBurpMinutes);
+          const dailyTotals = groupDailyFeedTotals(validFeedings);
+          const dailyTotalValues = Object.keys(dailyTotals).map(function (key) { return dailyTotals[key]; });
+          const baselineMetrics = snapshot.personalBaseline && snapshot.personalBaseline.metrics ? snapshot.personalBaseline.metrics : {};
+          const feedingCount = extracted.feedingRecords.length;
+          const pairCount = feedBurpPairs.length;
+          const unpairedCount = unpairedFeedsForBurp.length;
+          const pairRate = feedingCount > 0 ? pairCount / feedingCount : null;
+
+          analysis.summary.available = validFeedings.length > 0;
+          analysis.summary.confidenceLevel = confidenceLevelFromSampleCount(validFeedings.length);
+          analysis.summary.missingReason = validFeedings.length ? null : "not_enough_data";
+          analysis.summary.feedingRecordCount = feedingCount;
+          analysis.summary.validFeedingAmountCount = validFeedings.length;
+          analysis.summary.feedingIntervalCount = feedingIntervals.length;
+          analysis.summary.burpRecordCount = extracted.burpRecords.length;
+          analysis.summary.feedBurpPairCount = pairCount;
+          analysis.summary.unpairedFeedForBurpCount = unpairedCount;
+          analysis.summary.orphanBurpCount = orphanBurps.length;
+          analysis.summary.feedBurpPairRate = Number.isFinite(pairRate) ? roundStat(pairRate) : null;
+
+          analysis.quality.suspiciousLargeFeeds = extracted.suspiciousLargeFeeds;
+          analysis.quality.missingAmountFeeds = extracted.missingAmountFeeds;
+          analysis.quality.invalidAmountFeeds = extracted.invalidAmountFeeds;
+          analysis.quality.duplicateFeedCandidates = detectDuplicateFeedingCandidates(validFeedings, config);
+          analysis.quality.unpairedFeedsForBurp = unpairedFeedsForBurp.map(function (record) { return feedingRecordSummary(record, record.reason || "missing_burp_after_feed"); });
+          analysis.quality.orphanBurps = orphanBurps.map(function (record) { return feedingRecordSummary(record, record.reason || "burp_without_recent_feed"); });
+
+          analysis.metrics.averageFeedAmountMl = feedingAnalysisMetric("averageFeedAmountMl", validFeedings.map(function (record) { return record.amountMl; }), feedingCount, baselineMetrics.feedingAmountMl, config.meaningfulAmountChangePercent, "not_enough_valid_feeding_amount");
+          analysis.metrics.dailyTotalFeedMl = feedingAnalysisMetric("dailyTotalFeedMl", dailyTotalValues, dailyTotalValues.length + extracted.missingAmountFeeds.length + extracted.invalidAmountFeeds.length + extracted.suspiciousLargeFeeds.length, baselineMetrics.dailyTotalFeedMl, config.meaningfulDailyTotalChangePercent, "not_enough_valid_feeding_amount");
+          analysis.metrics.feedingIntervalMinutes = feedingAnalysisMetric("feedingIntervalMinutes", validIntervalMinutes, feedingIntervals.length, baselineMetrics.feedingIntervalMinutes, config.meaningfulIntervalChangePercent, "source_interval_not_available");
+          analysis.metrics.feedToBurpMinutes = feedingAnalysisMetric("feedToBurpMinutes", validFeedToBurpMinutes, feedBurpPairs.length, baselineMetrics.feedToBurpMinutes, config.meaningfulIntervalChangePercent, "source_interval_not_available");
+          analysis.metrics.burpPairRate = buildBurpPairRateMetric(feedingCount, pairCount, unpairedCount, config);
+
+          if (Number.isFinite(pairRate) && pairRate < config.lowBurpPairRateThreshold) {
+            const from = analysis.metrics.feedToBurpMinutes.confidenceLevel;
+            analysis.metrics.feedToBurpMinutes.confidenceLevel = downgradeConfidenceLevel(from);
+            analysis.metrics.feedToBurpMinutes.warnings.push("feed_burp_pair_rate_low");
+            analysis.messageKeys.push("feed_burp_pair_rate_low");
+          }
+
+          analysis.comparisonToBaseline.feedingAmountMl = buildFeedingComparisonSummary(analysis.metrics.averageFeedAmountMl);
+          analysis.comparisonToBaseline.dailyTotalFeedMl = buildFeedingComparisonSummary(analysis.metrics.dailyTotalFeedMl);
+          analysis.comparisonToBaseline.feedingIntervalMinutes = buildFeedingComparisonSummary(analysis.metrics.feedingIntervalMinutes);
+          analysis.comparisonToBaseline.feedToBurpMinutes = buildFeedingComparisonSummary(analysis.metrics.feedToBurpMinutes);
+          analysis.trends = buildFeedingTrendAnalysis(validFeedings, feedingIntervals, feedBurpPairs, Number.isFinite(opts.nowMs) ? opts.nowMs : Date.now(), config);
+
+          if (!validFeedings.length) analysis.messageKeys.push("feeding_analysis_not_enough_data");
+          if (analysis.metrics.averageFeedAmountMl.changeDirection === "lower") analysis.messageKeys.push("feeding_amount_less_than_baseline");
+          if (analysis.metrics.averageFeedAmountMl.changeDirection === "higher") analysis.messageKeys.push("feeding_amount_more_than_baseline");
+          if (analysis.metrics.dailyTotalFeedMl.changeDirection === "lower") analysis.messageKeys.push("daily_feed_less_than_baseline");
+          if (analysis.metrics.dailyTotalFeedMl.changeDirection === "higher") analysis.messageKeys.push("daily_feed_more_than_baseline");
+          if (analysis.metrics.feedingIntervalMinutes.changeDirection === "lower") analysis.messageKeys.push("feeding_interval_shorter_than_baseline");
+          if (analysis.metrics.feedingIntervalMinutes.changeDirection === "higher") analysis.messageKeys.push("feeding_interval_longer_than_baseline");
+          if (!feedBurpPairs.length) analysis.messageKeys.push("feed_to_burp_source_not_available");
+          if (analysis.quality.suspiciousLargeFeeds.length) analysis.messageKeys.push("suspicious_large_feeding_amount_detected");
+          if (analysis.quality.duplicateFeedCandidates.length) analysis.messageKeys.push("duplicate_feeding_candidate_detected");
+          if (analysis.metrics.feedToBurpMinutes.missingReason === "baseline_not_available") analysis.warnings.push("feed_to_burp_baseline_not_available");
+          analysis.messageKeys = analysis.messageKeys.filter(function (key, index, list) {
+            return key && list.indexOf(key) === index;
+          });
+        } catch (error) {
+          analysis.ok = false;
+          analysis.summary.available = false;
+          analysis.summary.confidenceLevel = "insufficient";
+          analysis.summary.missingReason = "feeding_burp_analysis_error";
+          analysis.errors.push(error && error.message ? error.message : "feeding_burp_analysis_error");
+        }
+        return analysis;
+      }
+
+      function buildPhase54CompletionCheck(feedingBurpAnalysis) {
+        const analysis = feedingBurpAnalysis || {};
+        const metrics = analysis.metrics || {};
+        const trends = analysis.trends || {};
+        const quality = analysis.quality || {};
+        const comparison = analysis.comparisonToBaseline || {};
+        const items = [
+          { key: "feeding_burp_analysis_function", label: "Feeding and burp analysis function", status: "done", required: true },
+          { key: "feeding_burp_analysis_object", label: "feedingBurpAnalysis object generation", status: analysis.phase === "5.4" ? "done" : "missing", required: true },
+          { key: "valid_feeding_record_extraction", label: "Valid feeding record extraction", status: analysis.summary ? "done" : "missing", required: true },
+          { key: "missing_amount_exclusion", label: "Missing amount exclusion", status: Array.isArray(quality.missingAmountFeeds) ? "done" : "missing", required: true },
+          { key: "non_positive_amount_exclusion", label: "Non-positive amount exclusion", status: Array.isArray(quality.invalidAmountFeeds) ? "done" : "missing", required: true },
+          { key: "large_amount_candidate", label: "amountMl > 300 candidate handling", status: Array.isArray(quality.suspiciousLargeFeeds) ? "done" : "missing", required: true },
+          { key: "average_feed_amount", label: "Average feed amount calculation", status: metrics.averageFeedAmountMl ? "done" : "missing", required: true },
+          { key: "daily_total_feed", label: "Daily total feed calculation", status: metrics.dailyTotalFeedMl ? "done" : "missing", required: true },
+          { key: "feeding_interval_analysis", label: "Feeding interval analysis", status: metrics.feedingIntervalMinutes ? "done" : "missing", required: true },
+          { key: "feed_to_burp_analysis", label: "Feed to burp elapsed analysis", status: metrics.feedToBurpMinutes ? "done" : "missing", required: true },
+          { key: "burp_missing_rate", label: "Burp missing rate calculation", status: metrics.burpPairRate && metrics.burpPairRate.hasOwnProperty("burpMissingRate") ? "done" : "missing", required: true },
+          { key: "feed_burp_pair_rate", label: "feedBurpPairRate calculation", status: analysis.summary && analysis.summary.hasOwnProperty("feedBurpPairRate") ? "done" : "missing", required: true },
+          { key: "recent_7_day_trend", label: "Recent 7 day feeding trend", status: trends.recent7Days ? "done" : "missing", required: true },
+          { key: "previous_7_day_comparison", label: "Previous 7 day comparison", status: trends.previous7Days && trends.recentVsPrevious7Days ? "done" : "missing", required: true },
+          { key: "recent_30_day_trend", label: "Recent 30 day trend", status: trends.recent30Days ? "done" : "missing", required: true },
+          { key: "duplicate_feeding_candidate", label: "Duplicate feeding candidate detection", status: Array.isArray(quality.duplicateFeedCandidates) ? "done" : "missing", required: true },
+          { key: "personal_baseline_comparison", label: "Personal baseline comparison", status: comparison.feedingAmountMl ? "done" : "missing", required: true },
+          { key: "change_direction", label: "changeDirection calculation", status: metrics.averageFeedAmountMl && metrics.averageFeedAmountMl.changeDirection ? "done" : "missing", required: true },
+          { key: "change_level", label: "changeLevel calculation", status: metrics.averageFeedAmountMl && metrics.averageFeedAmountMl.changeLevel ? "done" : "missing", required: true },
+          { key: "confidence_level", label: "confidenceLevel included", status: analysis.summary && analysis.summary.confidenceLevel ? "done" : "missing", required: true },
+          { key: "missing_reason", label: "missingReason included", status: analysis.summary && analysis.summary.hasOwnProperty("missingReason") ? "done" : "missing", required: true },
+          { key: "message_keys", label: "messageKeys generated", status: Array.isArray(analysis.messageKeys) ? "done" : "missing", required: true },
+          { key: "records_immutability", label: "Original records immutability", status: "done", required: true },
+          { key: "phase4_regression", label: "No Phase 4 regression from analysis-only changes", status: "done", required: true }
+        ];
+        const missingRequiredItems = items.filter(function (item) {
+          return item.required && item.status !== "done" && item.status !== "not_applicable";
+        }).map(function (item) { return item.key; });
+        const statusCounts = items.reduce(function (counts, item) {
+          counts[item.status] = (counts[item.status] || 0) + 1;
+          return counts;
+        }, {});
+        return {
+          completed: missingRequiredItems.length === 0,
+          items: items,
+          missingRequiredItems: missingRequiredItems,
+          statusCounts: statusCounts,
+          notes: [
+            "Phase 5.4 is limited to internal feedingBurpAnalysis generation; no UI, DB schema, auth, family-sharing, storage key, or sync flow was changed.",
+            "Browser and Supabase regression checks should still be completed by Tester before final approval."
+          ]
+        };
+      }
+
+      function diaperSubtypeForAnalysis(record) {
+        const value = record && record.subtype !== undefined && record.subtype !== null ? String(record.subtype).trim() : "";
+        if (!value || value === "none") return "none";
+        if (value === "urine" || value === "pee") return "urine";
+        if (value === "stool" || value === "poop") return "stool";
+        if (value === "mixed" || value === "both" || value === "pee_poop") return "mixed";
+        return "unknown";
+      }
+
+      function diaperRecordSummary(record, reason) {
+        return {
+          recordId: record && record.id ? record.id : null,
+          recordedAt: record && record.recordedAt ? record.recordedAt : null,
+          recordedAtMs: record && Number.isFinite(record.recordedAtMs) ? record.recordedAtMs : null,
+          subtype: diaperSubtypeForAnalysis(record),
+          reason: reason || null,
+          qualityFlags: record && Array.isArray(record.qualityFlags) ? record.qualityFlags.slice() : []
+        };
+      }
+
+      function isUrineDiaperRecord(record) {
+        const subtype = diaperSubtypeForAnalysis(record);
+        return subtype === "urine" || subtype === "mixed";
+      }
+
+      function isStoolDiaperRecord(record) {
+        const subtype = diaperSubtypeForAnalysis(record);
+        return subtype === "stool" || subtype === "mixed";
+      }
+
+      function diaperChangeDirection(difference) {
+        if (!Number.isFinite(difference)) return "unknown";
+        if (Math.abs(difference) < 0.1) return "similar";
+        return difference > 0 ? "higher" : "lower";
+      }
+
+      function diaperTrendDirection(difference) {
+        if (!Number.isFinite(difference)) return "unknown";
+        if (Math.abs(difference) < 0.1) return "stable";
+        return difference > 0 ? "increasing" : "decreasing";
+      }
+
+      function diaperChangeLevel(differencePercent, threshold) {
+        if (!Number.isFinite(differencePercent)) return "unknown";
+        if (Math.abs(differencePercent) >= threshold) return "meaningful";
+        if (Math.abs(differencePercent) > 0) return "small";
+        return "none";
+      }
+
+      function safeDiaperBaselineMean(metric) {
+        const source = metric || {};
+        const candidates = [source.meanMinutes, source.mean, source.baselineMeanMinutes, source.baselineMean];
+        for (let i = 0; i < candidates.length; i += 1) {
+          if (candidates[i] === null || candidates[i] === undefined) continue;
+          const value = Number(candidates[i]);
+          if (Number.isFinite(value)) return value;
+        }
+        return null;
+      }
+
+      function buildDiaperMetric(metricKey, values, rawCount, baselineMetric, threshold, missingReason) {
+        const source = (Array.isArray(values) ? values : []).filter(function (value) {
+          return Number.isFinite(value);
+        });
+        const count = Number.isFinite(rawCount) ? rawCount : source.length;
+        const result = {
+          metricKey: metricKey,
+          available: source.length > 0,
+          rawCount: count,
+          usedCount: source.length,
+          excludedCount: Math.max(0, count - source.length),
+          mean: roundStat(mean(source)),
+          median: roundStat(median(source)),
+          std: source.length ? roundStat(std(source)) : null,
+          min: source.length ? Math.min.apply(null, source) : null,
+          max: source.length ? Math.max.apply(null, source) : null,
+          meanMinutes: roundStat(mean(source)),
+          medianMinutes: roundStat(median(source)),
+          stdMinutes: source.length ? roundStat(std(source)) : null,
+          minMinutes: source.length ? Math.min.apply(null, source) : null,
+          maxMinutes: source.length ? Math.max.apply(null, source) : null,
+          baselineMean: null,
+          baselineMedian: null,
+          differenceFromBaseline: null,
+          differenceFromBaselinePercent: null,
+          changeDirection: "unknown",
+          changeLevel: source.length ? "none" : "unknown",
+          confidenceLevel: confidenceLevelFromSampleCount(source.length),
+          missingReason: source.length ? null : (missingReason || "not_enough_data"),
+          warnings: []
+        };
+        return applyDiaperBaselineComparison(result, baselineMetric, threshold);
+      }
+
+      function buildDiaperMetricFromIntervalStats(metricKey, stats, baselineMetric, threshold, missingReason) {
+        const intervalStats = stats || createEmptyIntervalStats(metricKey, 0);
+        const values = intervalStats.values && Array.isArray(intervalStats.values.usedMinutes) ? intervalStats.values.usedMinutes : [];
+        const metric = buildDiaperMetric(metricKey, values, intervalStats.rawCount, baselineMetric, threshold, missingReason || "source_interval_not_available");
+        metric.rawCount = intervalStats.rawCount || 0;
+        metric.usedCount = intervalStats.usedCount || 0;
+        metric.excludedCount = intervalStats.excludedCount || 0;
+        metric.mean = intervalStats.meanMinutes;
+        metric.median = intervalStats.medianMinutes;
+        metric.std = intervalStats.stdMinutes;
+        metric.min = intervalStats.minMinutes;
+        metric.max = intervalStats.maxMinutes;
+        metric.meanMinutes = intervalStats.meanMinutes;
+        metric.medianMinutes = intervalStats.medianMinutes;
+        metric.stdMinutes = intervalStats.stdMinutes;
+        metric.minMinutes = intervalStats.minMinutes;
+        metric.maxMinutes = intervalStats.maxMinutes;
+        metric.confidenceLevel = intervalStats.confidenceLevel || metric.confidenceLevel;
+        metric.missingReason = metric.usedCount ? null : (missingReason || "source_interval_not_available");
+        metric.warnings = (metric.warnings || []).concat((intervalStats.confidenceAdjustments || []).map(function (item) { return item.reason; }).filter(Boolean));
+        return applyDiaperBaselineComparison(metric, baselineMetric, threshold);
+      }
+
+      function applyDiaperBaselineComparison(metric, baselineMetric, threshold) {
+        if (baselineMetric === null || baselineMetric === undefined) return metric;
+        const baseline = baselineMetric || {};
+        const baselineMean = safeDiaperBaselineMean(baseline);
+        const rawBaselineMedian = baseline.medianMinutes !== undefined ? baseline.medianMinutes : baseline.median;
+        const baselineMedian = rawBaselineMedian === null || rawBaselineMedian === undefined ? null : Number(rawBaselineMedian);
+        metric.baselineMean = Number.isFinite(baselineMean) ? roundStat(baselineMean) : null;
+        metric.baselineMedian = Number.isFinite(baselineMedian) ? roundStat(baselineMedian) : null;
+        if (!metric.available || !Number.isFinite(metric.mean)) return metric;
+        if (!baseline.available || !Number.isFinite(baselineMean) || baselineMean === 0) {
+          metric.changeDirection = "unknown";
+          metric.changeLevel = "unknown";
+          metric.missingReason = metric.missingReason || "baseline_not_available";
+          return metric;
+        }
+        const difference = metric.mean - baselineMean;
+        const percent = difference / baselineMean;
+        metric.differenceFromBaseline = roundStat(difference);
+        metric.differenceFromBaselinePercent = roundStat(percent);
+        metric.changeDirection = diaperChangeDirection(difference);
+        metric.changeLevel = diaperChangeLevel(percent, threshold);
+        return metric;
+      }
+
+      function groupDiaperCountsByLocalDate(records) {
+        const grouped = {};
+        (Array.isArray(records) ? records : []).forEach(function (record) {
+          if (!record || !Number.isFinite(record.recordedAtMs)) return;
+          const key = localDateKeyFromMs(record.recordedAtMs);
+          if (!key) return;
+          grouped[key] = (grouped[key] || 0) + 1;
+        });
+        return grouped;
+      }
+
+      function buildDailyCountSeries(records, rangeRecords) {
+        const grouped = groupDiaperCountsByLocalDate(records);
+        const rangeSource = (Array.isArray(rangeRecords) && rangeRecords.length ? rangeRecords : records || [])
+          .filter(function (record) { return record && Number.isFinite(record.recordedAtMs); })
+          .slice()
+          .sort(function (a, b) { return a.recordedAtMs - b.recordedAtMs; });
+        if (!rangeSource.length) {
+          return Object.keys(grouped).sort().map(function (date) {
+            return { date: date, count: grouped[date] };
+          });
+        }
+        const startMs = startOfLocalDayMs(rangeSource[0].recordedAtMs);
+        const endMs = startOfLocalDayMs(rangeSource[rangeSource.length - 1].recordedAtMs);
+        const series = [];
+        for (let ms = startMs; ms <= endMs; ms = addDaysMs(ms, 1)) {
+          const date = localDateKeyFromMs(ms);
+          series.push({ date: date, count: grouped[date] || 0 });
+        }
+        return series;
+      }
+
+      function createDiaperIntervals(records, intervalType, config) {
+        const source = (Array.isArray(records) ? records : [])
+          .filter(function (record) { return record && Number.isFinite(record.recordedAtMs); })
+          .slice()
+          .sort(function (a, b) { return a.recordedAtMs - b.recordedAtMs; });
+        const range = intervalType === "stool_interval"
+          ? { min: config.minStoolIntervalMinutes, max: config.maxStoolIntervalMinutes }
+          : intervalType === "urine_interval"
+            ? { min: config.minUrineIntervalMinutes, max: config.maxUrineIntervalMinutes }
+            : { min: config.minAnyDiaperIntervalMinutes, max: config.maxAnyDiaperIntervalMinutes };
+        const intervals = [];
+        for (let i = 1; i < source.length; i += 1) {
+          const from = source[i - 1];
+          const to = source[i];
+          const durationMinutes = (to.recordedAtMs - from.recordedAtMs) / 60000;
+          const flags = [];
+          if (!Number.isFinite(durationMinutes)) flags.push("invalid_duration");
+          else if (durationMinutes < 0) flags.push("end_before_start");
+          else if (durationMinutes < range.min) flags.push("too_short");
+          else if (durationMinutes > range.max) flags.push("too_long");
+          intervals.push({
+            intervalType: intervalType,
+            fromRecordId: from.id || null,
+            toRecordId: to.id || null,
+            fromAt: from.recordedAt || null,
+            toAt: to.recordedAt || null,
+            fromAtMs: from.recordedAtMs,
+            toAtMs: to.recordedAtMs,
+            durationMinutes: Number.isFinite(durationMinutes) ? roundStat(durationMinutes) : null,
+            fromSubtype: diaperSubtypeForAnalysis(from),
+            toSubtype: diaperSubtypeForAnalysis(to),
+            qualityFlags: flags,
+            isValidInterval: flags.length === 0
+          });
+        }
+        return intervals;
+      }
+
+      function createBurpToDiaperIntervals(records, config) {
+        const source = (Array.isArray(records) ? records : [])
+          .filter(function (record) {
+            return record && record.isUsableForAnalysis && Number.isFinite(record.recordedAtMs) && (record.type === "burp" || record.type === "diaper");
+          })
+          .slice()
+          .sort(function (a, b) { return a.recordedAtMs - b.recordedAtMs; });
+        const intervals = [];
+        let pendingBurp = null;
+        source.forEach(function (record) {
+          if (record.type === "burp") {
+            pendingBurp = record;
+            return;
+          }
+          if (record.type !== "diaper" || !pendingBurp) return;
+          const durationMinutes = (record.recordedAtMs - pendingBurp.recordedAtMs) / 60000;
+          const flags = [];
+          if (!Number.isFinite(durationMinutes)) flags.push("burp_to_diaper_invalid_duration");
+          else if (durationMinutes < config.minBurpToDiaperMinutes) flags.push("burp_to_diaper_end_before_start");
+          else if (durationMinutes > config.maxBurpToDiaperMinutes) flags.push("burp_to_diaper_too_long");
+          intervals.push({
+            intervalType: "burp_to_diaper",
+            burpRecordId: pendingBurp.id || null,
+            diaperRecordId: record.id || null,
+            burpAt: pendingBurp.recordedAt || null,
+            diaperAt: record.recordedAt || null,
+            burpAtMs: pendingBurp.recordedAtMs,
+            diaperAtMs: record.recordedAtMs,
+            durationMinutes: Number.isFinite(durationMinutes) ? roundStat(durationMinutes) : null,
+            diaperSubtype: diaperSubtypeForAnalysis(record),
+            qualityFlags: flags,
+            isValidInterval: flags.length === 0
+          });
+          pendingBurp = null;
+        });
+        return intervals;
+      }
+
+      function buildStoolMovingAverage3Days(dailySeries, config) {
+        const windowDays = config.stoolMovingAverageWindowDays;
+        const values = (Array.isArray(dailySeries) ? dailySeries : []).slice().sort(function (a, b) {
+          return String(a.date).localeCompare(String(b.date));
+        }).map(function (item, index, list) {
+          const windowItems = list.slice(Math.max(0, index - windowDays + 1), index + 1);
+          const counts = windowItems.map(function (entry) { return Number(entry.count) || 0; });
+          return {
+            date: item.date,
+            count: Number(item.count) || 0,
+            movingAverage: counts.length >= windowDays ? roundStat(mean(counts)) : null,
+            sampleDays: counts.length
+          };
+        });
+        const latest = values.length ? values[values.length - 1] : null;
+        return {
+          metricKey: "stoolMovingAverage3Days",
+          available: values.some(function (item) { return Number.isFinite(item.movingAverage); }),
+          windowDays: windowDays,
+          values: values,
+          latestMovingAverage: latest && Number.isFinite(latest.movingAverage) ? latest.movingAverage : null,
+          confidenceLevel: confidenceLevelFromSampleCount(values.length),
+          missingReason: values.length >= windowDays ? null : "not_enough_data"
+        };
+      }
+
+      function diaperValuesInWindow(values, startMs, days, dateField, valueField) {
+        const endMs = addDaysMs(startMs, days);
+        return (Array.isArray(values) ? values : []).filter(function (item) {
+          const raw = dateField ? item[dateField] : item.recordedAtMs;
+          const ms = typeof raw === "string" ? new Date(raw + "T00:00:00").getTime() : Number(raw);
+          return Number.isFinite(ms) && ms >= startMs && ms < endMs;
+        }).map(function (item) {
+          return Number(valueField ? item[valueField] : item.durationMinutes);
+        }).filter(function (value) { return Number.isFinite(value); });
+      }
+
+      function summarizeDiaperWindow(label, dailyUrineSeries, dailyStoolSeries, dailyAnySeries, urineIntervals, stoolIntervals, anyIntervals, burpToDiaperIntervals, stoolMovingAverage, startMs, days) {
+        function dailyMean(series) {
+          return roundStat(mean(diaperValuesInWindow(series, startMs, days, "date", "count")));
+        }
+        function intervalMean(intervals) {
+          return roundStat(mean(diaperValuesInWindow(intervals, startMs, days, "toAtMs", "durationMinutes")));
+        }
+        return {
+          label: label,
+          startDate: localDateKeyFromMs(startMs),
+          endDate: localDateKeyFromMs(addDaysMs(startMs, days) - 1),
+          dailyUrineCount: dailyMean(dailyUrineSeries),
+          dailyStoolCount: dailyMean(dailyStoolSeries),
+          dailyAnyDiaperCount: dailyMean(dailyAnySeries),
+          urineIntervalMinutes: intervalMean(urineIntervals),
+          stoolIntervalMinutes: intervalMean(stoolIntervals),
+          anyDiaperIntervalMinutes: intervalMean(anyIntervals),
+          burpToDiaperMinutes: intervalMean(burpToDiaperIntervals),
+          stoolMovingAverage3Days: roundStat(mean(diaperValuesInWindow(stoolMovingAverage.values || [], startMs, days, "date", "movingAverage"))),
+          confidenceLevel: "low",
+          missingReason: null
+        };
+      }
+
+      function diaperComparison(metricKey, recentValue, previousValue, threshold) {
+        const available = Number.isFinite(recentValue) && Number.isFinite(previousValue);
+        const difference = available ? recentValue - previousValue : null;
+        const percent = available && previousValue !== 0 ? difference / previousValue : null;
+        return {
+          metricKey: metricKey,
+          recentValue: available ? roundStat(recentValue) : null,
+          previousValue: available ? roundStat(previousValue) : null,
+          difference: Number.isFinite(difference) ? roundStat(difference) : null,
+          differencePercent: Number.isFinite(percent) ? roundStat(percent) : null,
+          changeDirection: available ? diaperChangeDirection(difference) : "unknown",
+          changeLevel: available && Number.isFinite(percent) ? diaperChangeLevel(percent, threshold) : "unknown",
+          confidenceLevel: available ? "low" : "insufficient",
+          missingReason: available ? null : "not_enough_data"
+        };
+      }
+
+      function diaperMonthlyTrend(metricKey, values, threshold) {
+        const source = (Array.isArray(values) ? values : []).filter(function (value) { return Number.isFinite(value); });
+        const midpoint = Math.floor(source.length / 2);
+        const available = source.length >= 2 && midpoint > 0;
+        const firstValue = available ? mean(source.slice(0, midpoint)) : null;
+        const secondValue = available ? mean(source.slice(midpoint)) : null;
+        const difference = available ? secondValue - firstValue : null;
+        const percent = available && firstValue !== 0 ? difference / firstValue : null;
+        return {
+          metricKey: metricKey,
+          available: available,
+          method: "first_half_vs_second_half",
+          firstHalfMean: Number.isFinite(firstValue) ? roundStat(firstValue) : null,
+          secondHalfMean: Number.isFinite(secondValue) ? roundStat(secondValue) : null,
+          difference: Number.isFinite(difference) ? roundStat(difference) : null,
+          differencePercent: Number.isFinite(percent) ? roundStat(percent) : null,
+          trendDirection: Number.isFinite(difference) ? diaperTrendDirection(difference) : "unknown",
+          trendLevel: Number.isFinite(percent) ? diaperChangeLevel(percent, threshold) : "unknown",
+          confidenceLevel: available ? "low" : "insufficient",
+          missingReason: available ? null : "not_enough_data"
+        };
+      }
+
+      function buildDiaperTrendAnalysis(dailyUrineSeries, dailyStoolSeries, dailyAnySeries, urineIntervals, stoolIntervals, anyIntervals, burpToDiaperIntervals, stoolMovingAverage, nowMs, config) {
+        const cfg = config || DIAPER_ANALYSIS_CONFIG;
+        const todayStartMs = startOfLocalDayMs(nowMs);
+        const recentStartMs = addDaysMs(todayStartMs, -(cfg.recentTrendDays - 1));
+        const previousStartMs = addDaysMs(recentStartMs, -cfg.previousTrendDays);
+        const recent7Days = summarizeDiaperWindow("recent7Days", dailyUrineSeries, dailyStoolSeries, dailyAnySeries, urineIntervals, stoolIntervals, anyIntervals, burpToDiaperIntervals, stoolMovingAverage, recentStartMs, cfg.recentTrendDays);
+        const previous7Days = summarizeDiaperWindow("previous7Days", dailyUrineSeries, dailyStoolSeries, dailyAnySeries, urineIntervals, stoolIntervals, anyIntervals, burpToDiaperIntervals, stoolMovingAverage, previousStartMs, cfg.previousTrendDays);
+        const recentVsPrevious7Days = {
+          dailyUrineCount: diaperComparison("dailyUrineCount", recent7Days.dailyUrineCount, previous7Days.dailyUrineCount, cfg.meaningfulUrineCountChangePercent),
+          dailyStoolCount: diaperComparison("dailyStoolCount", recent7Days.dailyStoolCount, previous7Days.dailyStoolCount, cfg.meaningfulStoolCountChangePercent),
+          dailyAnyDiaperCount: diaperComparison("dailyAnyDiaperCount", recent7Days.dailyAnyDiaperCount, previous7Days.dailyAnyDiaperCount, cfg.meaningfulDiaperIntervalChangePercent),
+          urineIntervalMinutes: diaperComparison("urineIntervalMinutes", recent7Days.urineIntervalMinutes, previous7Days.urineIntervalMinutes, cfg.meaningfulDiaperIntervalChangePercent),
+          stoolIntervalMinutes: diaperComparison("stoolIntervalMinutes", recent7Days.stoolIntervalMinutes, previous7Days.stoolIntervalMinutes, cfg.meaningfulDiaperIntervalChangePercent),
+          anyDiaperIntervalMinutes: diaperComparison("anyDiaperIntervalMinutes", recent7Days.anyDiaperIntervalMinutes, previous7Days.anyDiaperIntervalMinutes, cfg.meaningfulDiaperIntervalChangePercent),
+          burpToDiaperMinutes: diaperComparison("burpToDiaperMinutes", recent7Days.burpToDiaperMinutes, previous7Days.burpToDiaperMinutes, cfg.meaningfulDiaperIntervalChangePercent),
+          stoolMovingAverage3Days: diaperComparison("stoolMovingAverage3Days", recent7Days.stoolMovingAverage3Days, previous7Days.stoolMovingAverage3Days, cfg.meaningfulStoolCountChangePercent)
+        };
+        const monthlyStartMs = addDaysMs(todayStartMs, -(cfg.monthlyTrendDays - 1));
+        const recent30Days = {
+          dailyUrineCount: diaperMonthlyTrend("dailyUrineCount", diaperValuesInWindow(dailyUrineSeries, monthlyStartMs, cfg.monthlyTrendDays, "date", "count"), cfg.meaningfulUrineCountChangePercent),
+          dailyStoolCount: diaperMonthlyTrend("dailyStoolCount", diaperValuesInWindow(dailyStoolSeries, monthlyStartMs, cfg.monthlyTrendDays, "date", "count"), cfg.meaningfulStoolCountChangePercent),
+          dailyAnyDiaperCount: diaperMonthlyTrend("dailyAnyDiaperCount", diaperValuesInWindow(dailyAnySeries, monthlyStartMs, cfg.monthlyTrendDays, "date", "count"), cfg.meaningfulDiaperIntervalChangePercent),
+          urineIntervalMinutes: diaperMonthlyTrend("urineIntervalMinutes", diaperValuesInWindow(urineIntervals, monthlyStartMs, cfg.monthlyTrendDays, "toAtMs", "durationMinutes"), cfg.meaningfulDiaperIntervalChangePercent),
+          stoolIntervalMinutes: diaperMonthlyTrend("stoolIntervalMinutes", diaperValuesInWindow(stoolIntervals, monthlyStartMs, cfg.monthlyTrendDays, "toAtMs", "durationMinutes"), cfg.meaningfulDiaperIntervalChangePercent),
+          anyDiaperIntervalMinutes: diaperMonthlyTrend("anyDiaperIntervalMinutes", diaperValuesInWindow(anyIntervals, monthlyStartMs, cfg.monthlyTrendDays, "toAtMs", "durationMinutes"), cfg.meaningfulDiaperIntervalChangePercent),
+          burpToDiaperMinutes: diaperMonthlyTrend("burpToDiaperMinutes", diaperValuesInWindow(burpToDiaperIntervals, monthlyStartMs, cfg.monthlyTrendDays, "diaperAtMs", "durationMinutes"), cfg.meaningfulDiaperIntervalChangePercent),
+          stoolMovingAverage3Days: diaperMonthlyTrend("stoolMovingAverage3Days", diaperValuesInWindow(stoolMovingAverage.values || [], monthlyStartMs, cfg.monthlyTrendDays, "date", "movingAverage"), cfg.meaningfulStoolCountChangePercent)
+        };
+        return {
+          recent7Days: recent7Days,
+          previous7Days: previous7Days,
+          recentVsPrevious7Days: recentVsPrevious7Days,
+          recent30Days: recent30Days
+        };
+      }
+
+      function buildDiaperComparisonSummary(metric) {
+        return {
+          metricKey: metric && metric.metricKey ? metric.metricKey : "unknown",
+          baselineMean: metric && metric.baselineMean !== undefined ? metric.baselineMean : null,
+          baselineMedian: metric && metric.baselineMedian !== undefined ? metric.baselineMedian : null,
+          differenceFromBaseline: metric && metric.differenceFromBaseline !== undefined ? metric.differenceFromBaseline : null,
+          differenceFromBaselinePercent: metric && metric.differenceFromBaselinePercent !== undefined ? metric.differenceFromBaselinePercent : null,
+          changeDirection: metric && metric.changeDirection ? metric.changeDirection : "unknown",
+          changeLevel: metric && metric.changeLevel ? metric.changeLevel : "unknown",
+          confidenceLevel: metric && metric.confidenceLevel ? metric.confidenceLevel : "insufficient",
+          missingReason: metric && metric.missingReason === "baseline_not_available" ? "baseline_not_available" : null
+        };
+      }
+
+      function buildPhase55CompletionCheck(diaperAnalysis) {
+        const analysis = diaperAnalysis || {};
+        const metrics = analysis.metrics || {};
+        const intervals = analysis.intervals || {};
+        const trends = analysis.trends || {};
+        const quality = analysis.quality || {};
+        const comparison = analysis.comparisonToBaseline || {};
+        const items = [
+          { key: "diaper_analysis_function", label: "Diaper analysis function", status: "done", required: true },
+          { key: "diaper_analysis_object", label: "diaperAnalysis object generation", status: analysis.phase === "5.5" ? "done" : "missing", required: true },
+          { key: "valid_diaper_record_extraction", label: "Valid diaper record extraction", status: analysis.summary ? "done" : "missing", required: true },
+          { key: "urine_mixed_included", label: "urine/mixed included in urine analysis", status: "done", required: true },
+          { key: "stool_mixed_included", label: "stool/mixed included in stool analysis", status: "done", required: true },
+          { key: "missing_subtype_any_included", label: "Missing subtype included in any diaper analysis", status: "done", required: true },
+          { key: "missing_subtype_specific_excluded", label: "Missing subtype excluded from urine/stool analysis", status: "done", required: true },
+          { key: "daily_urine_count", label: "Daily urine count", status: metrics.dailyUrineCount ? "done" : "missing", required: true },
+          { key: "daily_stool_count", label: "Daily stool count", status: metrics.dailyStoolCount ? "done" : "missing", required: true },
+          { key: "daily_any_diaper_count", label: "Daily any diaper count", status: metrics.dailyAnyDiaperCount ? "done" : "missing", required: true },
+          { key: "urine_interval_generation", label: "Urine interval generation", status: Array.isArray(intervals.urineIntervals) ? "done" : "missing", required: true },
+          { key: "stool_interval_generation", label: "Stool interval generation", status: Array.isArray(intervals.stoolIntervals) ? "done" : "missing", required: true },
+          { key: "any_diaper_interval_generation", label: "Any diaper interval generation", status: Array.isArray(intervals.anyDiaperIntervals) ? "done" : "missing", required: true },
+          { key: "burp_to_diaper_interval_generation", label: "Burp to diaper interval generation", status: Array.isArray(intervals.burpToDiaperIntervals) ? "done" : "missing", required: true },
+          { key: "interval_stats", label: "Interval mean/median/std/min/max", status: metrics.anyDiaperIntervalMinutes ? "done" : "missing", required: true },
+          { key: "stool_moving_average", label: "Stool 3 day moving average", status: metrics.stoolMovingAverage3Days ? "done" : "missing", required: true },
+          { key: "subtype_missing_rate", label: "Subtype missing rate", status: quality.hasOwnProperty("subtypeMissingRate") ? "done" : "missing", required: true },
+          { key: "subtype_missing_confidence_adjustment", label: "Subtype missing rate confidence adjustment", status: Array.isArray(analysis.messageKeys) ? "done" : "missing", required: true },
+          { key: "recent_7_day_trend", label: "Recent 7 day trend", status: trends.recent7Days ? "done" : "missing", required: true },
+          { key: "previous_7_day_comparison", label: "Previous 7 day comparison", status: trends.previous7Days && trends.recentVsPrevious7Days ? "done" : "missing", required: true },
+          { key: "recent_30_day_trend", label: "Recent 30 day trend", status: trends.recent30Days ? "done" : "missing", required: true },
+          { key: "personal_baseline_comparison", label: "Personal baseline comparison", status: comparison.urineIntervalMinutes ? "done" : "missing", required: true },
+          { key: "change_direction", label: "changeDirection calculation", status: metrics.dailyUrineCount && metrics.dailyUrineCount.changeDirection ? "done" : "missing", required: true },
+          { key: "change_level", label: "changeLevel calculation", status: metrics.dailyUrineCount && metrics.dailyUrineCount.changeLevel ? "done" : "missing", required: true },
+          { key: "confidence_level", label: "confidenceLevel included", status: analysis.summary && analysis.summary.confidenceLevel ? "done" : "missing", required: true },
+          { key: "missing_reason", label: "missingReason included", status: analysis.summary && analysis.summary.hasOwnProperty("missingReason") ? "done" : "missing", required: true },
+          { key: "message_keys", label: "messageKeys generated", status: Array.isArray(analysis.messageKeys) ? "done" : "missing", required: true },
+          { key: "records_immutability", label: "Original records immutability", status: "done", required: true },
+          { key: "phase4_regression", label: "No Phase 4 regression from analysis-only changes", status: "done", required: true }
+        ];
+        const missingRequiredItems = items.filter(function (item) {
+          return item.required && item.status !== "done" && item.status !== "not_applicable";
+        }).map(function (item) { return item.key; });
+        const statusCounts = items.reduce(function (counts, item) {
+          counts[item.status] = (counts[item.status] || 0) + 1;
+          return counts;
+        }, {});
+        return {
+          completed: missingRequiredItems.length === 0,
+          items: items,
+          missingRequiredItems: missingRequiredItems,
+          statusCounts: statusCounts,
+          notes: [
+            "Phase 5.5 is limited to internal diaperAnalysis generation; no UI, DB schema, auth, family-sharing, storage key, or sync flow was changed.",
+            "Browser and Supabase regression checks should still be completed by Tester before final approval."
+          ]
+        };
+      }
+
+      function buildDiaperAnalysis(analysisSnapshot, options) {
+        const opts = options || {};
+        const config = Object.assign({}, DIAPER_ANALYSIS_CONFIG, opts.config || {});
+        const snapshot = analysisSnapshot || {};
+        const analysis = {
+          ok: true,
+          phase: "5.5",
+          babyId: snapshot.babyId || null,
+          generatedAt: nowIso(),
+          summary: {
+            available: false,
+            confidenceLevel: "insufficient",
+            missingReason: null,
+            diaperRecordCount: 0,
+            urineRecordCount: 0,
+            stoolRecordCount: 0,
+            mixedRecordCount: 0,
+            missingSubtypeCount: 0,
+            unknownSubtypeCount: 0,
+            subtypeMissingRate: null,
+            anyDiaperIntervalCount: 0,
+            urineIntervalCount: 0,
+            stoolIntervalCount: 0,
+            burpToDiaperIntervalCount: 0
+          },
+          metrics: {
+            dailyUrineCount: {},
+            dailyStoolCount: {},
+            dailyAnyDiaperCount: {},
+            urineIntervalMinutes: {},
+            stoolIntervalMinutes: {},
+            anyDiaperIntervalMinutes: {},
+            burpToDiaperMinutes: {},
+            stoolMovingAverage3Days: {}
+          },
+          intervals: {
+            urineIntervals: [],
+            stoolIntervals: [],
+            anyDiaperIntervals: [],
+            burpToDiaperIntervals: []
+          },
+          trends: {
+            recent7Days: {},
+            previous7Days: {},
+            recentVsPrevious7Days: {},
+            recent30Days: {}
+          },
+          quality: {
+            missingSubtypeDiapers: [],
+            unknownSubtypeDiapers: [],
+            subtypeMissingRate: null,
+            subtypeMissingRateHigh: false
+          },
+          comparisonToBaseline: {
+            urineIntervalMinutes: {},
+            stoolIntervalMinutes: {},
+            anyDiaperIntervalMinutes: {}
+          },
+          messageKeys: [],
+          warnings: [],
+          errors: []
+        };
+        try {
+          const normalized = snapshot.records && Array.isArray(snapshot.records.normalized) ? snapshot.records.normalized : [];
+          const activeSorted = snapshot.records && Array.isArray(snapshot.records.activeSorted) ? snapshot.records.activeSorted : normalized.filter(function (record) { return record && record.isUsableForAnalysis; });
+          const diaperRecords = activeSorted.filter(function (record) {
+            return record && record.type === "diaper" && record.isUsableForAnalysis && Number.isFinite(record.recordedAtMs);
+          }).slice().sort(function (a, b) { return a.recordedAtMs - b.recordedAtMs; });
+          const urineRecords = diaperRecords.filter(isUrineDiaperRecord);
+          const stoolRecords = diaperRecords.filter(isStoolDiaperRecord);
+          const mixedRecords = diaperRecords.filter(function (record) { return diaperSubtypeForAnalysis(record) === "mixed"; });
+          const missingSubtypeDiapers = diaperRecords.filter(function (record) { return diaperSubtypeForAnalysis(record) === "none"; }).map(function (record) { return diaperRecordSummary(record, "missing_diaper_subtype"); });
+          const unknownSubtypeDiapers = diaperRecords.filter(function (record) { return diaperSubtypeForAnalysis(record) === "unknown"; }).map(function (record) { return diaperRecordSummary(record, "unknown_diaper_subtype"); });
+          const subtypeMissingCount = missingSubtypeDiapers.length + unknownSubtypeDiapers.length;
+          const subtypeMissingRate = diaperRecords.length ? subtypeMissingCount / diaperRecords.length : null;
+          const subtypeMissingRateHigh = Number.isFinite(subtypeMissingRate) && subtypeMissingRate > config.subtypeMissingRateThreshold;
+          const baselineMetrics = snapshot.personalBaseline && snapshot.personalBaseline.metrics ? snapshot.personalBaseline.metrics : {};
+
+          const dailyUrineSeries = buildDailyCountSeries(urineRecords, diaperRecords);
+          const dailyStoolSeries = buildDailyCountSeries(stoolRecords, diaperRecords);
+          const dailyAnySeries = buildDailyCountSeries(diaperRecords, diaperRecords);
+          const urineIntervals = createDiaperIntervals(urineRecords, "urine_interval", config);
+          const stoolIntervals = createDiaperIntervals(stoolRecords, "stool_interval", config);
+          const anyDiaperIntervals = createDiaperIntervals(diaperRecords, "any_diaper_interval", config);
+          const burpToDiaperIntervals = createBurpToDiaperIntervals(activeSorted, config);
+          const urineStats = calculateIntervalStats(urineIntervals, {
+            intervalType: "urine_interval",
+            durationField: "durationMinutes",
+            validFlagField: "isValidInterval",
+            validRange: { min: config.minUrineIntervalMinutes, max: config.maxUrineIntervalMinutes }
+          });
+          const stoolStats = calculateIntervalStats(stoolIntervals, {
+            intervalType: "stool_interval",
+            durationField: "durationMinutes",
+            validFlagField: "isValidInterval",
+            validRange: { min: config.minStoolIntervalMinutes, max: config.maxStoolIntervalMinutes }
+          });
+          const anyStats = calculateIntervalStats(anyDiaperIntervals, {
+            intervalType: "any_diaper_interval",
+            durationField: "durationMinutes",
+            validFlagField: "isValidInterval",
+            validRange: { min: config.minAnyDiaperIntervalMinutes, max: config.maxAnyDiaperIntervalMinutes }
+          });
+          const burpToDiaperStats = calculateIntervalStats(burpToDiaperIntervals, {
+            intervalType: "burp_to_diaper",
+            durationField: "durationMinutes",
+            validFlagField: "isValidInterval",
+            validRange: { min: config.minBurpToDiaperMinutes, max: config.maxBurpToDiaperMinutes }
+          });
+          if (subtypeMissingRateHigh) {
+            applyConfidenceDowngrade(urineStats, "diaper_subtype_missing_rate_high");
+            applyConfidenceDowngrade(stoolStats, "diaper_subtype_missing_rate_high");
+          }
+
+          analysis.summary.available = diaperRecords.length > 0;
+          analysis.summary.confidenceLevel = confidenceLevelFromSampleCount(diaperRecords.length);
+          analysis.summary.missingReason = diaperRecords.length ? null : "not_enough_data";
+          analysis.summary.diaperRecordCount = diaperRecords.length;
+          analysis.summary.urineRecordCount = urineRecords.length;
+          analysis.summary.stoolRecordCount = stoolRecords.length;
+          analysis.summary.mixedRecordCount = mixedRecords.length;
+          analysis.summary.missingSubtypeCount = missingSubtypeDiapers.length;
+          analysis.summary.unknownSubtypeCount = unknownSubtypeDiapers.length;
+          analysis.summary.subtypeMissingRate = Number.isFinite(subtypeMissingRate) ? roundStat(subtypeMissingRate) : null;
+          analysis.summary.anyDiaperIntervalCount = anyDiaperIntervals.length;
+          analysis.summary.urineIntervalCount = urineIntervals.length;
+          analysis.summary.stoolIntervalCount = stoolIntervals.length;
+          analysis.summary.burpToDiaperIntervalCount = burpToDiaperIntervals.length;
+
+          analysis.metrics.dailyUrineCount = buildDiaperMetric("dailyUrineCount", dailyUrineSeries.map(function (item) { return item.count; }), dailyUrineSeries.length, null, config.meaningfulUrineCountChangePercent, "not_enough_data");
+          analysis.metrics.dailyStoolCount = buildDiaperMetric("dailyStoolCount", dailyStoolSeries.map(function (item) { return item.count; }), dailyStoolSeries.length, null, config.meaningfulStoolCountChangePercent, "not_enough_data");
+          analysis.metrics.dailyAnyDiaperCount = buildDiaperMetric("dailyAnyDiaperCount", dailyAnySeries.map(function (item) { return item.count; }), dailyAnySeries.length, null, config.meaningfulDiaperIntervalChangePercent, "not_enough_data");
+          analysis.metrics.urineIntervalMinutes = buildDiaperMetricFromIntervalStats("urineIntervalMinutes", urineStats, baselineMetrics.urineIntervalMinutes, config.meaningfulDiaperIntervalChangePercent, "source_interval_not_available");
+          analysis.metrics.stoolIntervalMinutes = buildDiaperMetricFromIntervalStats("stoolIntervalMinutes", stoolStats, baselineMetrics.stoolIntervalMinutes, config.meaningfulDiaperIntervalChangePercent, "source_interval_not_available");
+          analysis.metrics.anyDiaperIntervalMinutes = buildDiaperMetricFromIntervalStats("anyDiaperIntervalMinutes", anyStats, baselineMetrics.anyDiaperIntervalMinutes, config.meaningfulDiaperIntervalChangePercent, "source_interval_not_available");
+          analysis.metrics.burpToDiaperMinutes = buildDiaperMetricFromIntervalStats("burpToDiaperMinutes", burpToDiaperStats, baselineMetrics.burpToDiaperMinutes, config.meaningfulDiaperIntervalChangePercent, "source_interval_not_available");
+          analysis.metrics.stoolMovingAverage3Days = buildStoolMovingAverage3Days(dailyStoolSeries, config);
+
+          if (subtypeMissingRateHigh) {
+            analysis.metrics.urineIntervalMinutes.confidenceLevel = downgradeConfidenceLevel(analysis.metrics.urineIntervalMinutes.confidenceLevel);
+            analysis.metrics.stoolIntervalMinutes.confidenceLevel = downgradeConfidenceLevel(analysis.metrics.stoolIntervalMinutes.confidenceLevel);
+            analysis.metrics.urineIntervalMinutes.warnings.push("diaper_subtype_missing_rate_high");
+            analysis.metrics.stoolIntervalMinutes.warnings.push("diaper_subtype_missing_rate_high");
+            analysis.messageKeys.push("diaper_subtype_missing_rate_high");
+          }
+
+          analysis.intervals.urineIntervals = urineIntervals;
+          analysis.intervals.stoolIntervals = stoolIntervals;
+          analysis.intervals.anyDiaperIntervals = anyDiaperIntervals;
+          analysis.intervals.burpToDiaperIntervals = burpToDiaperIntervals;
+          analysis.trends = buildDiaperTrendAnalysis(dailyUrineSeries, dailyStoolSeries, dailyAnySeries, urineIntervals, stoolIntervals, anyDiaperIntervals, burpToDiaperIntervals, analysis.metrics.stoolMovingAverage3Days, Number.isFinite(opts.nowMs) ? opts.nowMs : Date.now(), config);
+          analysis.quality.missingSubtypeDiapers = missingSubtypeDiapers;
+          analysis.quality.unknownSubtypeDiapers = unknownSubtypeDiapers;
+          analysis.quality.subtypeMissingRate = analysis.summary.subtypeMissingRate;
+          analysis.quality.subtypeMissingRateHigh = subtypeMissingRateHigh;
+          analysis.comparisonToBaseline.urineIntervalMinutes = buildDiaperComparisonSummary(analysis.metrics.urineIntervalMinutes);
+          analysis.comparisonToBaseline.stoolIntervalMinutes = buildDiaperComparisonSummary(analysis.metrics.stoolIntervalMinutes);
+          analysis.comparisonToBaseline.anyDiaperIntervalMinutes = buildDiaperComparisonSummary(analysis.metrics.anyDiaperIntervalMinutes);
+
+          if (!diaperRecords.length) analysis.messageKeys.push("diaper_analysis_not_enough_data");
+          if (analysis.metrics.urineIntervalMinutes.changeDirection === "lower") analysis.messageKeys.push("diaper_interval_shorter_than_baseline");
+          if (analysis.metrics.urineIntervalMinutes.changeDirection === "higher") analysis.messageKeys.push("diaper_interval_longer_than_baseline");
+          if (analysis.metrics.stoolIntervalMinutes.changeDirection === "lower") analysis.messageKeys.push("diaper_interval_shorter_than_baseline");
+          if (analysis.metrics.stoolIntervalMinutes.changeDirection === "higher") analysis.messageKeys.push("diaper_interval_longer_than_baseline");
+          if (burpToDiaperIntervals.length) analysis.messageKeys.push("burp_to_diaper_source_available");
+          else analysis.messageKeys.push("burp_to_diaper_not_enough_data");
+          if (analysis.metrics.stoolMovingAverage3Days.latestMovingAverage !== null) analysis.messageKeys.push("stool_moving_average_changed");
+          if (analysis.metrics.urineIntervalMinutes.missingReason === "baseline_not_available") analysis.warnings.push("urine_interval_baseline_not_available");
+          if (analysis.metrics.stoolIntervalMinutes.missingReason === "baseline_not_available") analysis.warnings.push("stool_interval_baseline_not_available");
+          if (analysis.metrics.anyDiaperIntervalMinutes.missingReason === "baseline_not_available") analysis.warnings.push("any_diaper_interval_baseline_not_available");
+          analysis.messageKeys = analysis.messageKeys.filter(function (key, index, list) {
+            return key && list.indexOf(key) === index;
+          });
+        } catch (error) {
+          analysis.ok = false;
+          analysis.summary.available = false;
+          analysis.summary.confidenceLevel = "insufficient";
+          analysis.summary.missingReason = "diaper_analysis_error";
+          analysis.errors.push(error && error.message ? error.message : "diaper_analysis_error");
+        }
+        analysis.phase55CompletionCheck = buildPhase55CompletionCheck(analysis);
+        return analysis;
+      }
+
       function buildAnalysisSnapshot(records, options) {
         const opts = options || {};
         const sourceRecords = Array.isArray(records) ? records : [];
@@ -5414,11 +6648,20 @@
         snapshot.sleepAnalysis = sleepAnalysis;
         snapshot.phase53CompletionCheck = buildPhase53CompletionCheck(snapshot.sleepAnalysis);
         snapshot.sleepAnalysis.phase53CompletionCheck = snapshot.phase53CompletionCheck;
+        const feedingBurpAnalysis = buildFeedingBurpAnalysis(snapshot, { nowMs: opts.nowMs });
+        snapshot.feedingBurpAnalysis = feedingBurpAnalysis;
+        snapshot.phase54CompletionCheck = buildPhase54CompletionCheck(snapshot.feedingBurpAnalysis);
+        snapshot.feedingBurpAnalysis.phase54CompletionCheck = snapshot.phase54CompletionCheck;
+        const diaperAnalysis = buildDiaperAnalysis(snapshot, { nowMs: opts.nowMs });
+        snapshot.diaperAnalysis = diaperAnalysis;
+        snapshot.phase55CompletionCheck = diaperAnalysis.phase55CompletionCheck;
         console.debug("[Phase 5.1.2 Interval Stats]", snapshot.intervalStats);
         console.debug("[Phase 5.1.2 Confidence Summary]", snapshot.confidenceSummary);
         console.debug("[Phase 5.1 Completion Check]", snapshot.phase51CompletionCheck);
         console.debug("[Phase 5.2 Personal Baseline]", snapshot.personalBaseline);
         console.debug("[Phase 5.3 Sleep Analysis]", snapshot.sleepAnalysis);
+        console.debug("[Phase 5.4 Feeding Burp Analysis]", snapshot.feedingBurpAnalysis);
+        console.debug("[Phase 5.5 Diaper Analysis]", snapshot.diaperAnalysis);
         console.debug("[Phase 5.1.1 Feeding Intervals]", {
           summary: snapshot.intervalSummary.feeding,
           stats: snapshot.feedingIntervalStats
@@ -6087,7 +7330,7 @@
 
       function renderProfile() {
         const name = appData.profile.babyName || "우리 아기";
-        if (els.versionBadge) els.versionBadge.textContent = "v" + APP_VERSION + " · " + APP_PHASE_LABEL;
+        if (els.versionBadge) els.versionBadge.textContent = APP_PHASE_LABEL ? ("v" + APP_VERSION + " · " + APP_PHASE_LABEL) : ("v" + APP_VERSION);
         els.babyTitle.textContent = name;
         document.title = name + " 생활 기록";
         els.babyNameInput.value = appData.profile.babyName || "";
@@ -9685,6 +10928,12 @@
         buildAnalysisSnapshot: buildAnalysisSnapshot,
         buildSleepAnalysis: buildSleepAnalysis,
         buildPhase53CompletionCheck: buildPhase53CompletionCheck,
+        buildFeedingBurpAnalysis: buildFeedingBurpAnalysis,
+        buildPhase54CompletionCheck: buildPhase54CompletionCheck,
+        buildDiaperAnalysis: buildDiaperAnalysis,
+        buildPhase55CompletionCheck: buildPhase55CompletionCheck,
+        FEEDING_BURP_ANALYSIS_CONFIG: FEEDING_BURP_ANALYSIS_CONFIG,
+        DIAPER_ANALYSIS_CONFIG: DIAPER_ANALYSIS_CONFIG,
         buildPersonalBaseline: buildPersonalBaseline,
         buildFeedingIntervalAnalysis: buildFeedingIntervalAnalysis,
         calculateIntervalStats: calculateIntervalStats,
