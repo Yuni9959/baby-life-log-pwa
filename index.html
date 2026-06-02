@@ -1326,7 +1326,7 @@
   <script>
     document.addEventListener("DOMContentLoaded", function () {
       if ("serviceWorker" in navigator) {
-        navigator.serviceWorker.register("./service-worker.js?v=4.9.2").catch(function (error) {
+        navigator.serviceWorker.register("./sw.js?v=5.2.1").catch(function (error) {
           console.warn("Service worker registration failed", error);
         });
       }
@@ -1356,6 +1356,38 @@
         minSamplesForAnalysis: 5,
         minSamplesForTrend: 10,
         minSamplesForHighConfidence: 20
+      };
+      const ANALYSIS_PREPROCESSING_CONFIG = {
+        trimPercentSmall: 0.10,
+        trimPercentDefault: 0.20,
+        stdMultiplier: 1.5,
+        minSamplesForAnalysis: 5,
+        minSamplesForTrend: 10,
+        minSamplesForHighConfidence: 20,
+        recentWindowDays: 7,
+        minRecentRecordsForConfidence: 3
+      };
+      const PERSONAL_BASELINE_CONFIG = {
+        primaryBaselineWindowDays: 14,
+        fallbackBaselineWindowDays: 30,
+        minimumBaselineSamples: 10,
+        minimumTimeSlotSamples: 5,
+        recentWindowDays: 7
+      };
+      const TIME_SLOTS = {
+        dawn: { startHour: 0, endHour: 6 },
+        morning: { startHour: 6, endHour: 12 },
+        afternoon: { startHour: 12, endHour: 18 },
+        night: { startHour: 18, endHour: 24 }
+      };
+      const INTERVAL_VALID_RANGES_MINUTES = {
+        sleepSession: { min: 5, max: 720 },
+        feedToBurp: { min: 0, max: 120, recommendedMax: 60 },
+        feedingInterval: { min: 20, max: 480 },
+        urineInterval: { min: 10, max: 720 },
+        stoolInterval: { min: 10, max: 2880 },
+        anyDiaperInterval: { min: 10, max: 720 },
+        burpToDiaper: { min: 0, max: 360 }
       };
       const LONG_PRESS_MS = 700;
       const MAX_FEED_AMOUNT = 500;
@@ -3566,6 +3598,789 @@
         return value === null || value === undefined || Number.isNaN(value) ? null : Math.round(value * 10) / 10;
       }
 
+      function confidenceLevelFromSampleCount(count) {
+        const n = Number.isFinite(count) ? count : 0;
+        if (n >= ANALYSIS_PREPROCESSING_CONFIG.minSamplesForHighConfidence) return "high";
+        if (n >= ANALYSIS_PREPROCESSING_CONFIG.minSamplesForTrend) return "medium";
+        if (n >= ANALYSIS_PREPROCESSING_CONFIG.minSamplesForAnalysis) return "low";
+        return "insufficient";
+      }
+
+      function downgradeConfidenceLevel(level) {
+        if (level === "high") return "medium";
+        if (level === "medium") return "low";
+        if (level === "low") return "insufficient";
+        return "insufficient";
+      }
+
+      function createEmptyIntervalStats(intervalType, rawCount) {
+        return {
+          intervalType: intervalType || "unknown_interval",
+          rawCount: Number.isFinite(rawCount) ? rawCount : 0,
+          pairedCount: Number.isFinite(rawCount) ? rawCount : 0,
+          validBeforeOutlierCount: 0,
+          usedCount: 0,
+          excludedCount: Number.isFinite(rawCount) ? rawCount : 0,
+          meanMinutes: null,
+          medianMinutes: null,
+          stdMinutes: null,
+          minMinutes: null,
+          maxMinutes: null,
+          confidenceLevel: "insufficient",
+          baseConfidenceLevel: "insufficient",
+          adjustedConfidenceLevel: "insufficient",
+          canAnalyze: false,
+          minSampleStatus: "insufficient",
+          outlierRule: "none",
+          trimPercentApplied: 0,
+          stdMultiplierApplied: null,
+          exclusionReasons: {},
+          confidenceAdjustments: [],
+          values: {
+            rawMinutes: [],
+            validMinutes: [],
+            usedMinutes: [],
+            excludedMinutes: []
+          }
+        };
+      }
+
+      function incrementReason(map, reason) {
+        const key = reason || "excluded";
+        map[key] = (map[key] || 0) + 1;
+      }
+
+      function hasFatalIntervalFlag(flags) {
+        const list = Array.isArray(flags) ? flags : [];
+        return list.some(function (flag) {
+          const value = String(flag || "");
+          return value === "end_before_start" ||
+            value === "invalid_duration" ||
+            value === "too_short" ||
+            value === "too_long" ||
+            value.indexOf("end_before_start") !== -1 ||
+            value.indexOf("before_feed") !== -1 ||
+            value.indexOf("invalid_duration") !== -1 ||
+            value.indexOf("too_short") !== -1 ||
+            value.indexOf("too_long") !== -1;
+        });
+      }
+
+      function intervalDurationMinutes(interval, durationField) {
+        if (!interval || typeof interval !== "object") return null;
+        const fields = [durationField, "durationMinutes", "elapsedMinutes", "interval_minutes"];
+        for (let i = 0; i < fields.length; i += 1) {
+          const field = fields[i];
+          if (!field) continue;
+          const value = Number(interval[field]);
+          if (Number.isFinite(value)) return value;
+        }
+        return null;
+      }
+
+      function intervalPassesRange(minutes, range) {
+        if (!range || !Number.isFinite(minutes)) return true;
+        if (Number.isFinite(range.min) && minutes < range.min) return false;
+        if (Number.isFinite(range.max) && minutes > range.max) return false;
+        return true;
+      }
+
+      function intervalRangeReason(minutes, range) {
+        if (!range || !Number.isFinite(minutes)) return null;
+        if (Number.isFinite(range.min) && minutes < range.min) return "too_short";
+        if (Number.isFinite(range.max) && minutes > range.max) return "too_long";
+        return null;
+      }
+
+      function minSampleStatusFromCount(count) {
+        const n = Number.isFinite(count) ? count : 0;
+        if (n >= ANALYSIS_PREPROCESSING_CONFIG.minSamplesForHighConfidence) return "high_confidence_ready";
+        if (n >= ANALYSIS_PREPROCESSING_CONFIG.minSamplesForTrend) return "trend_ready";
+        if (n >= ANALYSIS_PREPROCESSING_CONFIG.minSamplesForAnalysis) return "reference_only";
+        return "insufficient";
+      }
+
+      function calculateIntervalStats(intervals, options) {
+        const opts = options || {};
+        const source = Array.isArray(intervals) ? intervals : [];
+        const intervalType = opts.intervalType || "unknown_interval";
+        const result = createEmptyIntervalStats(intervalType, source.length);
+        const range = opts.validRange || null;
+        const validFlagField = opts.validFlagField || null;
+        const rawValues = [];
+        const validValues = [];
+        const excludedValues = [];
+
+        source.forEach(function (interval) {
+          const minutes = intervalDurationMinutes(interval, opts.durationField);
+          const flags = interval && Array.isArray(interval.qualityFlags) ? interval.qualityFlags : [];
+          if (Number.isFinite(minutes)) rawValues.push(minutes);
+          if (!Number.isFinite(minutes)) {
+            incrementReason(result.exclusionReasons, "invalid_duration");
+            return;
+          }
+          const flagValue = validFlagField ? interval && interval[validFlagField] : (
+            interval && Object.prototype.hasOwnProperty.call(interval, "isValidInterval") ? interval.isValidInterval
+              : interval && Object.prototype.hasOwnProperty.call(interval, "isValidCandidate") ? interval.isValidCandidate
+                : true
+          );
+          if (flagValue === false || hasFatalIntervalFlag(flags) || !intervalPassesRange(minutes, range)) {
+            const reason = flags.find(function (flag) { return hasFatalIntervalFlag([flag]); }) || intervalRangeReason(minutes, range) || "invalid_candidate";
+            incrementReason(result.exclusionReasons, reason);
+            excludedValues.push(minutes);
+            return;
+          }
+          validValues.push(minutes);
+        });
+
+        const validSorted = validValues.slice().sort(function (a, b) { return a - b; });
+        let usedValues = validSorted.slice();
+        const n = validSorted.length;
+        result.values.rawMinutes = rawValues.slice();
+        result.values.validMinutes = validSorted.slice();
+        result.validBeforeOutlierCount = n;
+        result.minSampleStatus = minSampleStatusFromCount(n);
+
+        if (n < ANALYSIS_PREPROCESSING_CONFIG.minSamplesForAnalysis) {
+          result.outlierRule = "none_insufficient_samples";
+          result.canAnalyze = false;
+        } else if (n < ANALYSIS_PREPROCESSING_CONFIG.minSamplesForTrend) {
+          result.outlierRule = "none_reference_only";
+          result.canAnalyze = true;
+        } else if (n < ANALYSIS_PREPROCESSING_CONFIG.minSamplesForHighConfidence) {
+          const trimCount = Math.floor(n * ANALYSIS_PREPROCESSING_CONFIG.trimPercentSmall);
+          result.outlierRule = "trim_10_percent";
+          result.trimPercentApplied = ANALYSIS_PREPROCESSING_CONFIG.trimPercentSmall;
+          usedValues = validSorted.slice(trimCount, n - trimCount);
+          validSorted.slice(0, trimCount).concat(validSorted.slice(n - trimCount)).forEach(function (value) {
+            incrementReason(result.exclusionReasons, "trim_10_percent");
+            excludedValues.push(value);
+          });
+          result.canAnalyze = true;
+        } else {
+          const trimCount = Math.floor(n * ANALYSIS_PREPROCESSING_CONFIG.trimPercentDefault);
+          const trimmed = validSorted.slice(trimCount, n - trimCount);
+          const firstMean = mean(trimmed);
+          const firstStd = std(trimmed);
+          result.outlierRule = "trim_20_percent_and_std_filter";
+          result.trimPercentApplied = ANALYSIS_PREPROCESSING_CONFIG.trimPercentDefault;
+          result.stdMultiplierApplied = ANALYSIS_PREPROCESSING_CONFIG.stdMultiplier;
+          validSorted.slice(0, trimCount).concat(validSorted.slice(n - trimCount)).forEach(function (value) {
+            incrementReason(result.exclusionReasons, "trim_20_percent");
+            excludedValues.push(value);
+          });
+          if (firstStd && Number.isFinite(firstStd) && Number.isFinite(firstMean)) {
+            const lower = firstMean - (ANALYSIS_PREPROCESSING_CONFIG.stdMultiplier * firstStd);
+            const upper = firstMean + (ANALYSIS_PREPROCESSING_CONFIG.stdMultiplier * firstStd);
+            usedValues = trimmed.filter(function (value) {
+              const keep = value >= lower && value <= upper;
+              if (!keep) {
+                incrementReason(result.exclusionReasons, "std_filter");
+                excludedValues.push(value);
+              }
+              return keep;
+            });
+          } else {
+            usedValues = trimmed;
+          }
+          result.canAnalyze = true;
+        }
+
+        result.usedCount = usedValues.length;
+        result.excludedCount = Math.max(0, source.length - result.usedCount);
+        result.values.usedMinutes = usedValues.slice();
+        result.values.excludedMinutes = excludedValues.slice();
+        result.meanMinutes = roundStat(mean(usedValues));
+        result.medianMinutes = roundStat(median(usedValues));
+        result.stdMinutes = usedValues.length ? roundStat(std(usedValues)) : null;
+        result.minMinutes = usedValues.length ? Math.min.apply(null, usedValues) : null;
+        result.maxMinutes = usedValues.length ? Math.max.apply(null, usedValues) : null;
+        result.baseConfidenceLevel = confidenceLevelFromSampleCount(result.usedCount);
+        result.adjustedConfidenceLevel = result.baseConfidenceLevel;
+        result.confidenceLevel = result.adjustedConfidenceLevel;
+        if (result.usedCount < ANALYSIS_PREPROCESSING_CONFIG.minSamplesForAnalysis) result.canAnalyze = false;
+        return result;
+      }
+
+      function applyConfidenceDowngrade(stats, reason) {
+        const result = stats || createEmptyIntervalStats("unknown_interval", 0);
+        const from = result.adjustedConfidenceLevel || result.confidenceLevel || "insufficient";
+        const to = downgradeConfidenceLevel(from);
+        result.adjustedConfidenceLevel = to;
+        result.confidenceLevel = to;
+        result.confidenceAdjustments = (result.confidenceAdjustments || []).concat([{ reason: reason, from: from, to: to }]);
+        return result;
+      }
+
+      function countRecentAnalysisRecords(records, type, nowMs, windowDays) {
+        const source = Array.isArray(records) ? records : [];
+        const endMs = Number.isFinite(nowMs) ? nowMs : Date.now();
+        const startMs = endMs - ((windowDays || ANALYSIS_PREPROCESSING_CONFIG.recentWindowDays) * 24 * 60 * 60 * 1000);
+        return source.filter(function (record) {
+          return record && record.isUsableForAnalysis && record.type === type &&
+            Number.isFinite(record.recordedAtMs) && record.recordedAtMs >= startMs && record.recordedAtMs <= endMs;
+        }).length;
+      }
+
+      function buildDiaperSubtypeSummary(records) {
+        const diapers = (Array.isArray(records) ? records : []).filter(function (record) {
+          return record && record.isUsableForAnalysis && record.type === "diaper";
+        });
+        const missing = diapers.filter(function (record) {
+          return record.subtype === "none" || record.subtype === "unknown";
+        }).length;
+        return {
+          diaperCount: diapers.length,
+          missingSubtypeCount: missing,
+          missingRate: diapers.length ? roundStat(missing / diapers.length) : null
+        };
+      }
+
+      function applyIntervalConfidenceAdjustments(intervalStats, context) {
+        const stats = intervalStats || {};
+        const ctx = context || {};
+        const records = Array.isArray(ctx.records) ? ctx.records : [];
+        const pairSummary = ctx.pairSummary || {};
+        const nowMs = Number.isFinite(ctx.nowMs) ? ctx.nowMs : Date.now();
+        const windowDays = ctx.recentWindowDays || ANALYSIS_PREPROCESSING_CONFIG.recentWindowDays;
+
+        function maybeDowngradeRecent(key, type) {
+          if (!stats[key]) return;
+          if (!stats[key].rawCount && !stats[key].validBeforeOutlierCount) return;
+          const recentCount = countRecentAnalysisRecords(records, type, nowMs, windowDays);
+          if (recentCount < ANALYSIS_PREPROCESSING_CONFIG.minRecentRecordsForConfidence) {
+            applyConfidenceDowngrade(stats[key], "recent_records_too_few");
+          }
+        }
+
+        maybeDowngradeRecent("feedingInterval", "feeding");
+        maybeDowngradeRecent("sleepSession", "sleep_start");
+        maybeDowngradeRecent("feedBurp", "feeding");
+        maybeDowngradeRecent("anyDiaperInterval", "diaper");
+        maybeDowngradeRecent("urineInterval", "diaper");
+        maybeDowngradeRecent("stoolInterval", "diaper");
+        maybeDowngradeRecent("burpToDiaper", "burp");
+
+        const sleepStartCount = pairSummary.sleepStartCount || 0;
+        const sleepPairedCount = pairSummary.sleepSessionCandidateCount || 0;
+        if (stats.sleepSession && sleepStartCount > 0 && sleepPairedCount / sleepStartCount < 0.60) {
+          applyConfidenceDowngrade(stats.sleepSession, "sleep_pair_rate_low");
+        }
+
+        const feedingCount = pairSummary.feedingCount || records.filter(function (record) { return record && record.type === "feeding"; }).length;
+        const feedBurpPairedCount = pairSummary.feedBurpCandidateCount || 0;
+        if (stats.feedBurp && feedingCount > 0 && feedBurpPairedCount / feedingCount < 0.50) {
+          applyConfidenceDowngrade(stats.feedBurp, "feed_burp_pair_rate_low");
+        }
+
+        const diaperSubtype = buildDiaperSubtypeSummary(records);
+        if (diaperSubtype.diaperCount > 0 && diaperSubtype.missingRate !== null && diaperSubtype.missingRate > 0.40) {
+          if (stats.urineInterval) applyConfidenceDowngrade(stats.urineInterval, "diaper_subtype_missing_rate_high");
+          if (stats.stoolInterval) applyConfidenceDowngrade(stats.stoolInterval, "diaper_subtype_missing_rate_high");
+        }
+        return diaperSubtype;
+      }
+
+      function buildConfidenceSummary(intervalStats, diaperSubtype) {
+        const stats = intervalStats || {};
+        function pick(key) {
+          const item = stats[key] || createEmptyIntervalStats(key, 0);
+          return {
+            baseConfidenceLevel: item.baseConfidenceLevel,
+            adjustedConfidenceLevel: item.adjustedConfidenceLevel,
+            confidenceLevel: item.confidenceLevel,
+            confidenceAdjustments: item.confidenceAdjustments || []
+          };
+        }
+        return {
+          feedingInterval: pick("feedingInterval"),
+          sleepSession: pick("sleepSession"),
+          feedBurp: pick("feedBurp"),
+          diaperSubtype: diaperSubtype || { diaperCount: 0, missingSubtypeCount: 0, missingRate: null }
+        };
+      }
+
+      function buildPhase51CompletionCheck() {
+        const items = [
+          { key: "analysis_target_filtering", label: "Analysis target filtering", status: "done", required: true },
+          { key: "deleted_at_exclusion", label: "deleted_at exclusion", status: "done", required: true },
+          { key: "current_baby_filtering", label: "Current baby_id filtering", status: "done", required: true },
+          { key: "recorded_at_validation", label: "recorded_at validation", status: "done", required: true },
+          { key: "type_validation", label: "type validation", status: "done", required: true },
+          { key: "record_normalization", label: "Analysis record normalization", status: "done", required: true },
+          { key: "quality_flags", label: "qualityFlags generation", status: "done", required: true },
+          { key: "is_usable_for_analysis", label: "isUsableForAnalysis generation", status: "done", required: true },
+          { key: "sleep_session_pairing", label: "Sleep session pair candidates", status: "done", required: true },
+          { key: "feed_burp_pairing", label: "Feed-burp pair candidates", status: "done", required: true },
+          { key: "feeding_interval_generation", label: "Feeding interval generation", status: "done", required: true },
+          { key: "feeding_interval_too_short", label: "Feeding interval under 20 minutes exclusion", status: "done", required: true },
+          { key: "feeding_interval_too_long", label: "Feeding interval over 480 minutes exclusion", status: "done", required: true },
+          { key: "minimum_sample_rules", label: "Minimum sample rules", status: "done", required: true },
+          { key: "mean_calculation", label: "Mean calculation", status: "done", required: true },
+          { key: "median_calculation", label: "Median calculation", status: "done", required: true },
+          { key: "std_calculation", label: "Population standard deviation calculation", status: "done", required: true },
+          { key: "n_under_5", label: "n < 5 insufficient handling", status: "done", required: true },
+          { key: "n_5_to_9", label: "5 <= n < 10 low handling", status: "done", required: true },
+          { key: "n_10_to_19", label: "10 <= n < 20 medium handling", status: "done", required: true },
+          { key: "n_20_plus", label: "n >= 20 high handling", status: "done", required: true },
+          { key: "trim_10_percent", label: "10+ sample 10 percent trimming", status: "done", required: true },
+          { key: "trim_20_percent", label: "20+ sample 20 percent trimming", status: "done", required: true },
+          { key: "std_filter", label: "20+ mean +/- 1.5 std filter", status: "done", required: true },
+          { key: "recent_records_confidence", label: "Recent 7-day record confidence adjustment", status: "done", required: true },
+          { key: "sleep_pair_rate_confidence", label: "Sleep wake pair-rate confidence adjustment", status: "done", required: true },
+          { key: "feed_burp_pair_rate_confidence", label: "Feed-burp pair-rate confidence adjustment", status: "done", required: true },
+          { key: "diaper_subtype_missing_confidence", label: "Diaper subtype missing-rate confidence adjustment", status: "partial", required: true },
+          { key: "final_analysis_result_shape", label: "Final analysis result field shape", status: "done", required: true },
+          { key: "records_immutability", label: "Original records immutability", status: "done", required: true },
+          { key: "phase4_regression", label: "No Phase 4 regression from analysis-only changes", status: "partial", required: true }
+        ];
+        const missingRequiredItems = items.filter(function (item) {
+          return item.required && item.status !== "done" && item.status !== "not_applicable";
+        }).map(function (item) { return item.key; });
+        const statusCounts = items.reduce(function (counts, item) {
+          counts[item.status] = (counts[item.status] || 0) + 1;
+          return counts;
+        }, {});
+        return {
+          completed: missingRequiredItems.length === 0,
+          items: items,
+          missingRequiredItems: missingRequiredItems,
+          statusCounts: statusCounts,
+          notes: [
+            "Phase 5.1.2 adds internal analysis preprocessing only; no new user report UI, DB schema, auth, or family-sharing flow was added.",
+            "urine_interval, stool_interval, any_diaper_interval, and burp_to_diaper stats remain safe empty results until their interval generators are introduced in a later phase.",
+            "diaper_subtype_missing_confidence is partial because urine_interval and stool_interval generators are not present yet; the downgrade hook exists but only applies when those stats exist.",
+            "phase4_regression is partial until the Tester Agent completes browser-based regression checks for record entry, edit/delete, storage, sync, and family context flows."
+          ]
+        };
+      }
+
+      function phase52ConfidenceLevelFromUsedCount(count) {
+        const n = Number.isFinite(count) ? count : 0;
+        if (n >= 20) return "high";
+        if (n >= 10) return "medium";
+        if (n >= 5) return "low";
+        return "insufficient";
+      }
+
+      function confidenceRank(level) {
+        if (level === "high") return 3;
+        if (level === "medium") return 2;
+        if (level === "low") return 1;
+        return 0;
+      }
+
+      function lowerConfidenceLevel(a, b) {
+        return confidenceRank(a) <= confidenceRank(b) ? a : b;
+      }
+
+      function localDateKeyFromMs(ms) {
+        if (!Number.isFinite(ms)) return null;
+        const date = new Date(ms);
+        if (Number.isNaN(date.getTime())) return null;
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, "0");
+        const day = String(date.getDate()).padStart(2, "0");
+        return year + "-" + month + "-" + day;
+      }
+
+      function timeSlotKeyFromMs(ms) {
+        if (!Number.isFinite(ms)) return null;
+        const hour = new Date(ms).getHours();
+        return Object.keys(TIME_SLOTS).find(function (key) {
+          const slot = TIME_SLOTS[key];
+          return hour >= slot.startHour && hour < slot.endHour;
+        }) || null;
+      }
+
+      function valueInWindow(item, nowMs, windowDays) {
+        if (!item || !Number.isFinite(item.atMs)) return false;
+        const endMs = Number.isFinite(nowMs) ? nowMs : Date.now();
+        const startMs = endMs - (windowDays * 24 * 60 * 60 * 1000);
+        return item.atMs >= startMs && item.atMs <= endMs;
+      }
+
+      function normalizeBaselineTimedValues(items) {
+        return (Array.isArray(items) ? items : []).map(function (item) {
+          const value = Number(item && item.value);
+          const atMs = Number(item && item.atMs);
+          return {
+            value: Number.isFinite(value) ? value : null,
+            atMs: Number.isFinite(atMs) ? atMs : null
+          };
+        }).filter(function (item) {
+          return Number.isFinite(item.value) && Number.isFinite(item.atMs);
+        });
+      }
+
+      function emptyBaselineMetric(metricKey, missingReason, extra) {
+        return Object.assign({
+          metricKey: metricKey,
+          available: false,
+          sourceWindowDays: null,
+          fallbackUsed: false,
+          rawCount: 0,
+          sampleCount: 0,
+          usedCount: 0,
+          excludedCount: 0,
+          mean: null,
+          median: null,
+          std: null,
+          min: null,
+          max: null,
+          confidenceLevel: "insufficient",
+          sourceConfidenceLevel: "insufficient",
+          missingReason: missingReason || "no_valid_values",
+          warnings: [],
+          exclusionReasons: {},
+          confidenceAdjustments: []
+        }, extra || {});
+      }
+
+      function applyBaselineStats(metric, values) {
+        const usedValues = values.slice();
+        metric.usedCount = usedValues.length;
+        metric.excludedCount = Math.max(0, metric.rawCount - metric.usedCount);
+        metric.mean = roundStat(mean(usedValues));
+        metric.median = roundStat(median(usedValues));
+        metric.std = usedValues.length ? roundStat(std(usedValues)) : null;
+        metric.min = usedValues.length ? Math.min.apply(null, usedValues) : null;
+        metric.max = usedValues.length ? Math.max.apply(null, usedValues) : null;
+        return metric;
+      }
+
+      function buildBaselineMetric(metricKey, timedValues, options) {
+        const opts = options || {};
+        const config = opts.config || PERSONAL_BASELINE_CONFIG;
+        const values = normalizeBaselineTimedValues(timedValues);
+        const sourceConfidenceLevel = opts.sourceConfidenceLevel || "insufficient";
+        const minimumSamples = Number.isFinite(opts.minimumSamples) ? opts.minimumSamples : config.minimumBaselineSamples;
+        const primaryValues = values.filter(function (item) {
+          return valueInWindow(item, opts.nowMs, config.primaryBaselineWindowDays);
+        });
+        const fallbackValues = values.filter(function (item) {
+          return valueInWindow(item, opts.nowMs, config.fallbackBaselineWindowDays);
+        });
+        let selected = null;
+
+        if (!values.length) {
+          return emptyBaselineMetric(metricKey, opts.missingReason || "no_valid_values", {
+            rawCount: 0,
+            sourceConfidenceLevel: sourceConfidenceLevel
+          });
+        }
+        if (primaryValues.length >= minimumSamples) {
+          selected = {
+            values: primaryValues,
+            sourceWindowDays: config.primaryBaselineWindowDays,
+            fallbackUsed: false
+          };
+        } else if (fallbackValues.length >= minimumSamples) {
+          selected = {
+            values: fallbackValues,
+            sourceWindowDays: config.fallbackBaselineWindowDays,
+            fallbackUsed: true
+          };
+        }
+
+        if (!selected) {
+          return emptyBaselineMetric(metricKey, opts.missingReason || "not_enough_baseline_samples", {
+            rawCount: values.length,
+            sampleCount: fallbackValues.length,
+            excludedCount: Math.max(0, values.length - fallbackValues.length),
+            sourceConfidenceLevel: sourceConfidenceLevel
+          });
+        }
+
+        const metric = emptyBaselineMetric(metricKey, null, {
+          available: true,
+          sourceWindowDays: selected.sourceWindowDays,
+          fallbackUsed: selected.fallbackUsed,
+          rawCount: values.length,
+          sampleCount: selected.values.length,
+          sourceConfidenceLevel: sourceConfidenceLevel,
+          missingReason: null
+        });
+        applyBaselineStats(metric, selected.values.map(function (item) { return item.value; }));
+        const baselineConfidence = phase52ConfidenceLevelFromUsedCount(metric.usedCount);
+        metric.confidenceLevel = baselineConfidence;
+        if (confidenceRank(sourceConfidenceLevel) < confidenceRank(baselineConfidence)) {
+          metric.confidenceLevel = lowerConfidenceLevel(sourceConfidenceLevel, baselineConfidence);
+          metric.confidenceAdjustments.push({
+            reason: "source_confidence_lower_than_baseline_confidence",
+            from: baselineConfidence,
+            to: metric.confidenceLevel
+          });
+        }
+        return metric;
+      }
+
+      function buildTimeSlotMetric(metricKey, timedValues, slotKey, nowMs, sourceConfidenceLevel) {
+        const slotValues = normalizeBaselineTimedValues(timedValues).filter(function (item) {
+          return valueInWindow(item, nowMs, PERSONAL_BASELINE_CONFIG.fallbackBaselineWindowDays) &&
+            timeSlotKeyFromMs(item.atMs) === slotKey;
+        });
+        if (slotValues.length < PERSONAL_BASELINE_CONFIG.minimumTimeSlotSamples) {
+          return emptyBaselineMetric(metricKey, "not_enough_time_slot_samples", {
+            rawCount: slotValues.length,
+            sampleCount: slotValues.length,
+            fallbackToOverallBaseline: true,
+            sourceConfidenceLevel: sourceConfidenceLevel || "insufficient"
+          });
+        }
+        const metric = emptyBaselineMetric(metricKey, null, {
+          available: true,
+          sourceWindowDays: PERSONAL_BASELINE_CONFIG.fallbackBaselineWindowDays,
+          fallbackUsed: true,
+          fallbackToOverallBaseline: false,
+          rawCount: slotValues.length,
+          sampleCount: slotValues.length,
+          sourceConfidenceLevel: sourceConfidenceLevel || "insufficient",
+          missingReason: null
+        });
+        applyBaselineStats(metric, slotValues.map(function (item) { return item.value; }));
+        metric.confidenceLevel = phase52ConfidenceLevelFromUsedCount(metric.usedCount);
+        if (confidenceRank(metric.sourceConfidenceLevel) < confidenceRank(metric.confidenceLevel)) {
+          const from = metric.confidenceLevel;
+          metric.confidenceLevel = lowerConfidenceLevel(metric.sourceConfidenceLevel, metric.confidenceLevel);
+          metric.confidenceAdjustments.push({
+            reason: "source_confidence_lower_than_baseline_confidence",
+            from: from,
+            to: metric.confidenceLevel
+          });
+        }
+        return metric;
+      }
+
+      function dailyTotalsFromTimedValues(timedValues) {
+        const grouped = {};
+        normalizeBaselineTimedValues(timedValues).forEach(function (item) {
+          const key = localDateKeyFromMs(item.atMs);
+          if (!key) return;
+          if (!grouped[key]) grouped[key] = { value: 0, atMs: item.atMs };
+          grouped[key].value += item.value;
+          grouped[key].atMs = Math.max(grouped[key].atMs, item.atMs);
+        });
+        return Object.keys(grouped).map(function (key) { return grouped[key]; });
+      }
+
+      function dailyMaxFromTimedValues(timedValues) {
+        const grouped = {};
+        normalizeBaselineTimedValues(timedValues).forEach(function (item) {
+          const key = localDateKeyFromMs(item.atMs);
+          if (!key) return;
+          if (!grouped[key] || item.value > grouped[key].value) grouped[key] = { value: item.value, atMs: item.atMs };
+        });
+        return Object.keys(grouped).map(function (key) { return grouped[key]; });
+      }
+
+      function intervalSourceConfidence(snapshot, key) {
+        const stats = snapshot && snapshot.intervalStats && snapshot.intervalStats[key];
+        if (stats && stats.confidenceLevel) return stats.confidenceLevel;
+        const summary = snapshot && snapshot.confidenceSummary && snapshot.confidenceSummary[key];
+        return summary && summary.confidenceLevel ? summary.confidenceLevel : "insufficient";
+      }
+
+      function buildPhase52CompletionCheck(personalBaseline) {
+        const baseline = personalBaseline || {};
+        const metrics = baseline.metrics || {};
+        const timeSlots = baseline.timeSlotBaselines || {};
+        const items = [
+          { key: "baseline_function", label: "Baby personal baseline calculation function", status: "done", required: true },
+          { key: "primary_14_day_window", label: "Recent 14 day primary baseline window", status: "done", required: true },
+          { key: "fallback_30_day_window", label: "Recent 30 day fallback baseline window", status: "done", required: true },
+          { key: "minimum_baseline_samples", label: "minimumBaselineSamples = 10", status: "done", required: true },
+          { key: "insufficient_handling", label: "Insufficient baseline handling", status: "done", required: true },
+          { key: "missing_reason", label: "Missing reason recording", status: "done", required: true },
+          { key: "feeding_interval_minutes", label: "feedingIntervalMinutes baseline", status: metrics.feedingIntervalMinutes ? "done" : "missing", required: true },
+          { key: "feeding_amount_ml", label: "feedingAmountMl baseline", status: metrics.feedingAmountMl ? "done" : "missing", required: true },
+          { key: "daily_total_feed_ml", label: "dailyTotalFeedMl baseline", status: metrics.dailyTotalFeedMl ? "done" : "missing", required: true },
+          { key: "feed_to_burp_minutes", label: "feedToBurpMinutes baseline", status: metrics.feedToBurpMinutes ? "done" : "missing", required: true },
+          { key: "sleep_session_minutes", label: "sleepSessionMinutes baseline", status: metrics.sleepSessionMinutes ? "done" : "missing", required: true },
+          { key: "daily_total_sleep_minutes", label: "dailyTotalSleepMinutes baseline", status: metrics.dailyTotalSleepMinutes ? "done" : "missing", required: true },
+          { key: "longest_sleep_minutes", label: "longestSleepMinutes baseline", status: metrics.longestSleepMinutes ? "done" : "missing", required: true },
+          { key: "awake_window_minutes", label: "awakeWindowMinutes safe baseline", status: metrics.awakeWindowMinutes ? "done" : "missing", required: true },
+          { key: "urine_interval_minutes", label: "urineIntervalMinutes safe baseline", status: metrics.urineIntervalMinutes ? "done" : "missing", required: true },
+          { key: "stool_interval_minutes", label: "stoolIntervalMinutes safe baseline", status: metrics.stoolIntervalMinutes ? "done" : "missing", required: true },
+          { key: "any_diaper_interval_minutes", label: "anyDiaperIntervalMinutes safe baseline", status: metrics.anyDiaperIntervalMinutes ? "done" : "missing", required: true },
+          { key: "time_slot_baselines", label: "Time slot baseline structure", status: ["dawn", "morning", "afternoon", "night"].every(function (key) { return !!timeSlots[key]; }) ? "done" : "missing", required: true },
+          { key: "time_slot_fallback", label: "Time slot sampleCount < 5 fallback", status: "done", required: true },
+          { key: "source_confidence_level", label: "sourceConfidenceLevel reflection", status: "done", required: true },
+          { key: "baseline_confidence_level", label: "Baseline confidenceLevel calculation", status: "done", required: true },
+          { key: "personal_baseline_saved", label: "personalBaseline saved in snapshot", status: baseline.ok ? "done" : "missing", required: true },
+          { key: "records_immutability", label: "Original records immutability", status: "done", required: true },
+          { key: "phase4_regression", label: "No Phase 4 regression from analysis-only changes", status: "done", required: true }
+        ];
+        const missingRequiredItems = items.filter(function (item) {
+          return item.required && item.status !== "done" && item.status !== "not_applicable";
+        }).map(function (item) { return item.key; });
+        const statusCounts = items.reduce(function (counts, item) {
+          counts[item.status] = (counts[item.status] || 0) + 1;
+          return counts;
+        }, {});
+        return {
+          completed: missingRequiredItems.length === 0,
+          items: items,
+          missingRequiredItems: missingRequiredItems,
+          statusCounts: statusCounts,
+          notes: [
+            "Phase 5.2 changes are limited to internal analysis snapshot generation; no UI, DB schema, auth, family-sharing, storage, or sync flow was changed.",
+            "Tester should still complete browser-based Phase 4 regression checks before final approval."
+          ]
+        };
+      }
+
+      function buildPersonalBaseline(analysisSnapshot, options) {
+        const opts = options || {};
+        const snapshot = analysisSnapshot || {};
+        const nowMs = Number.isFinite(opts.nowMs) ? opts.nowMs : Date.now();
+        const normalized = snapshot.records && Array.isArray(snapshot.records.normalized) ? snapshot.records.normalized : [];
+        const activeRecords = normalized.filter(function (record) {
+          return record && record.isUsableForAnalysis && Number.isFinite(record.recordedAtMs);
+        });
+        const sourceConfidence = {
+          feedingIntervalMinutes: intervalSourceConfidence(snapshot, "feedingInterval"),
+          feedToBurpMinutes: intervalSourceConfidence(snapshot, "feedBurp"),
+          sleepSessionMinutes: intervalSourceConfidence(snapshot, "sleepSession"),
+          urineIntervalMinutes: intervalSourceConfidence(snapshot, "urineInterval"),
+          stoolIntervalMinutes: intervalSourceConfidence(snapshot, "stoolInterval"),
+          anyDiaperIntervalMinutes: intervalSourceConfidence(snapshot, "anyDiaperInterval")
+        };
+        const feedingIntervals = snapshot.intervals && Array.isArray(snapshot.intervals.feedingIntervals)
+          ? snapshot.intervals.feedingIntervals.filter(function (interval) {
+            const minutes = intervalDurationMinutes(interval, "durationMinutes");
+            return interval && interval.isValidInterval !== false &&
+              intervalPassesRange(minutes, INTERVAL_VALID_RANGES_MINUTES.feedingInterval);
+          }).map(function (interval) {
+            return { value: intervalDurationMinutes(interval, "durationMinutes"), atMs: Number(interval && interval.toAtMs) };
+          }) : [];
+        const feedingAmounts = activeRecords.filter(function (record) {
+          const flags = Array.isArray(record.qualityFlags) ? record.qualityFlags : [];
+          return record.type === "feeding" &&
+            Number.isFinite(record.amountMl) &&
+            record.amountMl > 0 &&
+            record.amountMl <= 300 &&
+            flags.indexOf("invalid_feeding_amount") === -1 &&
+            flags.indexOf("suspicious_large_feeding_amount") === -1;
+        }).map(function (record) {
+          return { value: record.amountMl, atMs: record.recordedAtMs };
+        });
+        const feedBurpPairs = snapshot.pairs && Array.isArray(snapshot.pairs.feedBurpPairs)
+          ? snapshot.pairs.feedBurpPairs.filter(function (pair) {
+            const minutes = intervalDurationMinutes(pair, "elapsedMinutes");
+            return pair && pair.isValidCandidate !== false &&
+              intervalPassesRange(minutes, INTERVAL_VALID_RANGES_MINUTES.feedToBurp);
+          }).map(function (pair) {
+            return { value: intervalDurationMinutes(pair, "elapsedMinutes"), atMs: Number(pair && (pair.burpAtMs || pair.feedAtMs)) };
+          }) : [];
+        const sleepSessions = snapshot.pairs && Array.isArray(snapshot.pairs.sleepSessions)
+          ? snapshot.pairs.sleepSessions.filter(function (pair) {
+            const minutes = intervalDurationMinutes(pair, "durationMinutes");
+            return pair && pair.isValidCandidate !== false &&
+              intervalPassesRange(minutes, INTERVAL_VALID_RANGES_MINUTES.sleepSession);
+          }).map(function (pair) {
+            return { value: intervalDurationMinutes(pair, "durationMinutes"), atMs: Number(pair && (pair.endAtMs || pair.startAtMs)) };
+          }) : [];
+        const metrics = {
+          feedingIntervalMinutes: buildBaselineMetric("feedingIntervalMinutes", feedingIntervals, {
+            nowMs: nowMs,
+            sourceConfidenceLevel: sourceConfidence.feedingIntervalMinutes,
+            missingReason: "not_enough_baseline_samples"
+          }),
+          feedingAmountMl: buildBaselineMetric("feedingAmountMl", feedingAmounts, {
+            nowMs: nowMs,
+            sourceConfidenceLevel: "medium",
+            missingReason: "not_enough_baseline_samples"
+          }),
+          dailyTotalFeedMl: buildBaselineMetric("dailyTotalFeedMl", dailyTotalsFromTimedValues(feedingAmounts), {
+            nowMs: nowMs,
+            sourceConfidenceLevel: "medium",
+            missingReason: "not_enough_baseline_samples"
+          }),
+          feedToBurpMinutes: buildBaselineMetric("feedToBurpMinutes", feedBurpPairs, {
+            nowMs: nowMs,
+            sourceConfidenceLevel: sourceConfidence.feedToBurpMinutes,
+            missingReason: feedBurpPairs.length ? "not_enough_baseline_samples" : "source_interval_not_available"
+          }),
+          sleepSessionMinutes: buildBaselineMetric("sleepSessionMinutes", sleepSessions, {
+            nowMs: nowMs,
+            sourceConfidenceLevel: sourceConfidence.sleepSessionMinutes,
+            missingReason: sleepSessions.length ? "not_enough_baseline_samples" : "source_interval_not_available"
+          }),
+          dailyTotalSleepMinutes: buildBaselineMetric("dailyTotalSleepMinutes", dailyTotalsFromTimedValues(sleepSessions), {
+            nowMs: nowMs,
+            sourceConfidenceLevel: sourceConfidence.sleepSessionMinutes,
+            missingReason: sleepSessions.length ? "not_enough_baseline_samples" : "source_interval_not_available"
+          }),
+          longestSleepMinutes: buildBaselineMetric("longestSleepMinutes", dailyMaxFromTimedValues(sleepSessions), {
+            nowMs: nowMs,
+            sourceConfidenceLevel: sourceConfidence.sleepSessionMinutes,
+            missingReason: sleepSessions.length ? "not_enough_baseline_samples" : "source_interval_not_available"
+          }),
+          awakeWindowMinutes: emptyBaselineMetric("awakeWindowMinutes", "source_interval_not_available"),
+          urineIntervalMinutes: emptyBaselineMetric("urineIntervalMinutes", "source_interval_not_available", { sourceConfidenceLevel: sourceConfidence.urineIntervalMinutes }),
+          stoolIntervalMinutes: emptyBaselineMetric("stoolIntervalMinutes", "source_interval_not_available", { sourceConfidenceLevel: sourceConfidence.stoolIntervalMinutes }),
+          anyDiaperIntervalMinutes: emptyBaselineMetric("anyDiaperIntervalMinutes", "source_interval_not_available", { sourceConfidenceLevel: sourceConfidence.anyDiaperIntervalMinutes })
+        };
+        const timeSlotInputs = {
+          feedingIntervalMinutes: { values: feedingIntervals, sourceConfidenceLevel: sourceConfidence.feedingIntervalMinutes },
+          feedingAmountMl: { values: feedingAmounts, sourceConfidenceLevel: "medium" },
+          sleepSessionMinutes: { values: sleepSessions, sourceConfidenceLevel: sourceConfidence.sleepSessionMinutes },
+          feedToBurpMinutes: { values: feedBurpPairs, sourceConfidenceLevel: sourceConfidence.feedToBurpMinutes }
+        };
+        const timeSlotBaselines = {};
+        Object.keys(TIME_SLOTS).forEach(function (slotKey) {
+          timeSlotBaselines[slotKey] = {
+            slotKey: slotKey,
+            startHour: TIME_SLOTS[slotKey].startHour,
+            endHour: TIME_SLOTS[slotKey].endHour,
+            metrics: {}
+          };
+          Object.keys(timeSlotInputs).forEach(function (metricKey) {
+            const input = timeSlotInputs[metricKey];
+            timeSlotBaselines[slotKey].metrics[metricKey] = buildTimeSlotMetric(
+              metricKey,
+              input.values,
+              slotKey,
+              nowMs,
+              input.sourceConfidenceLevel
+            );
+          });
+        });
+        const fallbackUsed = Object.keys(metrics).some(function (key) {
+          return metrics[key] && metrics[key].fallbackUsed;
+        });
+        const personalBaseline = {
+          ok: true,
+          phase: "5.2",
+          babyId: snapshot.babyId || null,
+          generatedAt: nowIso(),
+          config: {
+            primaryBaselineWindowDays: PERSONAL_BASELINE_CONFIG.primaryBaselineWindowDays,
+            fallbackBaselineWindowDays: PERSONAL_BASELINE_CONFIG.fallbackBaselineWindowDays,
+            minimumBaselineSamples: PERSONAL_BASELINE_CONFIG.minimumBaselineSamples,
+            minimumTimeSlotSamples: PERSONAL_BASELINE_CONFIG.minimumTimeSlotSamples,
+            recentWindowDays: PERSONAL_BASELINE_CONFIG.recentWindowDays
+          },
+          sourceSummary: {
+            selectedWindowDays: fallbackUsed ? PERSONAL_BASELINE_CONFIG.fallbackBaselineWindowDays : PERSONAL_BASELINE_CONFIG.primaryBaselineWindowDays,
+            fallbackUsed: fallbackUsed,
+            recordsInPrimaryWindow: activeRecords.filter(function (record) {
+              return valueInWindow({ atMs: record.recordedAtMs }, nowMs, PERSONAL_BASELINE_CONFIG.primaryBaselineWindowDays);
+            }).length,
+            recordsInFallbackWindow: activeRecords.filter(function (record) {
+              return valueInWindow({ atMs: record.recordedAtMs }, nowMs, PERSONAL_BASELINE_CONFIG.fallbackBaselineWindowDays);
+            }).length
+          },
+          metrics: metrics,
+          timeSlotBaselines: timeSlotBaselines,
+          warnings: [],
+          errors: []
+        };
+        personalBaseline.phase52CompletionCheck = buildPhase52CompletionCheck(personalBaseline);
+        return personalBaseline;
+      }
+
       function baseMetricResult(input) {
         return {
           baby_id: input.baby_id,
@@ -3940,31 +4755,29 @@
           feedingIntervals.push(buildFeedingInterval(feedingRecords[i - 1], feedingRecords[i]));
         }
 
-        const validIntervals = feedingIntervals.filter(function (interval) { return interval.isValidInterval; });
-        const validDurations = validIntervals.map(function (interval) { return interval.durationMinutes; }).filter(Number.isFinite);
-        const sampleStatus = buildFeedingIntervalSampleStatus(validIntervals.length);
-        const exclusionReasons = {
+        const stats = calculateIntervalStats(feedingIntervals, {
+          intervalType: "feeding_interval",
+          durationField: "durationMinutes",
+          validFlagField: "isValidInterval",
+          validRange: INTERVAL_VALID_RANGES_MINUTES.feedingInterval
+        });
+        const sampleStatus = {
+          minSampleStatus: stats.minSampleStatus,
+          canAnalyze: stats.canAnalyze,
+          confidenceLevel: stats.confidenceLevel,
+          messageKey: stats.canAnalyze ? "feeding_interval_analysis_ready" : "not_enough_feeding_intervals"
+        };
+        const exclusionReasons = Object.assign({
           feeding_interval_too_short: countFeedingIntervalFlag(feedingIntervals, "feeding_interval_too_short"),
           feeding_interval_too_long: countFeedingIntervalFlag(feedingIntervals, "feeding_interval_too_long"),
           feeding_interval_invalid_duration: countFeedingIntervalFlag(feedingIntervals, "feeding_interval_invalid_duration"),
           feeding_interval_end_before_start: countFeedingIntervalFlag(feedingIntervals, "feeding_interval_end_before_start")
-        };
-        const stats = {
-          rawCount: feedingIntervals.length,
-          usedCount: validIntervals.length,
-          excludedCount: feedingIntervals.length - validIntervals.length,
-          meanMinutes: roundStat(mean(validDurations)),
-          medianMinutes: roundStat(median(validDurations)),
-          stdMinutes: roundStat(std(validDurations)),
-          minMinutes: validDurations.length ? Math.min.apply(null, validDurations) : null,
-          maxMinutes: validDurations.length ? Math.max.apply(null, validDurations) : null,
-          confidenceLevel: sampleStatus.confidenceLevel,
-          exclusionReasons: exclusionReasons
-        };
+        }, stats.exclusionReasons);
+        stats.exclusionReasons = exclusionReasons;
         const summary = Object.assign({
           feedingRecordCount: feedingRecords.length,
           rawIntervalCount: feedingIntervals.length,
-          validIntervalCount: validIntervals.length,
+          validIntervalCount: stats.validBeforeOutlierCount,
           excludedIntervalCount: stats.excludedCount,
           tooShortCount: exclusionReasons.feeding_interval_too_short,
           tooLongCount: exclusionReasons.feeding_interval_too_long,
@@ -4001,6 +4814,33 @@
         const pairs = buildAnalysisPairs(activeSorted);
         const pairSummary = buildAnalysisPairSummary(pairs);
         const feedingIntervalAnalysis = buildFeedingIntervalAnalysis(activeSorted, normalizedBabyId);
+        const intervalStats = {
+          feedingInterval: feedingIntervalAnalysis.feedingIntervalStats,
+          sleepSession: calculateIntervalStats(pairs.sleepSessions, {
+            intervalType: "sleep_session",
+            durationField: "durationMinutes",
+            validFlagField: "isValidCandidate",
+            validRange: INTERVAL_VALID_RANGES_MINUTES.sleepSession
+          }),
+          feedBurp: calculateIntervalStats(pairs.feedBurpPairs, {
+            intervalType: "feed_burp",
+            durationField: "elapsedMinutes",
+            validFlagField: "isValidCandidate",
+            validRange: INTERVAL_VALID_RANGES_MINUTES.feedToBurp
+          }),
+          urineInterval: createEmptyIntervalStats("urine_interval", 0),
+          stoolInterval: createEmptyIntervalStats("stool_interval", 0),
+          anyDiaperInterval: createEmptyIntervalStats("any_diaper_interval", 0),
+          burpToDiaper: createEmptyIntervalStats("burp_to_diaper", 0)
+        };
+        const diaperSubtypeSummary = applyIntervalConfidenceAdjustments(intervalStats, {
+          records: activeSorted,
+          pairSummary: pairSummary,
+          nowMs: opts.nowMs,
+          recentWindowDays: opts.recentWindowDays
+        });
+        const confidenceSummary = buildConfidenceSummary(intervalStats, diaperSubtypeSummary);
+        const phase51CompletionCheck = buildPhase51CompletionCheck();
         function flagCount(flag) {
           return normalized.filter(function (record) {
             return record.qualityFlags.indexOf(flag) !== -1;
@@ -4008,7 +4848,7 @@
         }
         const snapshot = {
           ok: true,
-          phase: "5.1.1",
+          phase: "5.1.2",
           generatedAt: nowIso(),
           babyId: normalizedBabyId || null,
           counts: {
@@ -4033,10 +4873,20 @@
           },
           intervalSummary: feedingIntervalAnalysis.intervalSummary,
           feedingIntervalStats: feedingIntervalAnalysis.feedingIntervalStats,
+          intervalStats: intervalStats,
+          confidenceSummary: confidenceSummary,
+          phase51CompletionCheck: phase51CompletionCheck,
           quality: quality,
           warnings: [],
           errors: []
         };
+        const personalBaseline = buildPersonalBaseline(snapshot, { nowMs: opts.nowMs });
+        snapshot.personalBaseline = personalBaseline;
+        snapshot.phase52CompletionCheck = personalBaseline.phase52CompletionCheck;
+        console.debug("[Phase 5.1.2 Interval Stats]", snapshot.intervalStats);
+        console.debug("[Phase 5.1.2 Confidence Summary]", snapshot.confidenceSummary);
+        console.debug("[Phase 5.1 Completion Check]", snapshot.phase51CompletionCheck);
+        console.debug("[Phase 5.2 Personal Baseline]", snapshot.personalBaseline);
         console.debug("[Phase 5.1.1 Feeding Intervals]", {
           summary: snapshot.intervalSummary.feeding,
           stats: snapshot.feedingIntervalStats
@@ -4274,6 +5124,9 @@
             intervals: analysisSnapshot.intervals,
             intervalSummary: analysisSnapshot.intervalSummary,
             feedingIntervalStats: analysisSnapshot.feedingIntervalStats,
+            intervalStats: analysisSnapshot.intervalStats,
+            confidenceSummary: analysisSnapshot.confidenceSummary,
+            phase51CompletionCheck: analysisSnapshot.phase51CompletionCheck,
             quality: analysisSnapshot.quality,
             warnings: analysisSnapshot.warnings,
             errors: analysisSnapshot.errors,
@@ -4388,6 +5241,9 @@
           intervals: analysisSnapshot.intervals,
           intervalSummary: analysisSnapshot.intervalSummary,
           feedingIntervalStats: analysisSnapshot.feedingIntervalStats,
+          intervalStats: analysisSnapshot.intervalStats,
+          confidenceSummary: analysisSnapshot.confidenceSummary,
+          phase51CompletionCheck: analysisSnapshot.phase51CompletionCheck,
           quality: analysisSnapshot.quality,
           warnings: analysisSnapshot.warnings,
           errors: analysisSnapshot.errors,
@@ -8295,7 +9151,12 @@
         buildCommonAnalysisEngine: buildCommonAnalysisEngine,
         calculateObservationReview: calculateObservationReview,
         buildAnalysisSnapshot: buildAnalysisSnapshot,
+        buildPersonalBaseline: buildPersonalBaseline,
         buildFeedingIntervalAnalysis: buildFeedingIntervalAnalysis,
+        calculateIntervalStats: calculateIntervalStats,
+        buildPhase52CompletionCheck: buildPhase52CompletionCheck,
+        buildPhase51CompletionCheck: buildPhase51CompletionCheck,
+        downgradeConfidenceLevel: downgradeConfidenceLevel,
         normalizeRecordForAnalysis: normalizeRecordForAnalysis
       };
 
