@@ -60,6 +60,60 @@
     button { border: 0; cursor: pointer; -webkit-tap-highlight-color: transparent; }
     button:active { transform: translateY(1px); }
 
+    button,
+    [role="button"],
+    a.button,
+    .small-action,
+    .danger-action,
+    .sheet-action,
+    .ghost-action,
+    .record-action,
+    .feeding-detail-button,
+    .chip,
+    .filter-chip,
+    .collapsible-head,
+    .management-tab,
+    .stepper-btn,
+    .sheet-close,
+    .undo-btn,
+    .edit-record,
+    .delete-record,
+    .menu-btn,
+    .icon-btn,
+    .detail-open,
+    .sheet-option,
+    .del-sel,
+    .ck {
+      position: relative;
+      overflow: hidden;
+      isolation: isolate;
+    }
+
+    .touch-ripple {
+      position: absolute;
+      border-radius: 999px;
+      pointer-events: none;
+      background: currentColor;
+      opacity: 0.26;
+      transform: translate(-50%, -50%) scale(0);
+      animation: touchRipple 520ms cubic-bezier(.22,.61,.36,1) forwards;
+      z-index: 0;
+    }
+
+    @keyframes touchRipple {
+      to {
+        transform: translate(-50%, -50%) scale(1);
+        opacity: 0;
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .touch-ripple {
+        display: none;
+        animation: none;
+      }
+    }
+
     .app {
       width: min(100%, 760px);
       margin: 0 auto;
@@ -1509,15 +1563,107 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="./cloud-config.js?v=6.0.0-design-foundation-ui-hotfix"></script>
-  <script src="./cloud-supabase.js?v=6.0.0-design-foundation-ui-hotfix"></script>
+  <script src="./cloud-config.js?v=6.0.0-design-foundation-ui-ripple"></script>
+  <script src="./cloud-supabase.js?v=6.0.0-design-foundation-ui-ripple"></script>
   <script>
     document.addEventListener("DOMContentLoaded", function () {
       if ("serviceWorker" in navigator) {
-        navigator.serviceWorker.register("./sw.js?v=6.0.0-design-foundation-ui-hotfix").catch(function (error) {
+        navigator.serviceWorker.register("./sw.js?v=6.0.0-design-foundation-ui-ripple").catch(function (error) {
           console.warn("Service worker registration failed", error);
         });
       }
+
+      function setupTouchRipple() {
+        const reduceMotionQuery = window.matchMedia ? window.matchMedia("(prefers-reduced-motion: reduce)") : null;
+        const rippleSelector = [
+          "button",
+          "[role='button']",
+          "a.button",
+          ".small-action",
+          ".danger-action",
+          ".sheet-action",
+          ".ghost-action",
+          ".record-action",
+          ".feeding-detail-button",
+          ".chip",
+          ".filter-chip",
+          ".collapsible-head",
+          ".management-tab",
+          ".stepper-btn",
+          ".sheet-close",
+          ".undo-btn",
+          ".edit-record",
+          ".delete-record",
+          ".menu-btn",
+          ".icon-btn",
+          ".detail-open",
+          ".sheet-option",
+          ".del-sel",
+          ".ck"
+        ].join(", ");
+        const inputSelector = "input, textarea, select";
+
+        function isRippleDisabled(target) {
+          return !target ||
+            target.disabled ||
+            target.getAttribute("aria-disabled") === "true" ||
+            target.closest("[disabled], [aria-disabled='true']");
+        }
+
+        function findRippleTarget(event) {
+          if (event.target.closest(inputSelector)) return null;
+          const target = event.target.closest(rippleSelector);
+          if (!target || isRippleDisabled(target)) return null;
+          return target;
+        }
+
+        function createTouchRipple(event, target, forceCenter) {
+          if (reduceMotionQuery && reduceMotionQuery.matches) return;
+          const rect = target.getBoundingClientRect();
+          if (!rect.width || !rect.height) return;
+
+          Array.from(target.children).filter(function (child) {
+            return child.classList && child.classList.contains("touch-ripple");
+          }).slice(0, -2).forEach(function (child) {
+            child.remove();
+          });
+
+          const size = Math.max(rect.width, rect.height) * 2;
+          const hasPointer = !forceCenter &&
+            Number.isFinite(event.clientX) &&
+            Number.isFinite(event.clientY);
+          const x = hasPointer ? event.clientX - rect.left : rect.width / 2;
+          const y = hasPointer ? event.clientY - rect.top : rect.height / 2;
+          const ripple = document.createElement("span");
+
+          ripple.className = "touch-ripple";
+          ripple.style.width = size + "px";
+          ripple.style.height = size + "px";
+          ripple.style.left = x + "px";
+          ripple.style.top = y + "px";
+          ripple.addEventListener("animationend", function () {
+            ripple.remove();
+          }, { once: true });
+
+          target.appendChild(ripple);
+        }
+
+        document.addEventListener("pointerdown", function (event) {
+          if (event.button !== undefined && event.button !== 0) return;
+          const target = findRippleTarget(event);
+          if (!target) return;
+          createTouchRipple(event, target, false);
+        });
+
+        document.addEventListener("keydown", function (event) {
+          if (event.repeat || (event.key !== "Enter" && event.key !== " ")) return;
+          const target = findRippleTarget(event);
+          if (!target) return;
+          createTouchRipple(event, target, true);
+        });
+      }
+
+      setupTouchRipple();
 
       const ILLUSTRATION_DB = [
         "./illus/i01.jpg",
