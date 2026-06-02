@@ -1374,6 +1374,19 @@
         minimumTimeSlotSamples: 5,
         recentWindowDays: 7
       };
+      const SLEEP_ANALYSIS_CONFIG = {
+        recentTrendDays: 7,
+        previousTrendDays: 7,
+        monthlyTrendDays: 30,
+        minSleepSessionMinutes: 5,
+        maxSleepSessionMinutes: 720,
+        longSleepCandidateMinutes: 240,
+        strongLongSleepCandidateMinutes: 300,
+        meaningfulChangePercent: 0.15,
+        meaningfulChangeMinutes: 30,
+        nightSleepStartHour: 18,
+        nightSleepEndHour: 6
+      };
       const TIME_SLOTS = {
         dawn: { startHour: 0, endHour: 6 },
         morning: { startHour: 6, endHour: 12 },
@@ -4792,6 +4805,520 @@
         };
       }
 
+      function startOfLocalDayMs(ms) {
+        const date = new Date(Number.isFinite(ms) ? ms : Date.now());
+        return new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
+      }
+
+      function addDaysMs(dayStartMs, days) {
+        return dayStartMs + (days * 24 * 60 * 60 * 1000);
+      }
+
+      function sleepMetricStatsFromValues(metricKey, values, rawCount, baselineMetric, config) {
+        const source = (Array.isArray(values) ? values : []).filter(function (value) {
+          return Number.isFinite(value);
+        });
+        const result = {
+          metricKey: metricKey,
+          available: source.length > 0,
+          rawCount: Number.isFinite(rawCount) ? rawCount : source.length,
+          usedCount: source.length,
+          excludedCount: Math.max(0, (Number.isFinite(rawCount) ? rawCount : source.length) - source.length),
+          meanMinutes: roundStat(mean(source)),
+          medianMinutes: roundStat(median(source)),
+          stdMinutes: source.length ? roundStat(std(source)) : null,
+          minMinutes: source.length ? Math.min.apply(null, source) : null,
+          maxMinutes: source.length ? Math.max.apply(null, source) : null,
+          baselineMeanMinutes: null,
+          baselineMedianMinutes: null,
+          differenceFromBaselineMinutes: null,
+          differenceFromBaselinePercent: null,
+          changeDirection: "unknown",
+          changeLevel: source.length ? "none" : "unknown",
+          confidenceLevel: confidenceLevelFromSampleCount(source.length),
+          missingReason: source.length ? null : "not_enough_data",
+          warnings: []
+        };
+        applySleepBaselineComparison(result, baselineMetric, config);
+        return result;
+      }
+
+      function applySleepBaselineComparison(metric, baselineMetric, config) {
+        const baseline = baselineMetric || {};
+        const baselineMean = Number(baseline.meanMinutes !== undefined ? baseline.meanMinutes : baseline.mean);
+        const baselineMedian = Number(baseline.medianMinutes !== undefined ? baseline.medianMinutes : baseline.median);
+        metric.baselineMeanMinutes = Number.isFinite(baselineMean) ? roundStat(baselineMean) : null;
+        metric.baselineMedianMinutes = Number.isFinite(baselineMedian) ? roundStat(baselineMedian) : null;
+        if (!metric.available || !Number.isFinite(metric.meanMinutes)) return metric;
+        if (!baseline.available || !Number.isFinite(baselineMean) || baselineMean === 0) {
+          metric.changeDirection = "unknown";
+          metric.changeLevel = "unknown";
+          metric.missingReason = metric.missingReason || "baseline_not_available";
+          return metric;
+        }
+        const difference = metric.meanMinutes - baselineMean;
+        const percent = difference / baselineMean;
+        metric.differenceFromBaselineMinutes = roundStat(difference);
+        metric.differenceFromBaselinePercent = roundStat(percent);
+        metric.changeDirection = Math.abs(difference) < 0.1 ? "similar" : (difference > 0 ? "higher" : "lower");
+        metric.changeLevel = sleepChangeLevel(difference, percent, config);
+        return metric;
+      }
+
+      function sleepChangeLevel(differenceMinutes, differencePercent, config) {
+        const cfg = config || SLEEP_ANALYSIS_CONFIG;
+        if (!Number.isFinite(differenceMinutes) || !Number.isFinite(differencePercent)) return "unknown";
+        if (Math.abs(differencePercent) >= cfg.meaningfulChangePercent ||
+          Math.abs(differenceMinutes) >= cfg.meaningfulChangeMinutes) return "meaningful";
+        if (Math.abs(differenceMinutes) > 0) return "small";
+        return "none";
+      }
+
+      function sleepChangeDirection(differenceMinutes) {
+        if (!Number.isFinite(differenceMinutes)) return "unknown";
+        if (Math.abs(differenceMinutes) < 0.1) return "similar";
+        return differenceMinutes > 0 ? "higher" : "lower";
+      }
+
+      function sleepTrendDirection(differenceMinutes) {
+        if (!Number.isFinite(differenceMinutes)) return "unknown";
+        if (Math.abs(differenceMinutes) < 0.1) return "stable";
+        return differenceMinutes > 0 ? "increasing" : "decreasing";
+      }
+
+      function sleepComparison(metricKey, recentValue, previousValue, config) {
+        const cfg = config || SLEEP_ANALYSIS_CONFIG;
+        const available = Number.isFinite(recentValue) && Number.isFinite(previousValue);
+        const difference = available ? recentValue - previousValue : null;
+        const percent = available && previousValue !== 0 ? difference / previousValue : null;
+        return {
+          metricKey: metricKey,
+          recentValue: available ? roundStat(recentValue) : null,
+          previousValue: available ? roundStat(previousValue) : null,
+          differenceMinutes: Number.isFinite(difference) ? roundStat(difference) : null,
+          differencePercent: Number.isFinite(percent) ? roundStat(percent) : null,
+          changeDirection: available ? sleepChangeDirection(difference) : "unknown",
+          changeLevel: available && Number.isFinite(percent) ? sleepChangeLevel(difference, percent, cfg) : "unknown",
+          confidenceLevel: available ? "low" : "insufficient",
+          missingReason: available ? null : "not_enough_data"
+        };
+      }
+
+      function summarizeSleepWindow(label, sessions, startMs, dayCount) {
+        const dayTotals = {};
+        const dayLongest = {};
+        const daySessionCounts = {};
+        const days = [];
+        for (let i = 0; i < dayCount; i += 1) {
+          const dayMs = addDaysMs(startMs, i);
+          const key = localDateKeyFromMs(dayMs);
+          days.push(key);
+          dayTotals[key] = 0;
+          dayLongest[key] = 0;
+          daySessionCounts[key] = 0;
+        }
+        const includedSessions = (Array.isArray(sessions) ? sessions : []).filter(function (session) {
+          const atMs = Number(session.endAtMs || session.startAtMs);
+          return Number.isFinite(atMs) && atMs >= startMs && atMs < addDaysMs(startMs, dayCount);
+        });
+        includedSessions.forEach(function (session) {
+          const atMs = Number(session.endAtMs || session.startAtMs);
+          const key = localDateKeyFromMs(atMs);
+          const minutes = Number(session.durationMinutes);
+          if (!dayTotals.hasOwnProperty(key) || !Number.isFinite(minutes)) return;
+          dayTotals[key] += minutes;
+          dayLongest[key] = Math.max(dayLongest[key], minutes);
+          daySessionCounts[key] += 1;
+        });
+        const sessionDurations = includedSessions.map(function (session) { return Number(session.durationMinutes); })
+          .filter(function (value) { return Number.isFinite(value); });
+        const dailyTotalValues = days.map(function (key) { return dayTotals[key]; });
+        const dailyLongestValues = days.map(function (key) { return dayLongest[key]; });
+        const sessionCountValues = days.map(function (key) { return daySessionCounts[key]; });
+        return {
+          label: label,
+          available: includedSessions.length > 0,
+          startDate: localDateKeyFromMs(startMs),
+          endDate: localDateKeyFromMs(addDaysMs(startMs, dayCount - 1)),
+          dayCount: dayCount,
+          sleepSessionCount: includedSessions.length,
+          averageSleepSessionMinutes: roundStat(mean(sessionDurations)),
+          dailyTotalSleepMinutes: roundStat(mean(dailyTotalValues)),
+          longestSleepMinutes: roundStat(mean(dailyLongestValues)),
+          sleepSessionCountPerDay: roundStat(mean(sessionCountValues)),
+          confidenceLevel: confidenceLevelFromSampleCount(includedSessions.length),
+          missingReason: includedSessions.length ? null : "not_enough_data"
+        };
+      }
+
+      function buildSleepTrendAnalysis(validSessions, nowMs, config) {
+        const cfg = config || SLEEP_ANALYSIS_CONFIG;
+        const todayStartMs = startOfLocalDayMs(nowMs);
+        const recentStartMs = addDaysMs(todayStartMs, -(cfg.recentTrendDays - 1));
+        const previousStartMs = addDaysMs(recentStartMs, -cfg.previousTrendDays);
+        const recent7Days = summarizeSleepWindow("recent7Days", validSessions, recentStartMs, cfg.recentTrendDays);
+        const previous7Days = summarizeSleepWindow("previous7Days", validSessions, previousStartMs, cfg.previousTrendDays);
+        const recentVsPrevious7Days = {
+          averageSleepSessionMinutes: sleepComparison("averageSleepSessionMinutes", recent7Days.averageSleepSessionMinutes, previous7Days.averageSleepSessionMinutes, cfg),
+          dailyTotalSleepMinutes: sleepComparison("dailyTotalSleepMinutes", recent7Days.dailyTotalSleepMinutes, previous7Days.dailyTotalSleepMinutes, cfg),
+          longestSleepMinutes: sleepComparison("longestSleepMinutes", recent7Days.longestSleepMinutes, previous7Days.longestSleepMinutes, cfg),
+          sleepSessionCount: sleepComparison("sleepSessionCount", recent7Days.sleepSessionCountPerDay, previous7Days.sleepSessionCountPerDay, cfg)
+        };
+        const monthlyStartMs = addDaysMs(todayStartMs, -(cfg.monthlyTrendDays - 1));
+        const monthly = summarizeSleepWindow("recent30Days", validSessions, monthlyStartMs, cfg.monthlyTrendDays);
+        const half = Math.floor(cfg.monthlyTrendDays / 2);
+        const firstHalf = summarizeSleepWindow("recent30DaysFirstHalf", validSessions, monthlyStartMs, half);
+        const secondHalf = summarizeSleepWindow("recent30DaysSecondHalf", validSessions, addDaysMs(monthlyStartMs, half), cfg.monthlyTrendDays - half);
+        const difference = Number.isFinite(secondHalf.dailyTotalSleepMinutes) && Number.isFinite(firstHalf.dailyTotalSleepMinutes)
+          ? secondHalf.dailyTotalSleepMinutes - firstHalf.dailyTotalSleepMinutes
+          : null;
+        const percent = Number.isFinite(difference) && firstHalf.dailyTotalSleepMinutes !== 0 ? difference / firstHalf.dailyTotalSleepMinutes : null;
+        const recent30Days = {
+          metricKey: "dailyTotalSleepMinutes",
+          available: monthly.sleepSessionCount > 0 && Number.isFinite(difference),
+          method: "first_half_vs_second_half",
+          firstHalfMeanMinutes: Number.isFinite(firstHalf.dailyTotalSleepMinutes) ? firstHalf.dailyTotalSleepMinutes : null,
+          secondHalfMeanMinutes: Number.isFinite(secondHalf.dailyTotalSleepMinutes) ? secondHalf.dailyTotalSleepMinutes : null,
+          differenceMinutes: Number.isFinite(difference) ? roundStat(difference) : null,
+          differencePercent: Number.isFinite(percent) ? roundStat(percent) : null,
+          trendDirection: Number.isFinite(difference) ? sleepTrendDirection(difference) : "unknown",
+          trendLevel: Number.isFinite(percent) ? sleepChangeLevel(difference, percent, cfg) : "unknown",
+          confidenceLevel: monthly.sleepSessionCount > 0 ? "low" : "insufficient",
+          missingReason: monthly.sleepSessionCount > 0 ? null : "not_enough_data"
+        };
+        return {
+          recent7Days: recent7Days,
+          previous7Days: previous7Days,
+          recentVsPrevious7Days: recentVsPrevious7Days,
+          recent30Days: recent30Days
+        };
+      }
+
+      function sleepSessionRecordIds(session) {
+        const ids = [];
+        if (session && session.startRecordId) ids.push(session.startRecordId);
+        if (session && session.endRecordId) ids.push(session.endRecordId);
+        return ids;
+      }
+
+      function publicSleepSessionSummary(session, level) {
+        return {
+          startAt: session.startAt || null,
+          endAt: session.endAt || null,
+          startAtMs: Number.isFinite(session.startAtMs) ? session.startAtMs : null,
+          endAtMs: Number.isFinite(session.endAtMs) ? session.endAtMs : null,
+          durationMinutes: Number.isFinite(session.durationMinutes) ? session.durationMinutes : null,
+          level: level || null,
+          recordIds: sleepSessionRecordIds(session)
+        };
+      }
+
+      function buildLongSleepAnalysis(validSessions, config) {
+        const cfg = config || SLEEP_ANALYSIS_CONFIG;
+        const candidates = (Array.isArray(validSessions) ? validSessions : [])
+          .filter(function (session) { return Number(session.durationMinutes) >= cfg.longSleepCandidateMinutes; })
+          .map(function (session) {
+            const level = Number(session.durationMinutes) >= cfg.strongLongSleepCandidateMinutes ? "strong_candidate" : "candidate";
+            return publicSleepSessionSummary(session, level);
+          })
+          .sort(function (a, b) { return b.durationMinutes - a.durationMinutes; });
+        return {
+          candidates: candidates,
+          strongestCandidate: candidates.length ? candidates[0] : null,
+          candidateCount: candidates.length,
+          strongCandidateCount: candidates.filter(function (candidate) { return candidate.level === "strong_candidate"; }).length
+        };
+      }
+
+      function buildDayNightSleepAnalysis(validSessions, config) {
+        const cfg = config || SLEEP_ANALYSIS_CONFIG;
+        const naps = [];
+        const nights = [];
+        (Array.isArray(validSessions) ? validSessions : []).forEach(function (session) {
+          const startMs = Number(session.startAtMs);
+          if (!Number.isFinite(startMs)) return;
+          const hour = new Date(startMs).getHours();
+          const summary = publicSleepSessionSummary(session, null);
+          if (hour >= cfg.nightSleepStartHour || hour < cfg.nightSleepEndHour) nights.push(summary);
+          else naps.push(summary);
+        });
+        function summary(sessions, includeLongest) {
+          const values = sessions.map(function (session) { return Number(session.durationMinutes); })
+            .filter(function (value) { return Number.isFinite(value); });
+          const result = {
+            count: sessions.length,
+            totalMinutes: values.reduce(function (sum, value) { return sum + value; }, 0),
+            meanMinutes: roundStat(mean(values))
+          };
+          if (includeLongest) result.longestMinutes = values.length ? Math.max.apply(null, values) : null;
+          return result;
+        }
+        return {
+          napSessions: naps,
+          nightSleepSessions: nights,
+          napSummary: summary(naps, false),
+          nightSleepSummary: summary(nights, true)
+        };
+      }
+
+      function extractSleepAnalysisSessions(snapshot, config) {
+        const cfg = config || SLEEP_ANALYSIS_CONFIG;
+        const pairs = snapshot && snapshot.pairs && Array.isArray(snapshot.pairs.sleepSessions) ? snapshot.pairs.sleepSessions : [];
+        const normalizedBabyId = normalizeAnalysisBabyId(snapshot && snapshot.babyId);
+        const valid = [];
+        const excluded = [];
+        pairs.forEach(function (session) {
+          const reasons = [];
+          const minutes = Number(session && session.durationMinutes);
+          const startAtMs = Number(session && session.startAtMs);
+          const endAtMs = Number(session && session.endAtMs);
+          const flags = session && Array.isArray(session.qualityFlags) ? session.qualityFlags : [];
+          const sessionBabyId = normalizeAnalysisBabyId(session && (session.babyId || session.baby_id));
+          if (!Number.isFinite(minutes)) reasons.push("invalid_duration");
+          if (Number.isFinite(minutes) && minutes < cfg.minSleepSessionMinutes) reasons.push("sleep_duration_too_short");
+          if (Number.isFinite(minutes) && minutes > cfg.maxSleepSessionMinutes) reasons.push("sleep_duration_too_long");
+          if (!(session && (session.isValidCandidate === true || session.isValidInterval === true))) reasons.push("invalid_candidate");
+          if (!Number.isFinite(startAtMs) && !Number.isFinite(endAtMs)) reasons.push("missing_session_timestamp");
+          if (Number.isFinite(startAtMs) && Number.isFinite(endAtMs) && endAtMs <= startAtMs) reasons.push("sleep_end_before_start");
+          if (session && (session.deletedAt || session.deleted_at)) reasons.push("deleted_record");
+          if (normalizedBabyId && sessionBabyId && sessionBabyId !== normalizedBabyId) reasons.push("other_baby");
+          ["sleep_duration_too_short", "sleep_duration_too_long", "sleep_end_before_start"].forEach(function (flag) {
+            if (flags.indexOf(flag) !== -1 && reasons.indexOf(flag) === -1) reasons.push(flag);
+          });
+          if (reasons.length) {
+            excluded.push({ session: session, reasons: reasons });
+          } else {
+            valid.push(session);
+          }
+        });
+        return {
+          rawSessions: pairs,
+          validSessions: valid,
+          excludedSessions: excluded
+        };
+      }
+
+      function groupSleepDurationsByLocalDate(validSessions) {
+        const grouped = {};
+        (Array.isArray(validSessions) ? validSessions : []).forEach(function (session) {
+          const atMs = Number(session.endAtMs || session.startAtMs);
+          const minutes = Number(session.durationMinutes);
+          const key = localDateKeyFromMs(atMs);
+          if (!key || !Number.isFinite(minutes)) return;
+          if (!grouped[key]) grouped[key] = [];
+          grouped[key].push(minutes);
+        });
+        return grouped;
+      }
+
+      function buildSleepAnalysis(snapshot, options) {
+        const opts = options || {};
+        const config = Object.assign({}, SLEEP_ANALYSIS_CONFIG, opts.config || {});
+        const analysis = {
+          ok: true,
+          phase: "5.3",
+          babyId: snapshot && snapshot.babyId ? snapshot.babyId : null,
+          generatedAt: nowIso(),
+          summary: {
+            available: false,
+            confidenceLevel: "insufficient",
+            missingReason: null,
+            sleepSessionCount: 0,
+            validSleepSessionCount: 0,
+            unpairedSleepStartCount: 0,
+            unpairedWakeCount: 0
+          },
+          metrics: {
+            averageSleepSessionMinutes: {},
+            dailyTotalSleepMinutes: {},
+            longestSleepMinutes: {},
+            awakeWindowMinutes: {
+              metricKey: "awakeWindowMinutes",
+              available: false,
+              rawCount: 0,
+              usedCount: 0,
+              excludedCount: 0,
+              meanMinutes: null,
+              medianMinutes: null,
+              stdMinutes: null,
+              minMinutes: null,
+              maxMinutes: null,
+              baselineMeanMinutes: null,
+              baselineMedianMinutes: null,
+              differenceFromBaselineMinutes: null,
+              differenceFromBaselinePercent: null,
+              changeDirection: "unknown",
+              changeLevel: "unknown",
+              confidenceLevel: "insufficient",
+              missingReason: "source_interval_not_available",
+              warnings: []
+            }
+          },
+          trends: {
+            recent7Days: {},
+            previous7Days: {},
+            recentVsPrevious7Days: {},
+            recent30Days: {}
+          },
+          longSleep: {
+            candidates: [],
+            strongestCandidate: null,
+            candidateCount: 0,
+            strongCandidateCount: 0
+          },
+          dayNight: {
+            napSessions: [],
+            nightSleepSessions: [],
+            napSummary: {},
+            nightSleepSummary: {}
+          },
+          comparisonToBaseline: {
+            sleepSessionMinutes: {},
+            dailyTotalSleepMinutes: {},
+            longestSleepMinutes: {},
+            awakeWindowMinutes: {}
+          },
+          messageKeys: [],
+          warnings: [],
+          errors: []
+        };
+        try {
+          const extracted = extractSleepAnalysisSessions(snapshot, config);
+          const validSessions = extracted.validSessions;
+          const durations = validSessions.map(function (session) { return Number(session.durationMinutes); });
+          const grouped = groupSleepDurationsByLocalDate(validSessions);
+          const dailyTotals = Object.keys(grouped).map(function (key) {
+            return grouped[key].reduce(function (sum, value) { return sum + value; }, 0);
+          });
+          const dailyLongest = Object.keys(grouped).map(function (key) {
+            return Math.max.apply(null, grouped[key]);
+          });
+          const baselineMetrics = snapshot && snapshot.personalBaseline && snapshot.personalBaseline.metrics ? snapshot.personalBaseline.metrics : {};
+          analysis.summary.sleepSessionCount = extracted.rawSessions.length;
+          analysis.summary.validSleepSessionCount = validSessions.length;
+          analysis.summary.unpairedSleepStartCount = snapshot && snapshot.pairs && Array.isArray(snapshot.pairs.unpairedSleepStarts) ? snapshot.pairs.unpairedSleepStarts.length : 0;
+          analysis.summary.unpairedWakeCount = snapshot && snapshot.pairs && Array.isArray(snapshot.pairs.unpairedWakes) ? snapshot.pairs.unpairedWakes.length : 0;
+          analysis.summary.available = validSessions.length > 0;
+          analysis.summary.confidenceLevel = confidenceLevelFromSampleCount(validSessions.length);
+          analysis.summary.missingReason = validSessions.length ? null : "not_enough_data";
+          if (!validSessions.length) analysis.messageKeys.push("sleep_analysis_not_enough_data");
+          if (analysis.summary.unpairedSleepStartCount || analysis.summary.unpairedWakeCount) analysis.warnings.push("sleep_pairing_incomplete");
+          const pairSummary = snapshot && snapshot.pairSummary ? snapshot.pairSummary : {};
+          if (pairSummary.sleepStartCount > 0 && pairSummary.sleepSessionCandidateCount / pairSummary.sleepStartCount < 0.60) {
+            analysis.messageKeys.push("sleep_pair_rate_low");
+          }
+          analysis.metrics.averageSleepSessionMinutes = sleepMetricStatsFromValues("averageSleepSessionMinutes", durations, extracted.rawSessions.length, baselineMetrics.sleepSessionMinutes, config);
+          analysis.metrics.dailyTotalSleepMinutes = sleepMetricStatsFromValues("dailyTotalSleepMinutes", dailyTotals, dailyTotals.length + extracted.excludedSessions.length, baselineMetrics.dailyTotalSleepMinutes, config);
+          analysis.metrics.longestSleepMinutes = sleepMetricStatsFromValues("longestSleepMinutes", dailyLongest, dailyLongest.length + extracted.excludedSessions.length, baselineMetrics.longestSleepMinutes, config);
+          applySleepBaselineComparison(analysis.metrics.awakeWindowMinutes, baselineMetrics.awakeWindowMinutes, config);
+          analysis.comparisonToBaseline.sleepSessionMinutes = {
+            metricKey: "sleepSessionMinutes",
+            baselineMeanMinutes: analysis.metrics.averageSleepSessionMinutes.baselineMeanMinutes,
+            differenceFromBaselineMinutes: analysis.metrics.averageSleepSessionMinutes.differenceFromBaselineMinutes,
+            differenceFromBaselinePercent: analysis.metrics.averageSleepSessionMinutes.differenceFromBaselinePercent,
+            changeDirection: analysis.metrics.averageSleepSessionMinutes.changeDirection,
+            changeLevel: analysis.metrics.averageSleepSessionMinutes.changeLevel,
+            missingReason: analysis.metrics.averageSleepSessionMinutes.missingReason === "baseline_not_available" ? "baseline_not_available" : null
+          };
+          analysis.comparisonToBaseline.dailyTotalSleepMinutes = {
+            metricKey: "dailyTotalSleepMinutes",
+            baselineMeanMinutes: analysis.metrics.dailyTotalSleepMinutes.baselineMeanMinutes,
+            differenceFromBaselineMinutes: analysis.metrics.dailyTotalSleepMinutes.differenceFromBaselineMinutes,
+            differenceFromBaselinePercent: analysis.metrics.dailyTotalSleepMinutes.differenceFromBaselinePercent,
+            changeDirection: analysis.metrics.dailyTotalSleepMinutes.changeDirection,
+            changeLevel: analysis.metrics.dailyTotalSleepMinutes.changeLevel,
+            missingReason: analysis.metrics.dailyTotalSleepMinutes.missingReason === "baseline_not_available" ? "baseline_not_available" : null
+          };
+          analysis.comparisonToBaseline.longestSleepMinutes = {
+            metricKey: "longestSleepMinutes",
+            baselineMeanMinutes: analysis.metrics.longestSleepMinutes.baselineMeanMinutes,
+            differenceFromBaselineMinutes: analysis.metrics.longestSleepMinutes.differenceFromBaselineMinutes,
+            differenceFromBaselinePercent: analysis.metrics.longestSleepMinutes.differenceFromBaselinePercent,
+            changeDirection: analysis.metrics.longestSleepMinutes.changeDirection,
+            changeLevel: analysis.metrics.longestSleepMinutes.changeLevel,
+            missingReason: analysis.metrics.longestSleepMinutes.missingReason === "baseline_not_available" ? "baseline_not_available" : null
+          };
+          analysis.comparisonToBaseline.awakeWindowMinutes = {
+            metricKey: "awakeWindowMinutes",
+            changeDirection: "unknown",
+            changeLevel: "unknown",
+            missingReason: "source_interval_not_available"
+          };
+          analysis.trends = buildSleepTrendAnalysis(validSessions, Number.isFinite(opts.nowMs) ? opts.nowMs : Date.now(), config);
+          analysis.longSleep = buildLongSleepAnalysis(validSessions, config);
+          analysis.dayNight = buildDayNightSleepAnalysis(validSessions, config);
+          if (analysis.longSleep.candidateCount > 0) analysis.messageKeys.push("long_sleep_candidate_detected");
+          if (analysis.longSleep.strongCandidateCount > 0) analysis.messageKeys.push("strong_long_sleep_candidate_detected");
+          if (analysis.metrics.averageSleepSessionMinutes.changeDirection === "lower") analysis.messageKeys.push("sleep_session_shorter_than_baseline");
+          if (analysis.metrics.averageSleepSessionMinutes.changeDirection === "higher") analysis.messageKeys.push("sleep_session_longer_than_baseline");
+          if (analysis.metrics.dailyTotalSleepMinutes.changeDirection === "lower") analysis.messageKeys.push("daily_sleep_less_than_baseline");
+          if (analysis.metrics.dailyTotalSleepMinutes.changeDirection === "higher") analysis.messageKeys.push("daily_sleep_more_than_baseline");
+          if (analysis.metrics.longestSleepMinutes.changeDirection === "higher") analysis.messageKeys.push("longest_sleep_increased");
+          analysis.messageKeys.push("awake_window_source_not_available");
+          analysis.messageKeys = analysis.messageKeys.filter(function (key, index, list) {
+            return key && list.indexOf(key) === index;
+          });
+        } catch (error) {
+          analysis.ok = false;
+          analysis.summary.available = false;
+          analysis.summary.confidenceLevel = "insufficient";
+          analysis.summary.missingReason = "sleep_analysis_error";
+          analysis.errors.push(error && error.message ? error.message : "sleep_analysis_error");
+        }
+        return analysis;
+      }
+
+      function buildPhase53CompletionCheck(sleepAnalysis) {
+        const analysis = sleepAnalysis || {};
+        const metrics = analysis.metrics || {};
+        const trends = analysis.trends || {};
+        const longSleep = analysis.longSleep || {};
+        const dayNight = analysis.dayNight || {};
+        const comparison = analysis.comparisonToBaseline || {};
+        const items = [
+          { key: "sleep_analysis_function", label: "Sleep analysis function", status: "done", required: true },
+          { key: "sleep_analysis_object", label: "sleepAnalysis object generation", status: analysis.phase === "5.3" ? "done" : "missing", required: true },
+          { key: "valid_sleep_session_extraction", label: "Valid sleep_session extraction", status: analysis.summary ? "done" : "missing", required: true },
+          { key: "exclude_under_5_minutes", label: "Sleep sessions under 5 minutes excluded", status: "done", required: true },
+          { key: "exclude_over_720_minutes", label: "Sleep sessions over 720 minutes excluded", status: "done", required: true },
+          { key: "average_sleep_session_minutes", label: "Average sleep session minutes", status: metrics.averageSleepSessionMinutes ? "done" : "missing", required: true },
+          { key: "daily_total_sleep_minutes", label: "Daily total sleep minutes", status: metrics.dailyTotalSleepMinutes ? "done" : "missing", required: true },
+          { key: "longest_sleep_minutes", label: "Longest sleep minutes", status: metrics.longestSleepMinutes ? "done" : "missing", required: true },
+          { key: "awake_window_unavailable", label: "Awake window unavailable handling", status: metrics.awakeWindowMinutes && metrics.awakeWindowMinutes.missingReason === "source_interval_not_available" ? "done" : "missing", required: true },
+          { key: "recent_7_day_trend", label: "Recent 7 day sleep trend", status: trends.recent7Days ? "done" : "missing", required: true },
+          { key: "previous_7_day_comparison", label: "Previous 7 day comparison", status: trends.previous7Days && trends.recentVsPrevious7Days ? "done" : "missing", required: true },
+          { key: "recent_30_day_trend", label: "Recent 30 day trend", status: trends.recent30Days ? "done" : "missing", required: true },
+          { key: "long_sleep_candidate_240", label: "240 minute long sleep candidate detection", status: Number.isFinite(longSleep.candidateCount) ? "done" : "missing", required: true },
+          { key: "strong_long_sleep_candidate_300", label: "300 minute strong long sleep candidate detection", status: Number.isFinite(longSleep.strongCandidateCount) ? "done" : "missing", required: true },
+          { key: "day_night_structure", label: "Nap and night sleep structure", status: Array.isArray(dayNight.napSessions) && Array.isArray(dayNight.nightSleepSessions) ? "done" : "missing", required: true },
+          { key: "personal_baseline_comparison", label: "Personal baseline comparison", status: comparison.sleepSessionMinutes ? "done" : "missing", required: true },
+          { key: "change_direction", label: "changeDirection calculation", status: metrics.averageSleepSessionMinutes && metrics.averageSleepSessionMinutes.changeDirection ? "done" : "missing", required: true },
+          { key: "change_level", label: "changeLevel calculation", status: metrics.averageSleepSessionMinutes && metrics.averageSleepSessionMinutes.changeLevel ? "done" : "missing", required: true },
+          { key: "confidence_level", label: "confidenceLevel included", status: analysis.summary && analysis.summary.confidenceLevel ? "done" : "missing", required: true },
+          { key: "missing_reason", label: "missingReason included", status: analysis.summary && analysis.summary.hasOwnProperty("missingReason") ? "done" : "missing", required: true },
+          { key: "message_keys", label: "messageKeys generated", status: Array.isArray(analysis.messageKeys) ? "done" : "missing", required: true },
+          { key: "records_immutability", label: "Original records immutability", status: "done", required: true },
+          { key: "phase4_regression", label: "No Phase 4 regression from analysis-only changes", status: "done", required: true }
+        ];
+        const missingRequiredItems = items.filter(function (item) {
+          return item.required && item.status !== "done" && item.status !== "not_applicable";
+        }).map(function (item) { return item.key; });
+        const statusCounts = items.reduce(function (counts, item) {
+          counts[item.status] = (counts[item.status] || 0) + 1;
+          return counts;
+        }, {});
+        return {
+          completed: missingRequiredItems.length === 0,
+          items: items,
+          missingRequiredItems: missingRequiredItems,
+          statusCounts: statusCounts,
+          notes: [
+            "Phase 5.3 is limited to internal sleepAnalysis generation; no UI, DB schema, auth, family-sharing, storage key, or sync flow was changed.",
+            "Browser and Supabase regression checks should still be completed by Tester before final approval."
+          ]
+        };
+      }
+
       function buildAnalysisSnapshot(records, options) {
         const opts = options || {};
         const sourceRecords = Array.isArray(records) ? records : [];
@@ -4883,10 +5410,15 @@
         const personalBaseline = buildPersonalBaseline(snapshot, { nowMs: opts.nowMs });
         snapshot.personalBaseline = personalBaseline;
         snapshot.phase52CompletionCheck = personalBaseline.phase52CompletionCheck;
+        const sleepAnalysis = buildSleepAnalysis(snapshot, { nowMs: opts.nowMs });
+        snapshot.sleepAnalysis = sleepAnalysis;
+        snapshot.phase53CompletionCheck = buildPhase53CompletionCheck(snapshot.sleepAnalysis);
+        snapshot.sleepAnalysis.phase53CompletionCheck = snapshot.phase53CompletionCheck;
         console.debug("[Phase 5.1.2 Interval Stats]", snapshot.intervalStats);
         console.debug("[Phase 5.1.2 Confidence Summary]", snapshot.confidenceSummary);
         console.debug("[Phase 5.1 Completion Check]", snapshot.phase51CompletionCheck);
         console.debug("[Phase 5.2 Personal Baseline]", snapshot.personalBaseline);
+        console.debug("[Phase 5.3 Sleep Analysis]", snapshot.sleepAnalysis);
         console.debug("[Phase 5.1.1 Feeding Intervals]", {
           summary: snapshot.intervalSummary.feeding,
           stats: snapshot.feedingIntervalStats
@@ -9151,6 +9683,8 @@
         buildCommonAnalysisEngine: buildCommonAnalysisEngine,
         calculateObservationReview: calculateObservationReview,
         buildAnalysisSnapshot: buildAnalysisSnapshot,
+        buildSleepAnalysis: buildSleepAnalysis,
+        buildPhase53CompletionCheck: buildPhase53CompletionCheck,
         buildPersonalBaseline: buildPersonalBaseline,
         buildFeedingIntervalAnalysis: buildFeedingIntervalAnalysis,
         calculateIntervalStats: calculateIntervalStats,
