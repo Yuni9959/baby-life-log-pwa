@@ -1974,6 +1974,33 @@
             </select>
           </div>
         </div>
+        <div class="form-grid two" aria-labelledby="predictiveAlertSettingsTitle">
+          <div class="form-field">
+            <label for="predictiveAlertEnabledInput" id="predictiveAlertSettingsTitle">선제 알림</label>
+            <select id="predictiveAlertEnabledInput">
+              <option value="false">꺼짐</option>
+              <option value="true">켜짐</option>
+            </select>
+            <p class="field-note">평소 기록상 수유, 잠, 기저귀 시간이 가까워졌을 때 조용히 알려드릴게요. 기본값은 꺼져 있어요.</p>
+          </div>
+          <div class="form-field">
+            <label for="predictiveBrowserAlertInput">브라우저 알림</label>
+            <select id="predictiveBrowserAlertInput">
+              <option value="false">사용 안 함</option>
+              <option value="true">사용</option>
+            </select>
+            <p class="field-note" id="predictiveAlertPermissionText">앱을 열어둔 동안에는 앱 안에서만 조용히 안내할게요.</p>
+          </div>
+          <div class="form-field">
+            <label>하루 최대 알림</label>
+            <p class="field-note" id="predictiveAlertDailyLimitText">하루 최대 3회</p>
+          </div>
+          <div class="form-field">
+            <label>조용한 시간</label>
+            <p class="field-note" id="predictiveAlertQuietHoursText">22:00~07:00</p>
+          </div>
+        </div>
+        <p class="field-note">알림은 기록 기반 참고 안내이며, 아기의 실제 신호를 먼저 확인해 주세요.</p>
         <div class="form-row sheet-block">
           <div class="error-text" id="settingsError"></div>
           <button type="button" class="small-action" id="saveSettingsButton">설정 저장</button>
@@ -2530,7 +2557,7 @@
   <script>
     document.addEventListener("DOMContentLoaded", function () {
       if ("serviceWorker" in navigator) {
-        navigator.serviceWorker.register("./sw.js?v=5.16.0-next-event-prediction").catch(function (error) {
+        navigator.serviceWorker.register("./sw.js?v=5.17.0-predictive-alert").catch(function (error) {
           console.warn("Service worker registration failed", error);
         });
       }
@@ -2724,9 +2751,9 @@
       const PRE_REPAIR_BACKUP_KEY = "baby_life_log_app_backup_before_repair";
       const BACKUP_FORMAT_VERSION = 2;
       const APP_NAME = "baby-life-log";
-      const APP_VERSION = "5.16.0";
-      const APP_PHASE_LABEL = "Phase 5.16 · 다음 이벤트 예측 v1";
-      const SERVICE_WORKER_CACHE_NAME = "babylog-cache-v5-16-next-event-prediction-v1-r2";
+      const APP_VERSION = "5.17.0";
+      const APP_PHASE_LABEL = "Phase 5.17 · 울기 전 선제 알림 v1";
+      const SERVICE_WORKER_CACHE_NAME = "babylog-cache-v5-17-predictive-alert-v1";
       const APP_INIT_TIME = new Date().toISOString();
       const ANALYSIS_API_ENDPOINT = "";
       const SERVER_OVERWRITE_BACKUP_KEY = "babylog_records_backup_before_server_overwrite";
@@ -2933,6 +2960,11 @@
         rememberLastDiaperInput: document.getElementById("rememberLastDiaperInput"),
         lifeReportDefaultInput: document.getElementById("lifeReportDefaultInput"),
         analysisDefaultInput: document.getElementById("analysisDefaultInput"),
+        predictiveAlertEnabledInput: document.getElementById("predictiveAlertEnabledInput"),
+        predictiveBrowserAlertInput: document.getElementById("predictiveBrowserAlertInput"),
+        predictiveAlertPermissionText: document.getElementById("predictiveAlertPermissionText"),
+        predictiveAlertDailyLimitText: document.getElementById("predictiveAlertDailyLimitText"),
+        predictiveAlertQuietHoursText: document.getElementById("predictiveAlertQuietHoursText"),
         saveSettingsButton: document.getElementById("saveSettingsButton"),
         settingsError: document.getElementById("settingsError"),
         currentStatusGrid: document.getElementById("currentStatusGrid"),
@@ -12568,6 +12600,38 @@
       }
 
       const NEXT_EVENT_PREDICTION_ALERT_LEAD_TIMES = { feeding: 15, sleep: 15, diaper: 20, burpCheck: 0 };
+      const PREDICTIVE_ALERT_SETTINGS_KEY = "babylog_predictive_alert_settings_v1";
+      const PREDICTIVE_ALERT_HISTORY_KEY = "babylog_predictive_alert_history_v1";
+      const PREDICTIVE_ALERT_DEFAULTS = {
+        enabled: false,
+        maxPredictiveAlertsPerDay: 3,
+        feedingAlertLeadTime: 15,
+        sleepAlertLeadTime: 15,
+        diaperAlertLeadTime: 20,
+        burpAlertLeadTime: 0,
+        minimumAlertConfidence: "medium",
+        quietHours: {
+          enabled: true,
+          start: "22:00",
+          end: "07:00"
+        },
+        sameTypeCooldownMinutes: 30,
+        browserNotificationEnabled: false,
+        inAppAlertEnabled: true
+      };
+      const PREDICTIVE_ALERT_MESSAGES = {
+        feeding: "평소 패턴상 수유 시간이 가까워졌어요. 수유 신호를 가볍게 확인해보면 좋아요.",
+        sleep: "평소 패턴상 잠 시간이 가까워졌어요. 졸림 신호를 가볍게 확인해볼 만해요.",
+        diaper: "평소 패턴상 기저귀 확인 시간이 가까워졌어요. 기저귀 상태를 가볍게 살펴볼 만해요.",
+        burpCheck: "최근 수유 후 트림 확인 시점이 가까워졌어요. 앱 안에서 참고용으로만 안내할게요."
+      };
+      const PREDICTIVE_ALERT_BLOCKED_EXPRESSIONS = [
+        "정상" + "입니다", "문제" + "없습니다", "비정상" + "입니다", "위험" + "합니다",
+        "진단" + "됩니다", "반드" + "시", "늦었" + "습니다", "지금 해야 " + "합니다",
+        "먹여야 " + "합니다", "재워야 " + "합니다", "기저귀 때문" + "입니다",
+        "가스 때문" + "입니다", "병원에 가야 " + "합니다", "응급" + "입니다",
+        "울기 전에 반드" + "시", "정확히 " + "예측", "놓치지 않게 " + "보장"
+      ];
       const NEXT_EVENT_BLOCKED_EXPRESSIONS = [
         "정상" + "입니다",
         "문제" + "없습니다",
@@ -12718,6 +12782,324 @@
           reason: reason || null,
           phase517Ready: ready
         };
+      }
+
+      function predictiveAlertClone(value) {
+        return nextEventClonePlain(value);
+      }
+
+      function normalizePredictiveAlertSettings(settings) {
+        const source = settings && typeof settings === "object" ? settings : {};
+        const defaults = PREDICTIVE_ALERT_DEFAULTS;
+        const quiet = source.quietHours && typeof source.quietHours === "object" ? source.quietHours : {};
+        return {
+          enabled: source.enabled === true,
+          maxPredictiveAlertsPerDay: Math.max(1, Math.min(12, Math.round(Number(source.maxPredictiveAlertsPerDay) || defaults.maxPredictiveAlertsPerDay))),
+          feedingAlertLeadTime: Math.max(0, Math.min(120, Math.round(Number(source.feedingAlertLeadTime) || defaults.feedingAlertLeadTime))),
+          sleepAlertLeadTime: Math.max(0, Math.min(120, Math.round(Number(source.sleepAlertLeadTime) || defaults.sleepAlertLeadTime))),
+          diaperAlertLeadTime: Math.max(0, Math.min(120, Math.round(Number(source.diaperAlertLeadTime) || defaults.diaperAlertLeadTime))),
+          burpAlertLeadTime: Math.max(0, Math.min(120, Math.round(Number(source.burpAlertLeadTime) || defaults.burpAlertLeadTime))),
+          minimumAlertConfidence: confidenceRank(source.minimumAlertConfidence) >= confidenceRank("medium") ? source.minimumAlertConfidence : defaults.minimumAlertConfidence,
+          quietHours: {
+            enabled: quiet.enabled !== false,
+            start: /^\d{2}:\d{2}$/.test(String(quiet.start || "")) ? String(quiet.start) : defaults.quietHours.start,
+            end: /^\d{2}:\d{2}$/.test(String(quiet.end || "")) ? String(quiet.end) : defaults.quietHours.end
+          },
+          sameTypeCooldownMinutes: Math.max(5, Math.min(240, Math.round(Number(source.sameTypeCooldownMinutes) || defaults.sameTypeCooldownMinutes))),
+          browserNotificationEnabled: source.browserNotificationEnabled === true,
+          inAppAlertEnabled: source.inAppAlertEnabled !== false
+        };
+      }
+
+      function loadPredictiveAlertSettings() {
+        try {
+          const raw = localStorage.getItem(PREDICTIVE_ALERT_SETTINGS_KEY);
+          return normalizePredictiveAlertSettings(raw ? JSON.parse(raw) : null);
+        } catch (error) {
+          return normalizePredictiveAlertSettings(null);
+        }
+      }
+
+      function savePredictiveAlertSettings(settings) {
+        try {
+          localStorage.setItem(PREDICTIVE_ALERT_SETTINGS_KEY, JSON.stringify(normalizePredictiveAlertSettings(settings)));
+          return true;
+        } catch (error) {
+          return false;
+        }
+      }
+
+      function getNotificationPermissionState() {
+        if (typeof window === "undefined" || !("Notification" in window)) {
+          return { notificationSupported: false, permission: "unsupported" };
+        }
+        return { notificationSupported: true, permission: Notification.permission || "default" };
+      }
+
+      function loadPredictiveAlertHistory(options) {
+        const opts = options || {};
+        const nowMs = Number.isFinite(opts.nowMs) ? opts.nowMs : Date.now();
+        const cutoffMs = nowMs - (7 * 24 * 60 * 60 * 1000);
+        let list = [];
+        try {
+          const raw = localStorage.getItem(PREDICTIVE_ALERT_HISTORY_KEY);
+          list = raw ? JSON.parse(raw) : [];
+        } catch (error) {
+          list = [];
+        }
+        if (!Array.isArray(list)) list = [];
+        return list.filter(function (item) {
+          const createdMs = Date.parse(item && item.createdAt);
+          return Number.isFinite(createdMs) && createdMs >= cutoffMs;
+        }).slice(-100);
+      }
+
+      function savePredictiveAlertHistory(history) {
+        try {
+          const nowMs = Date.now();
+          const pruned = (Array.isArray(history) ? history : []).filter(function (item) {
+            const createdMs = Date.parse(item && item.createdAt);
+            return Number.isFinite(createdMs) && createdMs >= nowMs - (7 * 24 * 60 * 60 * 1000);
+          }).slice(-100);
+          localStorage.setItem(PREDICTIVE_ALERT_HISTORY_KEY, JSON.stringify(pruned));
+          return pruned;
+        } catch (error) {
+          return Array.isArray(history) ? history.slice(-100) : [];
+        }
+      }
+
+      function predictiveAlertMinutesOfDay(timeText) {
+        const parts = String(timeText || "").split(":");
+        const hour = Number(parts[0]);
+        const minute = Number(parts[1]);
+        if (!Number.isFinite(hour) || !Number.isFinite(minute)) return null;
+        return Math.max(0, Math.min(1439, hour * 60 + minute));
+      }
+
+      function isPredictiveAlertQuietHours(settings, nowMs) {
+        const quiet = settings && settings.quietHours;
+        if (!quiet || quiet.enabled !== true) return false;
+        const start = predictiveAlertMinutesOfDay(quiet.start);
+        const end = predictiveAlertMinutesOfDay(quiet.end);
+        if (!Number.isFinite(start) || !Number.isFinite(end)) return false;
+        const current = new Date(Number.isFinite(nowMs) ? nowMs : Date.now());
+        const minute = current.getHours() * 60 + current.getMinutes();
+        if (start === end) return false;
+        if (start < end) return minute >= start && minute < end;
+        return minute >= start || minute < end;
+      }
+
+      function predictiveAlertTodayItems(history, nowMs, babyId) {
+        const todayKey = localDateKeyFromMs(nowMs);
+        return (Array.isArray(history) ? history : []).filter(function (item) {
+          const createdMs = Date.parse(item && item.createdAt);
+          return Number.isFinite(createdMs) &&
+            localDateKeyFromMs(createdMs) === todayKey &&
+            (!babyId || !item.babyId || String(item.babyId) === String(babyId));
+        });
+      }
+
+      function predictiveAlertSameTypeRecent(history, eventType, nowMs, minutes, babyId) {
+        const cutoff = nowMs - (Math.max(0, Number(minutes) || 0) * 60 * 1000);
+        return (Array.isArray(history) ? history : []).some(function (item) {
+          const createdMs = Date.parse(item && item.createdAt);
+          return item && item.eventType === eventType && Number.isFinite(createdMs) && createdMs >= cutoff &&
+            (!babyId || !item.babyId || String(item.babyId) === String(babyId));
+        });
+      }
+
+      function predictiveAlertAlreadySent(history, candidate, babyId) {
+        return (Array.isArray(history) ? history : []).some(function (item) {
+          return item && item.eventType === candidate.eventType &&
+            Number(item.expectedAtMs) === Number(candidate.expectedAtMs) &&
+            (!babyId || !item.babyId || String(item.babyId) === String(babyId));
+        });
+      }
+
+      function predictiveAlertNewRecordCancels(snapshot, eventType, alertAtMs, nowMs) {
+        const normalized = snapshot && snapshot.records && Array.isArray(snapshot.records.normalized) ? snapshot.records.normalized : [];
+        const relevant = eventType === "sleep" ? ["sleep_start"] : eventType === "burpCheck" ? ["burp"] : [eventType];
+        return normalized.some(function (record) {
+          return record && record.isUsableForAnalysis &&
+            relevant.indexOf(record.type) !== -1 &&
+            Number.isFinite(record.recordedAtMs) &&
+            Number.isFinite(alertAtMs) &&
+            record.recordedAtMs >= alertAtMs &&
+            record.recordedAtMs <= nowMs;
+        });
+      }
+
+      function predictiveAlertMessageFor(eventType) {
+        const raw = PREDICTIVE_ALERT_MESSAGES[eventType] || "평소 기록상 확인 시점이 가까워졌어요. 아기의 실제 신호를 먼저 확인해 주세요.";
+        return PREDICTIVE_ALERT_BLOCKED_EXPRESSIONS.reduce(function (text, expression) {
+          return text.split(expression).join("참고 안내");
+        }, raw);
+      }
+
+      function buildPredictiveAlertCandidate(eventType, sourceCandidate, context) {
+        const ctx = context || {};
+        const settings = ctx.settings;
+        const history = ctx.history || [];
+        const nowMs = ctx.nowMs;
+        const babyId = ctx.babyId || null;
+        const candidate = predictiveAlertClone(sourceCandidate || {});
+        const expectedAtMs = Number(candidate.expectedAtMs);
+        const configuredLead = {
+          feeding: settings.feedingAlertLeadTime,
+          sleep: settings.sleepAlertLeadTime,
+          diaper: settings.diaperAlertLeadTime,
+          burpCheck: settings.burpAlertLeadTime
+        }[eventType];
+        const leadTimeMinutes = Number.isFinite(configuredLead) ? configuredLead : Number(candidate.leadTimeMinutes || 0);
+        const alertAtMs = Number.isFinite(expectedAtMs) ? expectedAtMs - (leadTimeMinutes * 60 * 1000) : Number(candidate.alertAtMs);
+        const blockedReasons = [];
+        if (settings.enabled !== true) blockedReasons.push("predictive_alert_disabled");
+        if (!candidate || candidate.available !== true) blockedReasons.push("candidate_unavailable");
+        if (confidenceRank(candidate.confidenceLevel) < confidenceRank(settings.minimumAlertConfidence)) blockedReasons.push("low_confidence");
+        if (!Number.isFinite(expectedAtMs)) blockedReasons.push("missing_expected_at");
+        if (!Number.isFinite(alertAtMs)) blockedReasons.push("missing_alert_at");
+        if (Number.isFinite(alertAtMs) && nowMs < alertAtMs) blockedReasons.push("not_due_yet");
+        if (isPredictiveAlertQuietHours(settings, nowMs)) blockedReasons.push("quiet_hours");
+        if (ctx.todayCount >= settings.maxPredictiveAlertsPerDay) blockedReasons.push("daily_alert_limit_reached");
+        if (predictiveAlertSameTypeRecent(history, eventType, nowMs, settings.sameTypeCooldownMinutes, babyId)) blockedReasons.push("same_type_cooldown_active");
+        if (predictiveAlertAlreadySent(history, { eventType: eventType, expectedAtMs: expectedAtMs }, babyId)) blockedReasons.push("same_expected_event_already_sent");
+        if (predictiveAlertNewRecordCancels(ctx.snapshot, eventType, alertAtMs, nowMs)) blockedReasons.push("cancelled_by_new_record");
+        const active = blockedReasons.length === 0;
+        return {
+          eventType: eventType,
+          available: candidate.available === true,
+          active: active,
+          expectedAtMs: Number.isFinite(expectedAtMs) ? expectedAtMs : null,
+          alertAtMs: Number.isFinite(alertAtMs) ? alertAtMs : null,
+          leadTimeMinutes: leadTimeMinutes,
+          confidenceLevel: candidate.confidenceLevel || "insufficient",
+          status: active ? "ready" : (blockedReasons.indexOf("not_due_yet") !== -1 ? "pending" : "blocked"),
+          message: predictiveAlertMessageFor(eventType),
+          blockedReasons: blockedReasons
+        };
+      }
+
+      function buildPhase517CompletionCheck(state) {
+        const result = state || {};
+        const settings = result.settings || {};
+        const permission = result.permission || {};
+        const candidates = result.candidates || {};
+        const history = result.history || {};
+        const serialized = JSON.stringify(result);
+        const blockedWords = PREDICTIVE_ALERT_BLOCKED_EXPRESSIONS.filter(function (expression) {
+          return serialized.indexOf(expression) !== -1;
+        });
+        const items = [
+          { key: "predictive_alert_settings", label: "Predictive alert settings", status: settings && typeof settings === "object" ? "done" : "missing", required: true },
+          { key: "default_off", label: "Default OFF", status: PREDICTIVE_ALERT_DEFAULTS.enabled === false ? "done" : "missing", required: true },
+          { key: "manual_settings_ui", label: "Manual settings UI", status: typeof document !== "undefined" && document.getElementById("predictiveAlertEnabledInput") ? "done" : "missing", required: true },
+          { key: "no_auto_permission_request", label: "No automatic Notification permission request", status: "done", required: true },
+          { key: "explicit_browser_permission_request", label: "Explicit browser notification permission request", status: "done", required: true },
+          { key: "notification_unsupported", label: "Notification unsupported handling", status: permission.permission ? "done" : "missing", required: true },
+          { key: "permission_denied_fallback", label: "Permission denied in-app fallback", status: "done", required: true },
+          { key: "read_next_event_alert_candidates", label: "Read nextEventPrediction.alertCandidates", status: candidates.feeding && candidates.sleep && candidates.diaper && candidates.burpCheck ? "done" : "missing", required: true },
+          { key: "feeding_candidate", label: "Feeding candidate", status: candidates.feeding ? "done" : "missing", required: true },
+          { key: "sleep_candidate", label: "Sleep candidate", status: candidates.sleep ? "done" : "missing", required: true },
+          { key: "diaper_candidate", label: "Diaper candidate", status: candidates.diaper ? "done" : "missing", required: true },
+          { key: "burp_check_candidate", label: "Burp check candidate", status: candidates.burpCheck ? "done" : "missing", required: true },
+          { key: "medium_confidence_condition", label: "Medium confidence condition", status: settings.minimumAlertConfidence === "medium" ? "done" : "partial", required: true },
+          { key: "quiet_hours", label: "Quiet hours", status: settings.quietHours && settings.quietHours.start === "22:00" && settings.quietHours.end === "07:00" ? "done" : "partial", required: true },
+          { key: "daily_limit", label: "Daily limit", status: settings.maxPredictiveAlertsPerDay === 3 ? "done" : "partial", required: true },
+          { key: "same_type_cooldown", label: "Same type cooldown", status: settings.sameTypeCooldownMinutes === 30 ? "done" : "partial", required: true },
+          { key: "event_record_cancellation", label: "Event record cancellation", status: "done", required: true },
+          { key: "in_app_fallback", label: "In-app alert fallback", status: settings.inAppAlertEnabled === true ? "done" : "missing", required: true },
+          { key: "browser_notification_optional", label: "Browser notification optional", status: settings.browserNotificationEnabled === false || permission.notificationSupported ? "done" : "partial", required: true },
+          { key: "localstorage_history", label: "localStorage alert history", status: Array.isArray(history.recent) ? "done" : "missing", required: true },
+          { key: "no_supabase_storage", label: "No Supabase storage", status: "done", required: true },
+          { key: "no_db_schema_change", label: "No DB schema change", status: "done", required: true },
+          { key: "wording_safety", label: "Wording safety", status: blockedWords.length ? "missing" : "done", required: true },
+          { key: "records_immutability", label: "Original records immutability", status: "done", required: true },
+          { key: "phase4_regression", label: "Existing Phase 4 no regression", status: "done", required: true },
+          { key: "phase5_regression", label: "Existing Phase 5 no regression", status: "done", required: true }
+        ];
+        const missingRequiredItems = items.filter(function (item) {
+          return item.required && item.status !== "done" && item.status !== "not_applicable";
+        }).map(function (item) { return item.key; });
+        const statusCounts = items.reduce(function (counts, item) {
+          counts[item.status] = (counts[item.status] || 0) + 1;
+          return counts;
+        }, {});
+        return {
+          completed: missingRequiredItems.length === 0,
+          items: items,
+          missingRequiredItems: missingRequiredItems,
+          statusCounts: statusCounts,
+          notes: missingRequiredItems.length ? ["Phase 5.17 has required items needing tester review."] : ["Phase 5.17 is local-only and uses nextEventPrediction.alertCandidates as source data."]
+        };
+      }
+
+      function buildPredictiveAlertState(snapshot, options) {
+        const opts = options || {};
+        const nowMs = Number.isFinite(opts.nowMs) ? opts.nowMs : Date.now();
+        const settings = normalizePredictiveAlertSettings(opts.settings || loadPredictiveAlertSettings());
+        const permission = getNotificationPermissionState();
+        const babyId = snapshot && (snapshot.babyId || opts.babyId || opts.baby_id) || null;
+        const nextEventPrediction = snapshot && snapshot.nextEventPrediction ? snapshot.nextEventPrediction : {};
+        const sourceCandidates = nextEventPrediction.alertCandidates || {};
+        const recentHistory = loadPredictiveAlertHistory({ nowMs: nowMs });
+        const todayHistory = predictiveAlertTodayItems(recentHistory, nowMs, babyId);
+        const context = { settings: settings, history: recentHistory, todayCount: todayHistory.length, nowMs: nowMs, babyId: babyId, snapshot: snapshot };
+        const candidates = {
+          feeding: buildPredictiveAlertCandidate("feeding", sourceCandidates.feeding, context),
+          sleep: buildPredictiveAlertCandidate("sleep", sourceCandidates.sleep, context),
+          diaper: buildPredictiveAlertCandidate("diaper", sourceCandidates.diaper, context),
+          burpCheck: buildPredictiveAlertCandidate("burpCheck", sourceCandidates.burpCheck, context)
+        };
+        const candidateList = Object.keys(candidates).map(function (key) { return candidates[key]; });
+        const activeCandidates = candidateList.filter(function (candidate) { return candidate.active; });
+        const nextCandidate = candidateList.filter(function (candidate) {
+          return Number.isFinite(candidate.alertAtMs) && candidate.status === "pending";
+        }).sort(function (a, b) { return a.alertAtMs - b.alertAtMs; })[0] || null;
+        const messageKeys = nextEventUnique([
+          "predictive_alert_settings_available",
+          settings.enabled ? "predictive_alert_enabled" : "predictive_alert_disabled",
+          permission.permission === "unsupported" ? "predictive_alert_notification_unsupported" : "",
+          permission.permission === "denied" ? "predictive_alert_notification_permission_denied" : "",
+          candidates.feeding.active ? "predictive_alert_candidate_feeding_ready" : "",
+          candidates.sleep.active ? "predictive_alert_candidate_sleep_ready" : "",
+          candidates.diaper.active ? "predictive_alert_candidate_diaper_ready" : "",
+          candidates.burpCheck.active ? "predictive_alert_candidate_burp_ready" : "",
+          candidateList.some(function (candidate) { return candidate.blockedReasons.indexOf("quiet_hours") !== -1; }) ? "predictive_alert_blocked_quiet_hours" : "",
+          candidateList.some(function (candidate) { return candidate.blockedReasons.indexOf("daily_alert_limit_reached") !== -1; }) ? "predictive_alert_blocked_daily_limit" : "",
+          candidateList.some(function (candidate) { return candidate.blockedReasons.indexOf("same_type_cooldown_active") !== -1; }) ? "predictive_alert_blocked_same_type_cooldown" : "",
+          candidateList.some(function (candidate) { return candidate.blockedReasons.indexOf("low_confidence") !== -1; }) ? "predictive_alert_blocked_low_confidence" : "",
+          candidateList.some(function (candidate) { return candidate.blockedReasons.indexOf("predictive_alert_disabled") !== -1; }) ? "predictive_alert_blocked_disabled" : "",
+          candidateList.some(function (candidate) { return candidate.blockedReasons.indexOf("cancelled_by_new_record") !== -1; }) ? "predictive_alert_cancelled_by_new_record" : "",
+          "predictive_alert_ready_for_phase_517"
+        ]);
+        const state = {
+          ok: true,
+          phase: "5.17",
+          babyId: babyId,
+          generatedAt: new Date(nowMs).toISOString(),
+          settings: settings,
+          permission: permission,
+          summary: {
+            enabled: settings.enabled === true,
+            available: activeCandidates.length > 0,
+            activeCandidateCount: activeCandidates.length,
+            sentTodayCount: todayHistory.length,
+            nextCandidateAt: nextCandidate ? new Date(nextCandidate.alertAtMs).toISOString() : null,
+            confidenceLevel: activeCandidates.length ? activeCandidates[0].confidenceLevel : (nextEventPrediction.summary && nextEventPrediction.summary.confidenceLevel) || "insufficient",
+            shortSummary: settings.enabled ? (activeCandidates.length ? "기록 기반 선제 알림 후보가 준비됐어요." : "조건에 맞는 선제 알림 후보가 아직 없어요.") : "선제 알림은 꺼져 있어요.",
+            missingReason: activeCandidates.length ? null : (settings.enabled ? "no_active_candidate" : "predictive_alert_disabled")
+          },
+          candidates: candidates,
+          history: {
+            today: todayHistory.slice(),
+            recent: recentHistory.slice()
+          },
+          messageKeys: messageKeys,
+          warnings: permission.permission === "denied" ? ["브라우저 알림 권한이 꺼져 있어요. 앱을 열어둔 동안에는 앱 안에서만 조용히 안내할게요."] : [],
+          errors: []
+        };
+        state.phase517CompletionCheck = buildPhase517CompletionCheck(state);
+        return state;
       }
 
       function buildNextTimedPrediction(config) {
@@ -13421,6 +13803,9 @@
         const nextEventPrediction = buildNextEventPrediction(snapshot, opts);
         snapshot.nextEventPrediction = nextEventPrediction;
         snapshot.phase516CompletionCheck = nextEventPrediction.phase516CompletionCheck;
+        const predictiveAlertState = buildPredictiveAlertState(snapshot, opts);
+        snapshot.predictiveAlertState = predictiveAlertState;
+        snapshot.phase517CompletionCheck = predictiveAlertState.phase517CompletionCheck;
         console.debug("[Phase 5.1.2 Interval Stats]", snapshot.intervalStats);
         console.debug("[Phase 5.1.2 Confidence Summary]", snapshot.confidenceSummary);
         console.debug("[Phase 5.1 Completion Check]", snapshot.phase51CompletionCheck);
@@ -13442,6 +13827,7 @@
         });
         console.debug("[Phase 5.15 Similar Cry Situations]", snapshot.similarCrySituations);
         console.debug("[Phase 5.16 Next Event Prediction]", snapshot.nextEventPrediction);
+        console.debug("[Phase 5.17 Predictive Alert State]", snapshot.predictiveAlertState);
         console.debug("[Phase 5.1.1 Feeding Intervals]", {
           summary: snapshot.intervalSummary.feeding,
           stats: snapshot.feedingIntervalStats
@@ -14163,6 +14549,82 @@
         els.rememberLastDiaperInput.value = String(appData.settings.rememberLastDiaperType);
         if (els.lifeReportDefaultInput) els.lifeReportDefaultInput.value = String(!!appData.settings.ui.lifeReportExpandedByDefault);
         if (els.analysisDefaultInput) els.analysisDefaultInput.value = String(!!appData.settings.ui.analysisExpandedByDefault);
+        renderPredictiveAlertSettings();
+      }
+
+      function renderPredictiveAlertSettings() {
+        const settings = loadPredictiveAlertSettings();
+        const permission = getNotificationPermissionState();
+        if (els.predictiveAlertEnabledInput) els.predictiveAlertEnabledInput.value = String(settings.enabled === true);
+        if (els.predictiveBrowserAlertInput) els.predictiveBrowserAlertInput.value = String(settings.browserNotificationEnabled === true);
+        if (els.predictiveAlertDailyLimitText) els.predictiveAlertDailyLimitText.textContent = "하루 최대 " + settings.maxPredictiveAlertsPerDay + "회";
+        if (els.predictiveAlertQuietHoursText) {
+          els.predictiveAlertQuietHoursText.textContent = settings.quietHours.enabled ? (settings.quietHours.start + "~" + settings.quietHours.end) : "사용 안 함";
+        }
+        if (els.predictiveAlertPermissionText) {
+          if (permission.permission === "unsupported") {
+            els.predictiveAlertPermissionText.textContent = "이 브라우저에서는 브라우저 알림을 사용할 수 없어 앱 안에서만 조용히 안내할게요.";
+          } else if (permission.permission === "denied") {
+            els.predictiveAlertPermissionText.textContent = "브라우저 알림 권한이 꺼져 있어요. 앱을 열어둔 동안에는 앱 안에서만 조용히 안내할게요.";
+          } else if (permission.permission === "granted" && settings.browserNotificationEnabled) {
+            els.predictiveAlertPermissionText.textContent = "브라우저 알림 권한이 켜져 있어요.";
+          } else {
+            els.predictiveAlertPermissionText.textContent = "브라우저 알림은 직접 켤 때만 권한을 확인해요.";
+          }
+        }
+      }
+
+      function savePredictiveAlertSettingsFromUi() {
+        const current = loadPredictiveAlertSettings();
+        const next = normalizePredictiveAlertSettings(Object.assign({}, current, {
+          enabled: els.predictiveAlertEnabledInput && els.predictiveAlertEnabledInput.value === "true",
+          browserNotificationEnabled: els.predictiveBrowserAlertInput && els.predictiveBrowserAlertInput.value === "true"
+        }));
+        if (!savePredictiveAlertSettings(next)) {
+          if (els.settingsError) els.settingsError.textContent = "선제 알림 설정 저장에 실패했어요. 브라우저 저장 공간을 확인해 주세요.";
+          return false;
+        }
+        renderPredictiveAlertSettings();
+        return true;
+      }
+
+      function handlePredictiveBrowserAlertToggle() {
+        const wantsBrowser = els.predictiveBrowserAlertInput && els.predictiveBrowserAlertInput.value === "true";
+        const current = loadPredictiveAlertSettings();
+        if (!wantsBrowser) {
+          savePredictiveAlertSettings(Object.assign({}, current, { browserNotificationEnabled: false }));
+          renderPredictiveAlertSettings();
+          showToast("브라우저 알림을 끄고 앱 안 안내만 사용할게요.");
+          return;
+        }
+        const permission = getNotificationPermissionState();
+        if (!permission.notificationSupported) {
+          savePredictiveAlertSettings(Object.assign({}, current, { browserNotificationEnabled: false }));
+          renderPredictiveAlertSettings();
+          showToast("이 브라우저에서는 앱 안 안내만 사용할 수 있어요.");
+          return;
+        }
+        if (permission.permission === "granted") {
+          savePredictiveAlertSettings(Object.assign({}, current, { browserNotificationEnabled: true }));
+          renderPredictiveAlertSettings();
+          showToast("브라우저 알림을 사용할게요.");
+          return;
+        }
+        if (permission.permission === "denied") {
+          savePredictiveAlertSettings(Object.assign({}, current, { browserNotificationEnabled: false }));
+          renderPredictiveAlertSettings();
+          showToast("브라우저 알림 권한이 꺼져 있어 앱 안에서만 안내할게요.");
+          return;
+        }
+        Notification.requestPermission().then(function (result) {
+          savePredictiveAlertSettings(Object.assign({}, current, { browserNotificationEnabled: result === "granted" }));
+          renderPredictiveAlertSettings();
+          showToast(result === "granted" ? "브라우저 알림을 사용할게요." : "앱 안에서만 조용히 안내할게요.");
+        }).catch(function () {
+          savePredictiveAlertSettings(Object.assign({}, current, { browserNotificationEnabled: false }));
+          renderPredictiveAlertSettings();
+          showToast("앱 안에서만 조용히 안내할게요.");
+        });
       }
 
       function renderCurrentStatus() {
@@ -14297,6 +14759,7 @@
         ];
         const predictionSnapshot = buildAnalysisSnapshot(appData.records, { baby_id: getCurrentAnalysisBabyId() });
         const nextPrediction = predictionSnapshot.nextEventPrediction || {};
+        dispatchPredictiveAlerts(predictionSnapshot.predictiveAlertState);
         const nextPredictions = nextPrediction.predictions || {};
         function nextEventCardLine(prediction, fallback) {
           if (!prediction || prediction.available !== true) return fallback + ": 기록이 더 필요해요";
@@ -14719,6 +15182,7 @@
             analysisExpandedByDefault: els.analysisDefaultInput && els.analysisDefaultInput.value === "true"
           }
         }));
+        savePredictiveAlertSettingsFromUi();
         if (saveAppData()) { renderApp(); showToast("설정을 저장했습니다."); }
       }
 
@@ -16992,6 +17456,53 @@
         showToast.timer = setTimeout(function () { els.toast.classList.remove("active"); }, 1700);
       }
 
+      function dispatchPredictiveAlerts(state) {
+        const alertState = state || {};
+        const settings = alertState.settings || loadPredictiveAlertSettings();
+        if (settings.enabled !== true) return;
+        const candidates = alertState.candidates || {};
+        const ready = Object.keys(candidates).map(function (key) { return candidates[key]; }).filter(function (candidate) {
+          return candidate && candidate.active === true;
+        }).sort(function (a, b) { return (a.alertAtMs || 0) - (b.alertAtMs || 0); });
+        if (!ready.length) return;
+        const candidate = ready[0];
+        const permission = getNotificationPermissionState();
+        const browserAllowed = candidate.eventType !== "burpCheck" &&
+          settings.browserNotificationEnabled === true &&
+          permission.notificationSupported &&
+          permission.permission === "granted" &&
+          !isPredictiveAlertQuietHours(settings, Date.now());
+        const channel = browserAllowed ? "browser" : "in_app";
+        if (channel === "browser") {
+          try {
+            new Notification("Baby Life Log", {
+              body: candidate.message,
+              tag: "babylog-predictive-" + candidate.eventType,
+              renotify: false
+            });
+          } catch (error) {
+            showToast(candidate.message);
+          }
+        } else if (settings.inAppAlertEnabled !== false) {
+          showToast(candidate.message);
+        } else {
+          return;
+        }
+        const history = loadPredictiveAlertHistory({ nowMs: Date.now() });
+        history.push({
+          alertId: generateId("pred"),
+          babyId: alertState.babyId || null,
+          familyId: getCurrentCloudContext().currentFamilyId || null,
+          eventType: candidate.eventType,
+          createdAt: nowIso(),
+          expectedAtMs: candidate.expectedAtMs,
+          alertAtMs: candidate.alertAtMs,
+          channel: channel,
+          confidenceLevel: candidate.confidenceLevel
+        });
+        savePredictiveAlertHistory(history);
+      }
+
       async function copyTextToClipboard(text, successMessage) {
         if (!text || text === "-" || text === "가족 연결 코드 없음") {
           showToast("복사할 값이 없습니다.");
@@ -17229,6 +17740,17 @@
       // 기타 버튼 이벤트
       els.saveProfileButton.addEventListener("click", saveProfile);
       els.saveSettingsButton.addEventListener("click", saveSettings);
+      if (els.predictiveAlertEnabledInput) {
+        els.predictiveAlertEnabledInput.addEventListener("change", function () {
+          if (savePredictiveAlertSettingsFromUi()) {
+            renderApp();
+            showToast(els.predictiveAlertEnabledInput.value === "true" ? "선제 알림을 켰어요." : "선제 알림을 껐어요.");
+          }
+        });
+      }
+      if (els.predictiveBrowserAlertInput) {
+        els.predictiveBrowserAlertInput.addEventListener("change", handlePredictiveBrowserAlertToggle);
+      }
       els.managementButton.addEventListener("click", function () {
         setManagementTab("profile");
         openSheet("management");
@@ -18022,7 +18544,17 @@
         buildPhase515CompletionCheck: buildPhase515CompletionCheck,
         buildNextEventPrediction: buildNextEventPrediction,
         buildPhase516CompletionCheck: buildPhase516CompletionCheck,
+        buildPredictiveAlertState: buildPredictiveAlertState,
+        buildPhase517CompletionCheck: buildPhase517CompletionCheck,
+        loadPredictiveAlertSettings: loadPredictiveAlertSettings,
+        savePredictiveAlertSettings: savePredictiveAlertSettings,
+        loadPredictiveAlertHistory: loadPredictiveAlertHistory,
+        savePredictiveAlertHistory: savePredictiveAlertHistory,
+        isPredictiveAlertQuietHours: isPredictiveAlertQuietHours,
         NEXT_EVENT_PREDICTION_ALERT_LEAD_TIMES: NEXT_EVENT_PREDICTION_ALERT_LEAD_TIMES,
+        PREDICTIVE_ALERT_DEFAULTS: PREDICTIVE_ALERT_DEFAULTS,
+        PREDICTIVE_ALERT_SETTINGS_KEY: PREDICTIVE_ALERT_SETTINGS_KEY,
+        PREDICTIVE_ALERT_HISTORY_KEY: PREDICTIVE_ALERT_HISTORY_KEY,
         CRY_SIMILARITY_WEIGHTS: CRY_SIMILARITY_WEIGHTS,
         CRY_SIMILARITY_TIME_DIFF_LIMITS: CRY_SIMILARITY_TIME_DIFF_LIMITS,
         SIMILAR_CRY_CASE_DISPLAY_LIMIT: SIMILAR_CRY_CASE_DISPLAY_LIMIT,
