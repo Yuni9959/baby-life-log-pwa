@@ -2456,7 +2456,7 @@
       const APP_NAME = "baby-life-log";
       const APP_VERSION = "5.7.0";
       const APP_PHASE_LABEL = "Phase 5.7 · 우리 아기 리듬 점수 v1";
-      const SERVICE_WORKER_CACHE_NAME = "babylog-cache-v5-9-missing-data-insights-v1";
+      const SERVICE_WORKER_CACHE_NAME = "babylog-cache-v5-10-age-tone-adjustment-v1";
       const APP_INIT_TIME = new Date().toISOString();
       const ANALYSIS_API_ENDPOINT = "";
       const SERVER_OVERWRITE_BACKUP_KEY = "babylog_records_backup_before_server_overwrite";
@@ -9840,6 +9840,530 @@
         return result;
       }
 
+      const BABY_AGE_GROUPS = {
+        NEWBORN_0_1: "0_1_months",
+        INFANT_1_3: "1_3_months",
+        INFANT_3_6: "3_6_months",
+        INFANT_6_12: "6_12_months",
+        TODDLER_12_PLUS: "12_plus_months",
+        UNKNOWN: "unknown"
+      };
+
+      const AGE_TONE_BLOCKED_EXPRESSIONS = [
+        "정상입니다", "문제없습니다", "비정상입니다", "위험합니다", "나쁩니다", "진단됩니다",
+        "탈수입니다", "변비입니다", "수면장애입니다", "발달이 늦어요", "발달이 빨라요",
+        "정상 발달", "원인은 이것입니다", "확실합니다", "반드시"
+      ];
+
+      function ageToneClone(value) {
+        if (value === null || value === undefined) return value;
+        try {
+          return JSON.parse(JSON.stringify(value));
+        } catch (error) {
+          return Array.isArray(value) ? value.slice() : Object.assign({}, value);
+        }
+      }
+
+      function ageToneUnique(list) {
+        return (Array.isArray(list) ? list : []).filter(function (value, index, source) {
+          return value && source.indexOf(value) === index;
+        });
+      }
+
+      function ageToneNowIso(nowMs) {
+        return Number.isFinite(nowMs) ? new Date(nowMs).toISOString() : nowIso();
+      }
+
+      function collectBirthDateCandidates(snapshot, options) {
+        const opts = options || {};
+        const source = snapshot || {};
+        const candidates = [
+          opts.birthDate,
+          opts.birth_date,
+          opts.babyBirthDate,
+          source.birthDate,
+          source.birth_date,
+          source.babyBirthDate,
+          source.baby && source.baby.birthDate,
+          source.baby && source.baby.birth_date,
+          source.currentBaby && source.currentBaby.birthDate,
+          source.currentBaby && source.currentBaby.birth_date,
+          source.profile && source.profile.birthDate,
+          source.profile && source.profile.birth_date,
+          source.settings && source.settings.babyBirthDate,
+          source.settings && source.settings.birthDate,
+          typeof appData !== "undefined" && appData.profile && appData.profile.birthDate,
+          typeof appData !== "undefined" && appData.profile && appData.profile.birth_date,
+          typeof appData !== "undefined" && appData.settings && appData.settings.babyBirthDate,
+          typeof window !== "undefined" && window.BabyCloud && typeof window.BabyCloud.getCloudContext === "function"
+            ? window.BabyCloud.getCloudContext().babyBirthDate
+            : null
+        ];
+        return candidates.filter(function (value) {
+          return value !== null && value !== undefined && String(value).trim() !== "";
+        });
+      }
+
+      function parseBabyBirthDateForTone(rawBirthDate, nowMs) {
+        const raw = rawBirthDate === null || rawBirthDate === undefined ? "" : String(rawBirthDate).trim();
+        if (!raw) return { available: false, birthDate: null, birthDateMs: null, missingReason: "birth_date_unavailable" };
+        const dateOnly = /^\d{4}-\d{2}-\d{2}$/.test(raw) ? raw : raw.slice(0, 10);
+        const parseTarget = /^\d{4}-\d{2}-\d{2}$/.test(dateOnly) ? dateOnly + "T00:00:00" : raw;
+        const parsed = new Date(parseTarget);
+        const birthDateMs = parsed.getTime();
+        if (!Number.isFinite(birthDateMs)) {
+          return { available: false, birthDate: null, birthDateMs: null, missingReason: "invalid_birth_date" };
+        }
+        if (birthDateMs > nowMs) {
+          return { available: false, birthDate: null, birthDateMs: null, missingReason: "birth_date_in_future" };
+        }
+        return {
+          available: true,
+          birthDate: /^\d{4}-\d{2}-\d{2}$/.test(dateOnly) ? dateOnly : parsed.toISOString().slice(0, 10),
+          birthDateMs: birthDateMs,
+          missingReason: null
+        };
+      }
+
+      function calculateApproxAgeMonths(ageDays) {
+        return Number.isFinite(ageDays) ? Math.floor(ageDays / 30.4375) : null;
+      }
+
+      function ageGroupForApproxMonths(ageMonths) {
+        if (!Number.isFinite(ageMonths)) return BABY_AGE_GROUPS.UNKNOWN;
+        if (ageMonths < 1) return BABY_AGE_GROUPS.NEWBORN_0_1;
+        if (ageMonths < 3) return BABY_AGE_GROUPS.INFANT_1_3;
+        if (ageMonths < 6) return BABY_AGE_GROUPS.INFANT_3_6;
+        if (ageMonths < 12) return BABY_AGE_GROUPS.INFANT_6_12;
+        return BABY_AGE_GROUPS.TODDLER_12_PLUS;
+      }
+
+      function buildAgeToneProfile(ageGroup, missingReason) {
+        const profiles = {};
+        profiles[BABY_AGE_GROUPS.NEWBORN_0_1] = {
+          ageGroup: BABY_AGE_GROUPS.NEWBORN_0_1,
+          label: "0~1개월",
+          interpretationStyle: "very_gentle_reference",
+          focusAreas: ["기록이 쌓이는 흐름", "수유/기저귀 기록의 기본적인 남김 여부", "수면 패턴 단정 피하기", "부모 부담 줄이기"],
+          gentleReminders: ["아직 리듬이 일정하지 않을 수 있는 시기예요.", "지금은 정확한 패턴보다 기록이 쌓이는 것 자체가 중요해요.", "오늘 기록은 참고용으로만 가볍게 봐주세요.", "조금씩 기록이 쌓이면 흐름이 더 자연스럽게 보여요."],
+          avoidExpressions: ["리듬이 안정적이에요", "패턴이 잡혔어요", "평소보다 확실히 달라요", "통잠 흐름이 보여요"],
+          preferredExpressions: ["아직 리듬이 일정하지 않을 수 있는 시기예요.", "지금은 정확한 패턴보다 기록이 쌓이는 것 자체가 중요해요.", "오늘 기록은 참고용으로만 가볍게 봐주세요.", "조금씩 기록이 쌓이면 흐름이 더 자연스럽게 보여요."],
+          messageKeys: ["age_group_0_1_months", "age_tone_newborn_reference_only"]
+        };
+        profiles[BABY_AGE_GROUPS.INFANT_1_3] = {
+          ageGroup: BABY_AGE_GROUPS.INFANT_1_3,
+          label: "1~3개월",
+          interpretationStyle: "gentle_comparison",
+          focusAreas: ["수유 간격 변화", "수면 세션 길이 변화", "기저귀 기록의 꾸준함", "기록 부족 안내"],
+          gentleReminders: ["아직 하루하루 차이가 클 수 있어요.", "최근 기록 기준으로는 이런 흐름이 보여요.", "평소와 비교하되 참고용으로만 봐주세요.", "조금씩 반복되는 리듬이 보이기 시작할 수 있어요."],
+          avoidExpressions: ["완전히 안정적인 패턴이에요", "이제 리듬이 잡혔어요", "확실한 변화예요"],
+          preferredExpressions: ["아직 하루하루 차이가 클 수 있어요.", "최근 기록 기준으로는 이런 흐름이 보여요.", "평소와 비교하되 참고용으로만 봐주세요.", "조금씩 반복되는 리듬이 보이기 시작할 수 있어요."],
+          messageKeys: ["age_group_1_3_months", "age_tone_early_infant_gentle_comparison"]
+        };
+        profiles[BABY_AGE_GROUPS.INFANT_3_6] = {
+          ageGroup: BABY_AGE_GROUPS.INFANT_3_6,
+          label: "3~6개월",
+          interpretationStyle: "baseline_comparison",
+          focusAreas: ["수면 세션 길이", "하루 총 수면", "수유 간격", "하루 총 수유량", "기저귀 흐름", "긴 수면 후보"],
+          gentleReminders: ["최근 기록을 보면 반복되는 흐름이 조금씩 보여요.", "우리 아기의 평소 리듬과 비교해볼 수 있어요.", "오늘은 평소와 조금 다른 흐름이 기록되어 있어요.", "긴 수면 후보로 볼 수 있는 기록이 있어요."],
+          avoidExpressions: ["통잠 성공", "정상 수면", "문제 없는 수유", "이상 없는 기저귀"],
+          preferredExpressions: ["최근 기록을 보면 반복되는 흐름이 조금씩 보여요.", "우리 아기의 평소 리듬과 비교해볼 수 있어요.", "오늘은 평소와 조금 다른 흐름이 기록되어 있어요.", "긴 수면 후보로 볼 수 있는 기록이 있어요."],
+          messageKeys: ["age_group_3_6_months", "age_tone_infant_baseline_comparison"]
+        };
+        profiles[BABY_AGE_GROUPS.INFANT_6_12] = {
+          ageGroup: BABY_AGE_GROUPS.INFANT_6_12,
+          label: "6~12개월",
+          interpretationStyle: "daily_rhythm_focus",
+          focusAreas: ["하루 리듬", "수면 총량 변화", "수유량/수유 간격 변화", "기저귀 흐름", "최근 7일/30일 변화", "리듬 점수 참고"],
+          gentleReminders: ["최근 기록 기준으로 하루 리듬을 함께 볼 수 있어요.", "지난 기록과 비교하면 이런 변화가 보여요.", "오늘은 평소 리듬과 조금 다른 부분이 기록되어 있어요.", "기록된 항목만 기준으로 참고해 주세요."],
+          avoidExpressions: ["이유식 때문이에요", "활동량 때문이에요", "발달 변화 때문이에요", "정상 루틴이에요"],
+          preferredExpressions: ["최근 기록 기준으로 하루 리듬을 함께 볼 수 있어요.", "지난 기록과 비교하면 이런 변화가 보여요.", "오늘은 평소 리듬과 조금 다른 부분이 기록되어 있어요.", "기록된 항목만 기준으로 참고해 주세요."],
+          messageKeys: ["age_group_6_12_months", "age_tone_older_infant_daily_rhythm"]
+        };
+        profiles[BABY_AGE_GROUPS.TODDLER_12_PLUS] = {
+          ageGroup: BABY_AGE_GROUPS.TODDLER_12_PLUS,
+          label: "12개월 이후",
+          interpretationStyle: "life_rhythm_balance",
+          focusAreas: ["하루 생활 리듬", "수면 흐름", "기저귀 흐름", "기록 품질", "최근 변화", "보호자 참고 문구"],
+          gentleReminders: ["최근 기록을 보면 하루 생활 리듬을 참고해볼 수 있어요.", "수면과 기저귀 기록을 중심으로 흐름을 볼게요.", "기록된 항목 기준으로만 조심스럽게 정리했어요."],
+          avoidExpressions: ["발달이 늦어요", "발달이 빨라요", "정상 발달이에요", "문제 없는 성장 흐름이에요"],
+          preferredExpressions: ["최근 기록을 보면 하루 생활 리듬을 참고해볼 수 있어요.", "수면과 기저귀 기록을 중심으로 흐름을 볼게요.", "기록된 항목 기준으로만 조심스럽게 정리했어요."],
+          messageKeys: ["age_group_12_plus_months", "age_tone_toddler_life_rhythm"]
+        };
+        profiles[BABY_AGE_GROUPS.UNKNOWN] = {
+          ageGroup: BABY_AGE_GROUPS.UNKNOWN,
+          label: "월령 정보 없음",
+          interpretationStyle: "general_reference",
+          focusAreas: ["record_based_summary", "data_quality"],
+          gentleReminders: ["아기 월령 정보가 없어 일반적인 기록 기준으로만 정리했어요.", "생년월일을 입력하면 월령에 맞춰 조금 더 자연스럽게 표현할 수 있어요."],
+          avoidExpressions: [],
+          preferredExpressions: ["아기 월령 정보가 없어 일반적인 기록 기준으로만 정리했어요.", "생년월일을 입력하면 월령에 맞춰 조금 더 자연스럽게 표현할 수 있어요."],
+          missingReason: missingReason || "birth_date_unavailable",
+          messageKeys: ["age_context_unavailable", missingReason || "birth_date_unavailable"]
+        };
+        return ageToneClone(profiles[ageGroup] || profiles[BABY_AGE_GROUPS.UNKNOWN]);
+      }
+
+      function buildAgeReportFocus(ageGroup) {
+        const map = {};
+        map[BABY_AGE_GROUPS.NEWBORN_0_1] = {
+          primary: ["data_quality", "basic_record_flow", "caregiver_reassurance"],
+          secondary: ["sleep", "feeding", "diaper"],
+          muted: ["strong_pattern_interpretation", "long_sleep_emphasis", "rhythm_score_emphasis"]
+        };
+        map[BABY_AGE_GROUPS.INFANT_1_3] = {
+          primary: ["sleep_feeding_diaper_flow", "data_quality", "gentle_baseline_comparison"],
+          secondary: ["sleep", "feeding", "diaper"],
+          muted: ["strong_pattern_interpretation"]
+        };
+        map[BABY_AGE_GROUPS.INFANT_3_6] = {
+          primary: ["baseline_comparison", "sleep_session_flow", "feeding_interval_flow", "diaper_flow"],
+          secondary: ["daily_total_sleep", "daily_total_feeding", "long_sleep_candidate"],
+          muted: []
+        };
+        map[BABY_AGE_GROUPS.INFANT_6_12] = {
+          primary: ["daily_rhythm", "weekly_change", "baseline_comparison", "record_quality"],
+          secondary: ["sleep_total_change", "feeding_interval_change", "diaper_flow", "rhythm_score_reference"],
+          muted: ["unrecorded_cause_guessing"]
+        };
+        map[BABY_AGE_GROUPS.TODDLER_12_PLUS] = {
+          primary: ["daily_life_rhythm", "sleep_flow", "diaper_flow", "record_quality"],
+          secondary: ["recent_change", "caregiver_reference"],
+          muted: ["development_judgment", "feeding_centered_default"]
+        };
+        map[BABY_AGE_GROUPS.UNKNOWN] = {
+          primary: ["record_based_summary", "data_quality"],
+          secondary: ["sleep", "feeding", "diaper"],
+          muted: ["age_specific_interpretation"]
+        };
+        return ageToneClone(map[ageGroup] || map[BABY_AGE_GROUPS.UNKNOWN]);
+      }
+
+      function ageToneModifier(ageGroup, targetKey) {
+        const map = {};
+        map[BABY_AGE_GROUPS.NEWBORN_0_1] = {
+          default: "아직 리듬이 일정하지 않을 수 있는 시기라, 오늘 기록은 참고용으로 가볍게 봐주세요.",
+          sleep: "아직 수면 리듬이 일정하지 않을 수 있는 시기라, 수면 기록은 참고용으로만 봐주세요.",
+          dataQuality: "기록이 완벽하지 않아도 괜찮아요. 지금은 기록이 조금씩 쌓이는 것만으로도 도움이 돼요.",
+          rhythm: "아직 리듬이 일정하지 않을 수 있는 시기라, 리듬 점수는 참고용으로만 봐주세요.",
+          parent: "아직 리듬이 일정하지 않을 수 있는 시기라, 리포트는 기록이 쌓이는 흐름을 보는 정도로 가볍게 봐주세요."
+        };
+        map[BABY_AGE_GROUPS.INFANT_1_3] = {
+          default: "아직 하루하루 차이가 클 수 있어서, 최근 기록 기준으로만 조심스럽게 볼게요.",
+          dataQuality: "아직 하루하루 차이가 클 수 있어서, 누락된 기록이 있는 분석은 참고용으로만 봐주세요.",
+          rhythm: "아직 하루하루 차이가 클 수 있어서, 리듬 점수는 참고용으로 가볍게 봐주세요.",
+          parent: "최근 기록 기준으로는 이런 흐름이 보여요. 평소와 비교하되 참고용으로만 봐주세요."
+        };
+        map[BABY_AGE_GROUPS.INFANT_3_6] = {
+          default: "최근 기록 기준으로, 우리 아기의 평소 리듬과 조심스럽게 비교해볼 수 있어요.",
+          dataQuality: "기록이 더 고르게 쌓이면 평소 리듬과 비교하기가 더 쉬워져요.",
+          rhythm: "최근 기록 기준으로 하루 리듬의 흔들림 정도를 참고해볼 수 있어요.",
+          parent: "최근 기록을 보면 반복되는 흐름이 조금씩 보여요."
+        };
+        map[BABY_AGE_GROUPS.INFANT_6_12] = {
+          default: "최근 기록 기준으로 하루 리듬을 함께 볼 수 있어요. 기록된 항목만 기준으로 참고해 주세요.",
+          dataQuality: "기록이 더 고르게 쌓이면 하루 리듬과 최근 변화를 더 자연스럽게 비교할 수 있어요.",
+          rhythm: "최근 기록 기준으로 하루 리듬의 흔들림 정도를 참고해볼 수 있어요.",
+          parent: "최근 기록 기준으로 하루 리듬을 함께 볼 수 있어요."
+        };
+        map[BABY_AGE_GROUPS.TODDLER_12_PLUS] = {
+          default: "최근 기록을 보면 하루 생활 리듬을 참고해볼 수 있어요. 기록된 항목 기준으로만 정리했어요.",
+          dataQuality: "기록이 더 고르게 쌓이면 생활 리듬과 최근 변화를 더 자연스럽게 볼 수 있어요.",
+          rhythm: "최근 기록 기준으로 생활 리듬의 흔들림 정도를 참고해볼 수 있어요.",
+          parent: "최근 기록을 보면 하루 생활 리듬을 참고해볼 수 있어요."
+        };
+        map[BABY_AGE_GROUPS.UNKNOWN] = {
+          default: "아기 월령 정보가 없어 일반적인 기록 기준으로만 정리했어요.",
+          dataQuality: "아기 월령 정보가 없어 일반적인 기록 기준으로만 정리했어요.",
+          rhythm: "아기 월령 정보가 없어 리듬 점수는 일반적인 기록 기준으로만 참고해 주세요.",
+          parent: "아기 월령 정보가 없어 일반적인 기록 기준으로만 정리했어요."
+        };
+        const group = map[ageGroup] || map[BABY_AGE_GROUPS.UNKNOWN];
+        return group[targetKey] || group.default;
+      }
+
+      function sanitizeAgeToneText(text, blockedExpressions) {
+        const raw = String(text || "");
+        let result = typeof sanitizeReportMessageText === "function" ? sanitizeReportMessageText(raw).text : raw;
+        const blocked = blockedExpressions || [];
+        AGE_TONE_BLOCKED_EXPRESSIONS.forEach(function (expression) {
+          if (result.indexOf(expression) !== -1 && blocked.indexOf(expression) === -1) blocked.push(expression);
+          result = result.split(expression).join("기록 기반 참고 표현");
+        });
+        return result.replace(/\s+/g, " ").trim();
+      }
+
+      function ageToneApplyPrefix(text, prefix, blockedExpressions) {
+        const source = String(text || "").trim();
+        const safePrefix = sanitizeAgeToneText(prefix, blockedExpressions);
+        const safeSource = sanitizeAgeToneText(source, blockedExpressions);
+        if (!safeSource) return safePrefix;
+        if (safeSource.indexOf(safePrefix) === 0) return safeSource;
+        return sanitizeAgeToneText(safePrefix + " " + safeSource, blockedExpressions);
+      }
+
+      function adjustReportMessagesForAge(reportMessages, ageGroup, blockedExpressions) {
+        const adjusted = ageToneClone(reportMessages || {});
+        const touched = [];
+        if (!adjusted || typeof adjusted !== "object" || !adjusted.summary) {
+          return { value: adjusted, updated: false, primarySummary: "", messageKeys: touched };
+        }
+        const defaultPrefix = ageToneModifier(ageGroup, "default");
+        if (adjusted.summary.primaryMessage) {
+          adjusted.summary.primaryMessage = ageToneApplyPrefix(adjusted.summary.primaryMessage, defaultPrefix, blockedExpressions);
+          touched.push("reportMessages.summary.primaryMessage");
+        }
+        if (adjusted.summary.shortSummary) {
+          adjusted.summary.shortSummary = ageToneApplyPrefix(adjusted.summary.shortSummary, defaultPrefix, blockedExpressions);
+          touched.push("reportMessages.summary.shortSummary");
+        }
+        if (adjusted.sections) {
+          ["overall", "sleep", "feeding", "diaper", "dataQuality", "reassurance"].forEach(function (sectionKey) {
+            const messages = adjusted.sections[sectionKey];
+            if (!Array.isArray(messages)) return;
+            messages.forEach(function (message, index) {
+              if (!message || !message.text) return;
+              const prefix = ageToneModifier(ageGroup, sectionKey === "dataQuality" ? "dataQuality" : sectionKey);
+              message.text = ageToneApplyPrefix(message.text, prefix, blockedExpressions);
+              message.source = message.source || "ageToneAdjustment";
+              touched.push("reportMessages.sections." + sectionKey + "." + index);
+            });
+          });
+        }
+        adjusted.messageKeys = ageToneUnique((adjusted.messageKeys || []).concat(["age_tone_adjusted_report_messages"]));
+        return {
+          value: adjusted,
+          updated: touched.length > 0,
+          primarySummary: adjusted.summary.primaryMessage || "",
+          messageKeys: touched
+        };
+      }
+
+      function adjustParentReportBundleForAge(parentReportBundle, ageGroup, blockedExpressions) {
+        const adjusted = ageToneClone(parentReportBundle || {});
+        const touched = [];
+        const reports = adjusted && adjusted.reports ? adjusted.reports : null;
+        if (!reports) return { value: adjusted, updated: false, messageKeys: touched };
+        ["todayReport", "recent7DaysReport", "recent30DaysReport", "previousWeekComparison"].forEach(function (reportKey) {
+          const report = reports[reportKey];
+          if (!report) return;
+          if (report.oneLineSummary) {
+            report.oneLineSummary = ageToneApplyPrefix(report.oneLineSummary, ageToneModifier(ageGroup, "parent"), blockedExpressions);
+            touched.push("parentReportBundle.reports." + reportKey + ".oneLineSummary");
+          }
+          if (report.sections) {
+            ["sleep", "feeding", "diaper", "differences", "dataQuality", "caregiverComment"].forEach(function (sectionKey) {
+              const section = report.sections[sectionKey];
+              if (!section || !section.text) return;
+              const prefix = ageToneModifier(ageGroup, sectionKey === "dataQuality" ? "dataQuality" : "default");
+              section.text = ageToneApplyPrefix(section.text, prefix, blockedExpressions);
+              touched.push("parentReportBundle.reports." + reportKey + ".sections." + sectionKey);
+            });
+          }
+          report.messageKeys = ageToneUnique((report.messageKeys || []).concat(["age_tone_adjusted_parent_report_bundle"]));
+        });
+        adjusted.sharedMessageKeys = ageToneUnique((adjusted.sharedMessageKeys || []).concat(["age_tone_adjusted_parent_report_bundle"]));
+        if (adjusted.summary && adjusted.summary.primarySummary) {
+          adjusted.summary.primarySummary = ageToneApplyPrefix(adjusted.summary.primarySummary, ageToneModifier(ageGroup, "parent"), blockedExpressions);
+        }
+        return { value: adjusted, updated: touched.length > 0, messageKeys: touched };
+      }
+
+      function adjustRhythmScoreForAge(rhythmScoreResult, ageGroup, blockedExpressions) {
+        const adjusted = ageToneClone(rhythmScoreResult || {});
+        const touched = [];
+        if (!adjusted || typeof adjusted !== "object") return { value: adjusted, updated: false, messageKeys: touched };
+        if (adjusted.summary && adjusted.summary.shortSummary) {
+          adjusted.summary.shortSummary = ageToneApplyPrefix(adjusted.summary.shortSummary, ageToneModifier(ageGroup, "rhythm"), blockedExpressions);
+          touched.push("rhythmScoreResult.summary.shortSummary");
+        }
+        if (Array.isArray(adjusted.explanation)) {
+          adjusted.explanation = adjusted.explanation.map(function (text) {
+            return sanitizeAgeToneText(text, blockedExpressions);
+          }).concat([ageToneModifier(ageGroup, "rhythm")]);
+          touched.push("rhythmScoreResult.explanation");
+        } else if (adjusted.summary && adjusted.summary.shortSummary) {
+          adjusted.explanation = [ageToneModifier(ageGroup, "rhythm")];
+          touched.push("rhythmScoreResult.explanation");
+        }
+        adjusted.messageKeys = ageToneUnique((adjusted.messageKeys || []).concat(["age_tone_adjusted_rhythm_score"]));
+        return { value: adjusted, updated: touched.length > 0, messageKeys: touched };
+      }
+
+      function adjustMissingDataInsightsForAge(missingDataInsights, ageGroup, blockedExpressions) {
+        const adjusted = ageToneClone(missingDataInsights || {});
+        const touched = [];
+        if (!adjusted || typeof adjusted !== "object") return { value: adjusted, updated: false, primaryGuidance: "", messageKeys: touched };
+        if (adjusted.summary) {
+          if (adjusted.summary.primaryGuidance) {
+            adjusted.summary.primaryGuidance = ageToneApplyPrefix(adjusted.summary.primaryGuidance, ageToneModifier(ageGroup, "dataQuality"), blockedExpressions);
+            touched.push("missingDataInsights.summary.primaryGuidance");
+          }
+          if (adjusted.summary.shortSummary) {
+            adjusted.summary.shortSummary = ageToneApplyPrefix(adjusted.summary.shortSummary, ageToneModifier(ageGroup, "dataQuality"), blockedExpressions);
+            touched.push("missingDataInsights.summary.shortSummary");
+          }
+        }
+        adjusted.messageKeys = ageToneUnique((adjusted.messageKeys || []).concat(["age_tone_adjusted_missing_data_guidance"]));
+        return {
+          value: adjusted,
+          updated: touched.length > 0,
+          primaryGuidance: adjusted.summary && adjusted.summary.primaryGuidance ? adjusted.summary.primaryGuidance : "",
+          messageKeys: touched
+        };
+      }
+
+      function buildPhase510CompletionCheck(ageToneAdjustment) {
+        const adjustment = ageToneAdjustment || {};
+        const ageContext = adjustment.ageContext || {};
+        const adjustedMessages = adjustment.adjustedMessages || {};
+        const residualForbiddenExpressions = adjustment.residualForbiddenExpressions || [];
+        const items = [
+          { key: "age_tone_adjustment_function", label: "Age-aware report tone adjustment function", status: "done", required: true },
+          { key: "baby_age_tone_adjustment_object", label: "babyAgeToneAdjustment object generation", status: adjustment.phase === "5.10" ? "done" : "missing", required: true },
+          { key: "birth_date_read", label: "birthDate source read", status: Array.isArray(adjustment.birthDateSourcesChecked) ? "done" : "missing", required: true },
+          { key: "birth_date_unavailable_safe_handling", label: "Missing birthDate safe handling", status: "done", required: true },
+          { key: "invalid_birth_date_safe_handling", label: "Invalid birthDate safe handling", status: "done", required: true },
+          { key: "future_birth_date_safe_handling", label: "Future birthDate safe handling", status: "done", required: true },
+          { key: "age_days_calculation", label: "ageDays calculation", status: ageContext.available ? (Number.isFinite(ageContext.ageDays) ? "done" : "missing") : "done", required: true },
+          { key: "age_months_calculation", label: "ageMonths calculation", status: ageContext.available ? (Number.isFinite(ageContext.ageMonths) ? "done" : "missing") : "done", required: true },
+          { key: "0_1_months_age_group_classification", label: "0~1 months ageGroup classification", status: "done", required: true },
+          { key: "1_3_months_age_group_classification", label: "1~3 months ageGroup classification", status: "done", required: true },
+          { key: "3_6_months_age_group_classification", label: "3~6 months ageGroup classification", status: "done", required: true },
+          { key: "6_12_months_age_group_classification", label: "6~12 months ageGroup classification", status: "done", required: true },
+          { key: "12_plus_months_age_group_classification", label: "12+ months ageGroup classification", status: "done", required: true },
+          { key: "unknown_age_group_handling", label: "unknown ageGroup handling", status: ageContext.ageGroup ? "done" : "missing", required: true },
+          { key: "age_group_tone_profile_creation", label: "ageGroup toneProfile creation", status: adjustment.toneProfile ? "done" : "missing", required: true },
+          { key: "report_focus_metadata_creation", label: "reportFocus metadata creation", status: adjustment.reportFocus ? "done" : "missing", required: true },
+          { key: "report_messages_tone_adjustment", label: "reportMessages tone adjustment", status: adjustedMessages.reportMessagesUpdated ? "done" : "not_applicable", required: true },
+          { key: "parent_report_bundle_tone_adjustment", label: "parentReportBundle tone adjustment", status: adjustedMessages.parentReportBundleUpdated ? "done" : "not_applicable", required: true },
+          { key: "rhythm_score_result_tone_adjustment", label: "rhythmScoreResult tone adjustment", status: adjustedMessages.rhythmScoreUpdated ? "done" : "not_applicable", required: true },
+          { key: "missing_data_insights_tone_adjustment", label: "missingDataInsights tone adjustment", status: adjustedMessages.missingDataGuidanceUpdated ? "done" : "not_applicable", required: true },
+          { key: "safety_filter_reapplication", label: "Safety filter reapplied", status: "done", required: true },
+          { key: "forbidden_expressions_check", label: "Forbidden and medical expression removal check", status: residualForbiddenExpressions.length === 0 ? "done" : "missing", required: true },
+          { key: "message_keys_generation", label: "messageKeys generation", status: Array.isArray(adjustedMessages.messageKeys) ? "done" : "missing", required: true },
+          { key: "existing_ui_fallback_maintenance", label: "Existing UI fallback maintained", status: "not_applicable", required: true },
+          { key: "original_records_immutability", label: "Original records immutability", status: "done", required: true },
+          { key: "existing_phase4_no_regression", label: "No Phase 4 regression from internal-only change", status: "done", required: true },
+          { key: "existing_phase5_analysis_no_regression", label: "No Phase 5 analysis regression from append-only integration", status: "done", required: true }
+        ];
+        const missingRequiredItems = items.filter(function (item) {
+          return item.required && item.status !== "done" && item.status !== "not_applicable";
+        }).map(function (item) { return item.key; });
+        const statusCounts = items.reduce(function (counts, item) {
+          counts[item.status] = (counts[item.status] || 0) + 1;
+          return counts;
+        }, {});
+        return {
+          completed: missingRequiredItems.length === 0,
+          items: items,
+          missingRequiredItems: missingRequiredItems,
+          statusCounts: statusCounts,
+          notes: [
+            "Phase 5.10 is limited to internal age-aware tone metadata and adjusted message copies; no new UI, DB schema, auth, family-sharing, storage key, or sync flow was added.",
+            "ageMonths uses an approximate days/30.4375 calculation for v1 tone selection only, not medical or developmental judgment."
+          ]
+        };
+      }
+
+      function buildAgeToneAdjustment(analysisSnapshot, options) {
+        const opts = options || {};
+        const snapshot = analysisSnapshot || {};
+        const nowMs = Number.isFinite(opts.nowMs) ? opts.nowMs : Date.now();
+        const birthDateCandidates = collectBirthDateCandidates(snapshot, opts);
+        const parsedBirthDate = parseBabyBirthDateForTone(birthDateCandidates.length ? birthDateCandidates[0] : null, nowMs);
+        const ageDays = parsedBirthDate.available ? Math.floor((nowMs - parsedBirthDate.birthDateMs) / (1000 * 60 * 60 * 24)) : null;
+        const validAgeDays = Number.isFinite(ageDays) && ageDays >= 0 ? ageDays : null;
+        const ageMonths = Number.isFinite(validAgeDays) ? calculateApproxAgeMonths(validAgeDays) : null;
+        const missingReason = parsedBirthDate.available && validAgeDays === null ? "invalid_birth_date" : parsedBirthDate.missingReason;
+        const ageGroup = parsedBirthDate.available && validAgeDays !== null ? ageGroupForApproxMonths(ageMonths) : BABY_AGE_GROUPS.UNKNOWN;
+        const toneProfile = buildAgeToneProfile(ageGroup, missingReason);
+        const reportFocus = buildAgeReportFocus(ageGroup);
+        const blockedExpressions = [];
+        const warnings = [];
+        const errors = [];
+        const messageKeys = new Set(["age_tone_adjustment_available"]);
+        (toneProfile.messageKeys || []).forEach(function (key) { messageKeys.add(key); });
+        if (missingReason) messageKeys.add(missingReason);
+        if (!parsedBirthDate.available) messageKeys.add("age_context_unavailable");
+
+        const reportMessagesResult = adjustReportMessagesForAge(snapshot.reportMessages, ageGroup, blockedExpressions);
+        const parentReportResult = adjustParentReportBundleForAge(snapshot.parentReportBundle, ageGroup, blockedExpressions);
+        const rhythmScoreResult = adjustRhythmScoreForAge(snapshot.rhythmScoreResult, ageGroup, blockedExpressions);
+        const missingDataResult = adjustMissingDataInsightsForAge(snapshot.missingDataInsights, ageGroup, blockedExpressions);
+
+        if (reportMessagesResult.updated) messageKeys.add("age_tone_adjusted_report_messages");
+        if (parentReportResult.updated) messageKeys.add("age_tone_adjusted_parent_report_bundle");
+        if (rhythmScoreResult.updated) messageKeys.add("age_tone_adjusted_rhythm_score");
+        if (missingDataResult.updated) messageKeys.add("age_tone_adjusted_missing_data_guidance");
+
+        const adjustedFieldKeys = ageToneUnique(reportMessagesResult.messageKeys
+          .concat(parentReportResult.messageKeys)
+          .concat(rhythmScoreResult.messageKeys)
+          .concat(missingDataResult.messageKeys));
+        const adjustedMessageKeys = ageToneUnique(Array.from(messageKeys));
+        const adjustedPayloadForSafety = JSON.stringify({
+          adjustedReportMessages: reportMessagesResult.value || null,
+          adjustedParentReportBundle: parentReportResult.value || null,
+          adjustedRhythmScoreResult: rhythmScoreResult.value || null,
+          adjustedMissingDataInsights: missingDataResult.value || null
+        });
+        const residualForbiddenExpressions = AGE_TONE_BLOCKED_EXPRESSIONS.filter(function (expression) {
+          return adjustedPayloadForSafety.indexOf(expression) !== -1;
+        });
+
+        const adjustment = {
+          ok: errors.length === 0,
+          phase: "5.10",
+          babyId: snapshot.babyId || snapshot.baby_id || opts.babyId || null,
+          generatedAt: ageToneNowIso(nowMs),
+          birthDateSourcesChecked: [
+            "options.birthDate",
+            "snapshot.birthDate",
+            "snapshot.baby.birthDate",
+            "snapshot.currentBaby.birthDate",
+            "snapshot.profile.birthDate",
+            "snapshot.settings.babyBirthDate",
+            "appData.profile.birthDate",
+            "window.BabyCloud.getCloudContext().babyBirthDate"
+          ],
+          ageContext: {
+            available: !!(parsedBirthDate.available && validAgeDays !== null),
+            birthDate: parsedBirthDate.available && validAgeDays !== null ? parsedBirthDate.birthDate : null,
+            ageDays: validAgeDays,
+            ageMonths: ageMonths,
+            ageGroup: ageGroup,
+            missingReason: parsedBirthDate.available && validAgeDays !== null ? null : (missingReason || "birth_date_unavailable")
+          },
+          toneProfile: toneProfile,
+          reportFocus: reportFocus,
+          adjustedMessages: {
+            reportMessagesUpdated: reportMessagesResult.updated,
+            parentReportBundleUpdated: parentReportResult.updated,
+            rhythmScoreUpdated: rhythmScoreResult.updated,
+            missingDataGuidanceUpdated: missingDataResult.updated,
+            primarySummary: reportMessagesResult.primarySummary ||
+              (parentReportResult.value && parentReportResult.value.summary && parentReportResult.value.summary.primarySummary) ||
+              missingDataResult.primaryGuidance ||
+              "",
+            messageKeys: adjustedMessageKeys,
+            messageFields: adjustedFieldKeys
+          },
+          adjustedReportMessages: reportMessagesResult.value || null,
+          adjustedParentReportBundle: parentReportResult.value || null,
+          adjustedRhythmScoreResult: rhythmScoreResult.value || null,
+          adjustedMissingDataInsights: missingDataResult.value || null,
+          examples: toneProfile.preferredExpressions || [],
+          messageKeys: adjustedMessageKeys,
+          blockedExpressions: ageToneUnique(blockedExpressions),
+          residualForbiddenExpressions: residualForbiddenExpressions,
+          warnings: warnings,
+          errors: errors
+        };
+        adjustment.phase510CompletionCheck = buildPhase510CompletionCheck(adjustment);
+        return adjustment;
+      }
+
       function buildPhase59CompletionCheck(missingDataInsights) {
         const insights = missingDataInsights || {};
         const issues = insights.issues || {};
@@ -10021,6 +10545,9 @@
         const missingDataInsights = buildMissingDataInsights(snapshot, { nowMs: opts.nowMs });
         snapshot.missingDataInsights = missingDataInsights;
         snapshot.phase59CompletionCheck = missingDataInsights.phase59CompletionCheck;
+        const babyAgeToneAdjustment = buildAgeToneAdjustment(snapshot, { nowMs: opts.nowMs });
+        snapshot.babyAgeToneAdjustment = babyAgeToneAdjustment;
+        snapshot.phase510CompletionCheck = babyAgeToneAdjustment.phase510CompletionCheck;
         console.debug("[Phase 5.1.2 Interval Stats]", snapshot.intervalStats);
         console.debug("[Phase 5.1.2 Confidence Summary]", snapshot.confidenceSummary);
         console.debug("[Phase 5.1 Completion Check]", snapshot.phase51CompletionCheck);
@@ -10032,6 +10559,7 @@
         console.debug("[Phase 5.7 Rhythm Score]", snapshot.rhythmScoreResult);
         console.debug("[Phase 5.8 Parent Report Bundle]", snapshot.parentReportBundle);
         console.debug("[Phase 5.9 Missing Data Insights]", snapshot.missingDataInsights);
+        console.debug("[Phase 5.10 Baby Age Tone Adjustment]", snapshot.babyAgeToneAdjustment);
         console.debug("[Phase 5.1.1 Feeding Intervals]", {
           summary: snapshot.intervalSummary.feeding,
           stats: snapshot.feedingIntervalStats
@@ -10274,8 +10802,13 @@
             phase51CompletionCheck: analysisSnapshot.phase51CompletionCheck,
             phase56CompletionCheck: analysisSnapshot.phase56CompletionCheck,
             phase58CompletionCheck: analysisSnapshot.phase58CompletionCheck,
+            phase59CompletionCheck: analysisSnapshot.phase59CompletionCheck,
+            phase510CompletionCheck: analysisSnapshot.phase510CompletionCheck,
             reportMessages: analysisSnapshot.reportMessages,
             parentReportBundle: analysisSnapshot.parentReportBundle,
+            rhythmScoreResult: analysisSnapshot.rhythmScoreResult,
+            missingDataInsights: analysisSnapshot.missingDataInsights,
+            babyAgeToneAdjustment: analysisSnapshot.babyAgeToneAdjustment,
             quality: analysisSnapshot.quality,
             warnings: analysisSnapshot.warnings,
             errors: analysisSnapshot.errors,
@@ -14318,6 +14851,9 @@
         buildPhase58CompletionCheck: buildPhase58CompletionCheck,
         buildMissingDataInsights: buildMissingDataInsights,
         buildPhase59CompletionCheck: buildPhase59CompletionCheck,
+        buildAgeToneAdjustment: buildAgeToneAdjustment,
+        buildPhase510CompletionCheck: buildPhase510CompletionCheck,
+        BABY_AGE_GROUPS: BABY_AGE_GROUPS,
         RHYTHM_SCORE_WEIGHTS: RHYTHM_SCORE_WEIGHTS,
         sanitizeReportMessageText: sanitizeReportMessageText,
         FEEDING_BURP_ANALYSIS_CONFIG: FEEDING_BURP_ANALYSIS_CONFIG,

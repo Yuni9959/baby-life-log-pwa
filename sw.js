@@ -1,4 +1,4 @@
-const CACHE_NAME = "babylog-cache-v5-9-missing-data-insights-v1";
+const CACHE_NAME = "babylog-cache-v5-10-age-tone-adjustment-v1";
 const CACHE_PREFIX = "babylog-cache-";
 const OLD_CACHE_PREFIX = "baby-life-log-";
 const PRIMARY_CACHE_NAME = CACHE_NAME;
