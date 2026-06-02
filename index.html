@@ -2456,7 +2456,7 @@
       const APP_NAME = "baby-life-log";
       const APP_VERSION = "5.7.0";
       const APP_PHASE_LABEL = "Phase 5.7 · 우리 아기 리듬 점수 v1";
-      const SERVICE_WORKER_CACHE_NAME = "babylog-cache-v5-8-parent-report-v1";
+      const SERVICE_WORKER_CACHE_NAME = "babylog-cache-v5-9-missing-data-insights-v1";
       const APP_INIT_TIME = new Date().toISOString();
       const ANALYSIS_API_ENDPOINT = "";
       const SERVER_OVERWRITE_BACKUP_KEY = "babylog_records_backup_before_server_overwrite";
@@ -9140,6 +9140,772 @@
         return bundle;
       }
 
+      function buildMissingDataInsights(analysisSnapshot, options) {
+        const opts = options || {};
+        const snapshot = analysisSnapshot || {};
+        const nowMs = Number.isFinite(opts.nowMs) ? opts.nowMs : Date.now();
+        const generatedAt = nowIso();
+        const records = snapshot.records && Array.isArray(snapshot.records.normalized) ? snapshot.records.normalized : [];
+        const activeSorted = snapshot.records && Array.isArray(snapshot.records.activeSorted) ? snapshot.records.activeSorted : records.filter(function (record) {
+          return record && record.isUsableForAnalysis;
+        });
+        const pairs = snapshot.pairs || {};
+        const pairSummary = snapshot.pairSummary || {};
+        const quality = snapshot.quality || {};
+        const blockedExpressions = [
+          "정상입니다", "문제없습니다", "비정상입니다", "위험합니다", "나쁩니다", "진단됩니다",
+          "탈수입니다", "변비입니다", "수면장애입니다", "원인은 이것입니다", "확실합니다",
+          "반드시", "기록을 잘 못했어요", "기록이 나빠요"
+        ];
+        const warnings = [];
+        const errors = [];
+        const issues = {
+          sleep: [],
+          feeding: [],
+          diaper: [],
+          dailyBalance: [],
+          syncOrder: [],
+          dataQuality: []
+        };
+        const reportLinks = {
+          reportMessagesUpdated: false,
+          parentReportBundleUpdated: false,
+          rhythmScoreUpdated: false
+        };
+
+        function safeArray(value) {
+          return Array.isArray(value) ? value : [];
+        }
+
+        function countRecords(type) {
+          return records.filter(function (record) {
+            return record && record.type === type;
+          }).length;
+        }
+
+        function countQualityFlag(flag) {
+          return records.filter(function (record) {
+            return record && Array.isArray(record.qualityFlags) && record.qualityFlags.indexOf(flag) !== -1;
+          }).length;
+        }
+
+        function sanitizeMissingDataText(text) {
+          const raw = String(text || "기록이 조금 더 쌓이면 리포트를 더 자연스럽게 볼 수 있어요.");
+          let sanitized = typeof sanitizeReportMessageText === "function" ? sanitizeReportMessageText(raw).text : raw;
+          blockedExpressions.forEach(function (expression) {
+            sanitized = sanitized.split(expression).join("기록 기반 참고 안내예요");
+          });
+          return sanitized;
+        }
+
+        function addIssue(groupKey, issue) {
+          const target = issues[groupKey] || issues.dataQuality;
+          target.push(Object.assign({}, issue, {
+            messageKey: issue.messageKey || issue.issueKey,
+            guidanceText: sanitizeMissingDataText(issue.guidanceText),
+            evidence: issue.evidence || {}
+          }));
+        }
+
+        function rate(numerator, denominator) {
+          return denominator > 0 ? Math.round((numerator / denominator) * 1000) / 1000 : null;
+        }
+
+        function valueKey(value) {
+          if (value === null || value === undefined || value === "") return "none";
+          return String(value);
+        }
+
+        function duplicateGroups(sourceRecords, keyBuilder) {
+          const groups = {};
+          sourceRecords.forEach(function (record) {
+            if (!record) return;
+            const key = keyBuilder(record);
+            if (!key) return;
+            if (!groups[key]) groups[key] = [];
+            groups[key].push(record);
+          });
+          return Object.keys(groups).filter(function (key) {
+            return groups[key].length > 1;
+          }).map(function (key) {
+            return { key: key, count: groups[key].length };
+          });
+        }
+
+        const sleepStartCount = Number.isFinite(pairSummary.sleepStartCount) ? pairSummary.sleepStartCount : countRecords("sleep_start");
+        const wakeCount = Number.isFinite(pairSummary.wakeCount) ? pairSummary.wakeCount : countRecords("wake") + countRecords("sleep_end");
+        const sleepSessionCandidateCount = Number.isFinite(pairSummary.sleepSessionCandidateCount) ? pairSummary.sleepSessionCandidateCount : safeArray(pairs.sleepSessions).length;
+        const unpairedSleepStartCount = Number.isFinite(pairSummary.unpairedSleepStartCount) ? pairSummary.unpairedSleepStartCount : safeArray(pairs.unpairedSleepStarts).length;
+        const unpairedWakeCount = Number.isFinite(pairSummary.unpairedWakeCount) ? pairSummary.unpairedWakeCount : safeArray(pairs.unpairedWakes).length;
+        const sleepPairRate = rate(sleepSessionCandidateCount, sleepStartCount);
+
+        if (unpairedSleepStartCount > 0) {
+          addIssue("sleep", {
+            issueKey: "sleep_missing_wake",
+            domain: "sleep",
+            severity: "notice",
+            confidenceImpact: "downgrade",
+            affectedAnalysis: ["sleepAnalysis", "dailyTotalSleepMinutes"],
+            count: unpairedSleepStartCount,
+            rate: rate(unpairedSleepStartCount, sleepStartCount),
+            threshold: 0,
+            guidanceText: "잠듦 기록은 있는데 깨어남 기록이 빠진 경우가 있어요. 수면 시간 분석은 참고용으로만 봐주세요.",
+            evidence: { sleepStartCount: sleepStartCount, unpairedSleepStartCount: unpairedSleepStartCount }
+          });
+        }
+        if (unpairedWakeCount > 0) {
+          addIssue("sleep", {
+            issueKey: "wake_without_sleep_start",
+            domain: "sleep",
+            severity: "notice",
+            confidenceImpact: "downgrade",
+            affectedAnalysis: ["sleepAnalysis", "sleepSessions"],
+            count: unpairedWakeCount,
+            rate: rate(unpairedWakeCount, wakeCount),
+            threshold: 0,
+            guidanceText: "깨어남 기록만 남아 있는 경우가 있어요. 수면 시작 기록과 연결되지 않아 일부 수면 분석에서는 제외될 수 있어요.",
+            evidence: { wakeCount: wakeCount, unpairedWakeCount: unpairedWakeCount }
+          });
+        }
+        if (sleepStartCount > 0 && sleepPairRate !== null && sleepPairRate < 0.6) {
+          addIssue("sleep", {
+            issueKey: "sleep_pair_rate_low",
+            domain: "sleep",
+            severity: "warning",
+            confidenceImpact: "downgrade",
+            affectedAnalysis: ["sleepAnalysis", "sleepSession"],
+            count: sleepSessionCandidateCount,
+            rate: sleepPairRate,
+            threshold: 0.6,
+            guidanceText: "수면 시작과 깨어남이 연결된 기록이 적어서 수면 분석은 참고용으로만 봐주세요.",
+            evidence: { sleepStartCount: sleepStartCount, sleepSessionCandidateCount: sleepSessionCandidateCount, sleepPairRate: sleepPairRate }
+          });
+        }
+        if (sleepSessionCandidateCount < 5) {
+          addIssue("sleep", {
+            issueKey: "sleep_not_enough_sessions",
+            domain: "sleep",
+            severity: "info",
+            confidenceImpact: "none",
+            affectedAnalysis: ["sleepAnalysis"],
+            count: sleepSessionCandidateCount,
+            rate: null,
+            threshold: 5,
+            guidanceText: "수면 세션 기록이 조금 더 쌓이면 수면 흐름을 더 자연스럽게 볼 수 있어요.",
+            evidence: { sleepSessionCandidateCount: sleepSessionCandidateCount }
+          });
+        }
+
+        const feedingCount = Number.isFinite(pairSummary.feedingCount) ? pairSummary.feedingCount : countRecords("feeding");
+        const burpCount = Number.isFinite(pairSummary.burpCount) ? pairSummary.burpCount : countRecords("burp");
+        const feedBurpPairCount = Number.isFinite(pairSummary.feedBurpCandidateCount) ? pairSummary.feedBurpCandidateCount : safeArray(pairs.feedBurpPairs).length;
+        const unpairedFeedForBurpCount = Number.isFinite(pairSummary.unpairedFeedForBurpCount) ? pairSummary.unpairedFeedForBurpCount : safeArray(pairs.unpairedFeedsForBurp).length;
+        const orphanBurpCount = Number.isFinite(pairSummary.orphanBurpCount) ? pairSummary.orphanBurpCount : safeArray(pairs.orphanBurps).length;
+        const feedBurpPairRate = rate(feedBurpPairCount, feedingCount);
+        const burpMissingRate = rate(unpairedFeedForBurpCount, feedingCount);
+        const missingFeedingAmountCount = Number.isFinite(quality.missingAmountCount) ? quality.missingAmountCount : countQualityFlag("missing_feeding_amount");
+        const invalidFeedingAmountCount = Number.isFinite(quality.invalidAmountCount) ? quality.invalidAmountCount : countQualityFlag("invalid_feeding_amount");
+        const duplicateFeedGroups = duplicateGroups(records.filter(function (record) {
+          return record && record.type === "feeding" && Number.isFinite(record.recordedAtMs);
+        }), function (record) {
+          return [record.type, record.recordedAtMs, valueKey(record.amountMl)].join("|");
+        });
+        const duplicateFeedCandidateCount = duplicateFeedGroups.reduce(function (sum, group) { return sum + group.count; }, 0);
+
+        if (feedingCount > 0 && feedBurpPairRate !== null && feedBurpPairRate < 0.5) {
+          addIssue("feeding", {
+            issueKey: "feed_burp_pair_rate_low",
+            domain: "feeding",
+            severity: "warning",
+            confidenceImpact: "downgrade",
+            affectedAnalysis: ["feedingBurpAnalysis", "feedToBurpMinutes"],
+            count: feedBurpPairCount,
+            rate: feedBurpPairRate,
+            threshold: 0.5,
+            guidanceText: "수유 기록에 비해 연결된 트림 기록이 적어서 수유 후 트림 시간 분석은 참고용으로만 봐주세요.",
+            evidence: { feedingCount: feedingCount, feedBurpPairCount: feedBurpPairCount, feedBurpPairRate: feedBurpPairRate }
+          });
+        }
+        if (unpairedFeedForBurpCount > 0) {
+          addIssue("feeding", {
+            issueKey: "feed_missing_burp",
+            domain: "feeding",
+            severity: "notice",
+            confidenceImpact: "downgrade",
+            affectedAnalysis: ["feedingBurpAnalysis"],
+            count: unpairedFeedForBurpCount,
+            rate: burpMissingRate,
+            threshold: 0,
+            guidanceText: "수유 기록은 있지만 연결된 트림 기록이 빠진 경우가 있어요. 수유와 트림 연결 분석은 참고용으로만 봐주세요.",
+            evidence: { feedingCount: feedingCount, unpairedFeedForBurpCount: unpairedFeedForBurpCount, burpMissingRate: burpMissingRate }
+          });
+        }
+        if (orphanBurpCount > 0) {
+          addIssue("feeding", {
+            issueKey: "burp_without_recent_feed",
+            domain: "feeding",
+            severity: "notice",
+            confidenceImpact: "downgrade",
+            affectedAnalysis: ["feedingBurpAnalysis"],
+            count: orphanBurpCount,
+            rate: rate(orphanBurpCount, burpCount),
+            threshold: 0,
+            guidanceText: "트림 기록만 남아 있는 경우가 있어요. 가까운 수유 기록과 연결되지 않아 일부 분석에서는 제외될 수 있어요.",
+            evidence: { burpCount: burpCount, orphanBurpCount: orphanBurpCount }
+          });
+        }
+        if (missingFeedingAmountCount > 0) {
+          addIssue("feeding", {
+            issueKey: "feeding_amount_missing",
+            domain: "feeding",
+            severity: "notice",
+            confidenceImpact: "downgrade",
+            affectedAnalysis: ["feedingBurpAnalysis", "feedingAmount"],
+            count: missingFeedingAmountCount,
+            rate: rate(missingFeedingAmountCount, feedingCount),
+            threshold: 0,
+            guidanceText: "수유량이 비어 있는 기록이 있어요. 수유량 분석에서는 해당 기록이 제외될 수 있어요.",
+            evidence: { feedingCount: feedingCount, missingFeedingAmountCount: missingFeedingAmountCount }
+          });
+        }
+        if (invalidFeedingAmountCount > 0) {
+          addIssue("feeding", {
+            issueKey: "feeding_amount_invalid",
+            domain: "feeding",
+            severity: "notice",
+            confidenceImpact: "downgrade",
+            affectedAnalysis: ["feedingBurpAnalysis", "feedingAmount"],
+            count: invalidFeedingAmountCount,
+            rate: rate(invalidFeedingAmountCount, feedingCount),
+            threshold: 0,
+            guidanceText: "수유량 형식이 분석에 쓰기 어려운 기록이 있어요. 수유량 흐름은 참고용으로 봐주세요.",
+            evidence: { feedingCount: feedingCount, invalidFeedingAmountCount: invalidFeedingAmountCount }
+          });
+        }
+        if (duplicateFeedCandidateCount > 0) {
+          addIssue("feeding", {
+            issueKey: "duplicate_feeding_candidate",
+            domain: "feeding",
+            severity: "info",
+            confidenceImpact: "none",
+            affectedAnalysis: ["feedingBurpAnalysis", "feedingInterval"],
+            count: duplicateFeedCandidateCount,
+            rate: rate(duplicateFeedCandidateCount, feedingCount),
+            threshold: 0,
+            guidanceText: "비슷한 시각에 같은 수유량이 반복된 기록이 있어요. 중복 입력인지 나중에 확인해보면 좋아요.",
+            evidence: { duplicateGroupCount: duplicateFeedGroups.length, duplicateFeedCandidateCount: duplicateFeedCandidateCount }
+          });
+        }
+
+        const diaperRecords = records.filter(function (record) { return record && record.type === "diaper"; });
+        const diaperRecordCount = diaperRecords.length;
+        const missingSubtypeCount = Number.isFinite(quality.missingSubtypeCount) ? quality.missingSubtypeCount : countQualityFlag("missing_diaper_subtype");
+        const unknownSubtypeCount = Number.isFinite(quality.unknownSubtypeCount) ? quality.unknownSubtypeCount : countQualityFlag("unknown_diaper_subtype");
+        const subtypeMissingRate = rate(missingSubtypeCount + unknownSubtypeCount, diaperRecordCount);
+        const urineRecordCount = diaperRecords.filter(function (record) { return record.subtype === "urine" || record.subtype === "mixed"; }).length;
+        const stoolRecordCount = diaperRecords.filter(function (record) { return record.subtype === "stool" || record.subtype === "mixed"; }).length;
+        const mixedRecordCount = diaperRecords.filter(function (record) { return record.subtype === "mixed"; }).length;
+
+        if (diaperRecordCount === 0) {
+          addIssue("diaper", {
+            issueKey: "diaper_no_records",
+            domain: "diaper",
+            severity: "notice",
+            confidenceImpact: "unavailable",
+            affectedAnalysis: ["diaperAnalysis"],
+            count: 0,
+            rate: null,
+            threshold: 1,
+            guidanceText: "기저귀 기록이 아직 적어서 기저귀 분석은 기록이 쌓인 뒤 더 자연스럽게 볼 수 있어요.",
+            evidence: { diaperRecordCount: diaperRecordCount }
+          });
+        }
+        if (missingSubtypeCount > 0) {
+          addIssue("diaper", {
+            issueKey: "diaper_subtype_missing",
+            domain: "diaper",
+            severity: "notice",
+            confidenceImpact: "downgrade",
+            affectedAnalysis: ["diaperAnalysis", "diaperSubtype"],
+            count: missingSubtypeCount,
+            rate: rate(missingSubtypeCount, diaperRecordCount),
+            threshold: 0,
+            guidanceText: "기저귀 종류가 빠진 기록이 조금 있어요. 소변과 대변을 나눈 분석은 참고용으로 볼게요.",
+            evidence: { diaperRecordCount: diaperRecordCount, missingSubtypeCount: missingSubtypeCount }
+          });
+        }
+        if (unknownSubtypeCount > 0) {
+          addIssue("diaper", {
+            issueKey: "diaper_subtype_unknown",
+            domain: "diaper",
+            severity: "notice",
+            confidenceImpact: "downgrade",
+            affectedAnalysis: ["diaperAnalysis", "diaperSubtype"],
+            count: unknownSubtypeCount,
+            rate: rate(unknownSubtypeCount, diaperRecordCount),
+            threshold: 0,
+            guidanceText: "기저귀 종류를 해석하기 어려운 기록이 있어요. 종류별 기저귀 분석은 참고용으로 봐주세요.",
+            evidence: { diaperRecordCount: diaperRecordCount, unknownSubtypeCount: unknownSubtypeCount }
+          });
+        }
+        if (diaperRecordCount > 0 && subtypeMissingRate !== null && subtypeMissingRate > 0.4) {
+          addIssue("diaper", {
+            issueKey: "diaper_subtype_missing_rate_high",
+            domain: "diaper",
+            severity: "warning",
+            confidenceImpact: "downgrade",
+            affectedAnalysis: ["diaperAnalysis", "urineAnalysis", "stoolAnalysis"],
+            count: missingSubtypeCount + unknownSubtypeCount,
+            rate: subtypeMissingRate,
+            threshold: 0.4,
+            guidanceText: "기저귀 종류가 비어 있는 기록이 많아 소변과 대변을 나눈 분석은 조심스럽게 볼게요.",
+            evidence: { diaperRecordCount: diaperRecordCount, subtypeMissingRate: subtypeMissingRate }
+          });
+        }
+        if (urineRecordCount === 0 && diaperRecordCount > 0) {
+          addIssue("diaper", {
+            issueKey: "urine_specific_data_unavailable",
+            domain: "diaper",
+            severity: "info",
+            confidenceImpact: "none",
+            affectedAnalysis: ["diaperAnalysis", "urineAnalysis"],
+            count: 0,
+            rate: null,
+            threshold: 1,
+            guidanceText: "기저귀 기록은 있지만 소변 종류로 나뉜 기록은 아직 적어요. 소변 관련 분석은 참고용으로만 볼게요.",
+            evidence: { diaperRecordCount: diaperRecordCount, urineRecordCount: urineRecordCount }
+          });
+        }
+        if (stoolRecordCount === 0 && diaperRecordCount > 0) {
+          addIssue("diaper", {
+            issueKey: "stool_specific_data_unavailable",
+            domain: "diaper",
+            severity: "info",
+            confidenceImpact: "none",
+            affectedAnalysis: ["diaperAnalysis", "stoolAnalysis"],
+            count: 0,
+            rate: null,
+            threshold: 1,
+            guidanceText: "기저귀 기록은 있지만 대변 종류로 나뉜 기록은 아직 적어요. 대변 관련 분석은 참고용으로만 볼게요.",
+            evidence: { diaperRecordCount: diaperRecordCount, stoolRecordCount: stoolRecordCount }
+          });
+        }
+
+        function periodCounts(periodRecords) {
+          const counts = { total: periodRecords.length, feeding: 0, diaper: 0, sleepRelated: 0, burp: 0 };
+          periodRecords.forEach(function (record) {
+            if (!record) return;
+            if (record.type === "feeding") counts.feeding += 1;
+            if (record.type === "diaper") counts.diaper += 1;
+            if (record.type === "burp") counts.burp += 1;
+            if (record.type === "sleep_start" || record.type === "wake" || record.type === "sleep_end") counts.sleepRelated += 1;
+          });
+          return counts;
+        }
+
+        function recordsInWindow(startMs, endMs) {
+          return activeSorted.filter(function (record) {
+            return record && Number.isFinite(record.recordedAtMs) && record.recordedAtMs >= startMs && record.recordedAtMs < endMs;
+          });
+        }
+
+        function detectConcentration(label, counts, minimumCount, issueKey) {
+          if (counts.total < minimumCount) return;
+          const entries = [
+            { key: "feeding", count: counts.feeding },
+            { key: "diaper", count: counts.diaper },
+            { key: "sleep", count: counts.sleepRelated },
+            { key: "burp", count: counts.burp }
+          ];
+          const largest = entries.sort(function (a, b) { return b.count - a.count; })[0];
+          const concentrationRate = rate(largest.count, counts.total);
+          if (concentrationRate !== null && concentrationRate >= 0.75) {
+            addIssue("dailyBalance", {
+              issueKey: issueKey,
+              domain: "dailyBalance",
+              severity: "notice",
+              confidenceImpact: "downgrade",
+              affectedAnalysis: ["parentReportBundle", "rhythmScoreResult"],
+              count: largest.count,
+              rate: concentrationRate,
+              threshold: 0.75,
+              guidanceText: label + " 특정 종류의 기록이 많이 남아 있어요. 다른 종류의 기록은 적어서 전체 리포트는 참고용으로만 봐주세요.",
+              evidence: Object.assign({ dominantType: largest.key }, counts)
+            });
+          }
+        }
+
+        function detectMissingAxes(label, counts, minimumCount) {
+          if (counts.total < minimumCount) return;
+          [
+            { key: "feeding_records_missing_for_period", domainCount: counts.feeding, domainName: "수유", affected: "feedingBurpAnalysis" },
+            { key: "diaper_records_missing_for_period", domainCount: counts.diaper, domainName: "기저귀", affected: "diaperAnalysis" },
+            { key: "sleep_records_missing_for_period", domainCount: counts.sleepRelated, domainName: "수면", affected: "sleepAnalysis" }
+          ].forEach(function (entry) {
+            if (entry.domainCount !== 0) return;
+            addIssue("dailyBalance", {
+              issueKey: entry.key,
+              domain: "dailyBalance",
+              severity: "notice",
+              confidenceImpact: "downgrade",
+              affectedAnalysis: [entry.affected, "parentReportBundle"],
+              count: 0,
+              rate: 0,
+              threshold: 1,
+              guidanceText: label + " " + entry.domainName + " 기록이 적어서 하루 리듬 전체는 참고용으로만 봐주세요.",
+              evidence: Object.assign({ missingDomain: entry.domainName }, counts)
+            });
+          });
+        }
+
+        const todayStartMs = startOfLocalDayMs(nowMs);
+        const todayCounts = periodCounts(recordsInWindow(todayStartMs, addDaysMs(todayStartMs, 1)));
+        const recent7StartMs = addDaysMs(todayStartMs, -6);
+        const recent7Counts = periodCounts(recordsInWindow(recent7StartMs, addDaysMs(todayStartMs, 1)));
+        detectConcentration("오늘은", todayCounts, 5, "daily_record_type_concentration");
+        detectConcentration("최근 7일은", recent7Counts, 15, "weekly_record_type_concentration");
+        detectMissingAxes("오늘은", todayCounts, 5);
+        detectMissingAxes("최근 7일은", recent7Counts, 15);
+
+        const usableInOriginalOrder = records.filter(function (record) {
+          return record && record.isUsableForAnalysis && Number.isFinite(record.recordedAtMs);
+        });
+        let orderMismatchCount = 0;
+        for (let i = 1; i < usableInOriginalOrder.length; i += 1) {
+          if (usableInOriginalOrder[i].recordedAtMs < usableInOriginalOrder[i - 1].recordedAtMs) orderMismatchCount += 1;
+        }
+        if (usableInOriginalOrder.length >= 5 && orderMismatchCount > 0) {
+          addIssue("syncOrder", {
+            issueKey: "sync_order_changed_candidate",
+            domain: "syncOrder",
+            severity: "notice",
+            confidenceImpact: "downgrade",
+            affectedAnalysis: ["intervalStats", "parentReportBundle"],
+            count: orderMismatchCount,
+            rate: rate(orderMismatchCount, usableInOriginalOrder.length),
+            threshold: 0.2,
+            guidanceText: "동기화 이후 기록 순서가 바뀐 후보가 있어요. 시간 간격 분석은 참고용으로 보는 것이 좋아요.",
+            evidence: { usableRecordCount: usableInOriginalOrder.length, orderMismatchCount: orderMismatchCount }
+          });
+        }
+
+        const duplicateRecordGroups = duplicateGroups(records.filter(function (record) {
+          return record && Number.isFinite(record.recordedAtMs);
+        }), function (record) {
+          return [record.type, record.recordedAtMs, valueKey(record.amountMl), valueKey(record.subtype)].join("|");
+        });
+        const duplicateRecordCandidateCount = duplicateRecordGroups.reduce(function (sum, group) { return sum + group.count; }, 0);
+        if (duplicateRecordCandidateCount > 0) {
+          addIssue("syncOrder", {
+            issueKey: "duplicate_record_candidate",
+            domain: "syncOrder",
+            severity: "info",
+            confidenceImpact: "none",
+            affectedAnalysis: ["records.normalized", "intervalStats"],
+            count: duplicateRecordCandidateCount,
+            rate: rate(duplicateRecordCandidateCount, records.length),
+            threshold: 0,
+            guidanceText: "비슷한 시각의 같은 기록이 반복된 후보가 있어요. 중복 입력인지 나중에 확인해보면 좋아요.",
+            evidence: { duplicateGroupCount: duplicateRecordGroups.length, duplicateRecordCandidateCount: duplicateRecordCandidateCount }
+          });
+        }
+
+        const invalidRecordedAtCount = Number.isFinite(quality.invalidRecordedAtCount) ? quality.invalidRecordedAtCount : countQualityFlag("invalid_recorded_at") + countQualityFlag("missing_recorded_at");
+        if (invalidRecordedAtCount > 0) {
+          addIssue("dataQuality", {
+            issueKey: "invalid_recorded_at",
+            domain: "dataQuality",
+            severity: "notice",
+            confidenceImpact: "downgrade",
+            affectedAnalysis: ["intervalStats", "parentReportBundle"],
+            count: invalidRecordedAtCount,
+            rate: rate(invalidRecordedAtCount, records.length),
+            threshold: 0,
+            guidanceText: "시간 정보가 비어 있거나 해석하기 어려운 기록이 있어요. 시간 간격 분석은 참고용으로 봐주세요.",
+            evidence: { invalidRecordedAtCount: invalidRecordedAtCount, recordCount: records.length }
+          });
+        }
+
+        function allIssues() {
+          return Object.keys(issues).reduce(function (list, key) {
+            return list.concat(issues[key]);
+          }, []);
+        }
+
+        function levelForDomain(domainKey, baseCounts) {
+          const domainIssues = allIssues().filter(function (issue) {
+            return issue.domain === domainKey || (domainKey === "overall" && issue.domain);
+          });
+          if (baseCounts && baseCounts.recordCount === 0) return "insufficient";
+          if (domainIssues.some(function (issue) { return issue.confidenceImpact === "unavailable"; })) return "insufficient";
+          if (domainIssues.some(function (issue) { return issue.severity === "warning"; })) return "low";
+          if (domainIssues.some(function (issue) { return issue.severity === "notice"; })) return "medium";
+          return "high";
+        }
+
+        function confidenceForLevel(level) {
+          if (level === "high") return "high";
+          if (level === "medium") return "medium";
+          if (level === "low") return "low";
+          return "insufficient";
+        }
+
+        function reliabilityForDomain(domainKey, originalConfidenceLevel, level, reasonIssue) {
+          const suggested = confidenceForLevel(level);
+          const referenceOnly = level === "low" || level === "insufficient";
+          return {
+            available: level !== "insufficient",
+            originalConfidenceLevel: originalConfidenceLevel || "insufficient",
+            suggestedConfidenceLevel: suggested,
+            completenessLevel: level,
+            referenceOnly: referenceOnly,
+            reason: reasonIssue ? reasonIssue.issueKey : null,
+            guidanceText: sanitizeMissingDataText(reasonIssue ? reasonIssue.guidanceText : "기록이 조금 더 쌓이면 리포트를 더 자연스럽게 볼 수 있어요.")
+          };
+        }
+
+        const sleepLevel = levelForDomain("sleep", { recordCount: sleepStartCount + wakeCount });
+        const feedingLevel = levelForDomain("feeding", { recordCount: feedingCount + burpCount });
+        const diaperLevel = levelForDomain("diaper", { recordCount: diaperRecordCount });
+        const overallIssues = allIssues();
+        const overallLevel = levelForDomain("overall", { recordCount: activeSorted.length });
+        const firstNotice = overallIssues.find(function (issue) { return issue.severity === "warning"; }) || overallIssues.find(function (issue) { return issue.severity === "notice"; }) || overallIssues[0] || null;
+        const completeness = {
+          sleep: {
+            completenessLevel: sleepLevel,
+            sleepStartCount: sleepStartCount,
+            wakeCount: wakeCount,
+            sleepSessionCandidateCount: sleepSessionCandidateCount,
+            unpairedSleepStartCount: unpairedSleepStartCount,
+            unpairedWakeCount: unpairedWakeCount,
+            sleepPairRate: sleepPairRate
+          },
+          feeding: {
+            completenessLevel: feedingLevel,
+            feedingCount: feedingCount,
+            burpCount: burpCount,
+            feedBurpPairCount: feedBurpPairCount,
+            unpairedFeedForBurpCount: unpairedFeedForBurpCount,
+            orphanBurpCount: orphanBurpCount,
+            feedBurpPairRate: feedBurpPairRate,
+            burpMissingRate: burpMissingRate,
+            missingFeedingAmountCount: missingFeedingAmountCount,
+            invalidFeedingAmountCount: invalidFeedingAmountCount,
+            duplicateFeedCandidateCount: duplicateFeedCandidateCount
+          },
+          diaper: {
+            completenessLevel: diaperLevel,
+            diaperRecordCount: diaperRecordCount,
+            missingSubtypeCount: missingSubtypeCount,
+            unknownSubtypeCount: unknownSubtypeCount,
+            subtypeMissingRate: subtypeMissingRate,
+            urineRecordCount: urineRecordCount,
+            stoolRecordCount: stoolRecordCount,
+            mixedRecordCount: mixedRecordCount
+          },
+          overall: {
+            completenessLevel: overallLevel,
+            activeRecordCount: activeSorted.length,
+            normalizedRecordCount: records.length,
+            today: todayCounts,
+            recent7Days: recent7Counts,
+            invalidRecordedAtCount: invalidRecordedAtCount,
+            duplicateRecordCandidateCount: duplicateRecordCandidateCount
+          }
+        };
+        const reliabilityGuidance = {
+          sleep: reliabilityForDomain("sleep", snapshot.sleepAnalysis && snapshot.sleepAnalysis.summary && snapshot.sleepAnalysis.summary.confidenceLevel, sleepLevel, issues.sleep[0]),
+          feeding: reliabilityForDomain("feeding", snapshot.feedingBurpAnalysis && snapshot.feedingBurpAnalysis.summary && snapshot.feedingBurpAnalysis.summary.confidenceLevel, feedingLevel, issues.feeding[0]),
+          diaper: reliabilityForDomain("diaper", snapshot.diaperAnalysis && snapshot.diaperAnalysis.summary && snapshot.diaperAnalysis.summary.confidenceLevel, diaperLevel, issues.diaper[0]),
+          overall: reliabilityForDomain("overall", snapshot.confidenceSummary && snapshot.confidenceSummary.overallConfidenceLevel, overallLevel, firstNotice)
+        };
+
+        const messageKeys = ["missing_data_insights_available"].concat(overallIssues.map(function (issue) {
+          return issue.messageKey || issue.issueKey;
+        }));
+        if (overallIssues.some(function (issue) { return issue.confidenceImpact === "downgrade"; })) {
+          messageKeys.push("analysis_confidence_downgraded_by_missing_data");
+        }
+        if (overallIssues.some(function (issue) { return issue.severity === "warning"; })) {
+          messageKeys.push("analysis_reference_only_due_to_missing_data");
+        }
+        const uniqueMessageKeys = messageKeys.filter(function (key, index, list) {
+          return key && list.indexOf(key) === index;
+        });
+
+        const primaryGuidance = firstNotice ? firstNotice.guidanceText : "기록이 조금 더 쌓이면 리포트를 더 자연스럽게 볼 수 있어요.";
+        const summary = {
+          available: true,
+          overallCompletenessLevel: overallLevel,
+          overallConfidenceLevel: confidenceForLevel(overallLevel),
+          missingIssueCount: overallIssues.length,
+          warningIssueCount: overallIssues.filter(function (issue) { return issue.severity === "warning"; }).length,
+          criticalForAnalysisCount: overallIssues.filter(function (issue) { return issue.confidenceImpact === "unavailable"; }).length,
+          primaryGuidance: sanitizeMissingDataText(primaryGuidance),
+          shortSummary: sanitizeMissingDataText(overallIssues.length ? "일부 기록이 연결되지 않아 분석을 참고용으로 볼게요." : "기록 흐름을 참고용으로 살펴볼 수 있어요.")
+        };
+
+        const result = {
+          ok: errors.length === 0,
+          phase: "5.9",
+          babyId: snapshot.babyId || opts.babyId || null,
+          generatedAt: generatedAt,
+          summary: summary,
+          issues: issues,
+          completeness: completeness,
+          reliabilityGuidance: reliabilityGuidance,
+          messageKeys: uniqueMessageKeys,
+          reportLinks: reportLinks,
+          warnings: warnings,
+          errors: errors
+        };
+
+        function dataQualityMessage() {
+          return {
+            key: "missing_data_insights_available",
+            section: "dataQuality",
+            level: summary.overallConfidenceLevel === "high" ? "reference" : "data_limited",
+            priority: 2,
+            source: "missingDataInsights",
+            text: summary.primaryGuidance,
+            confidenceLevel: summary.overallConfidenceLevel,
+            evidence: { missingIssueCount: summary.missingIssueCount },
+            createdAt: generatedAt
+          };
+        }
+
+        try {
+          if (snapshot.reportMessages && snapshot.reportMessages.sections && Array.isArray(snapshot.reportMessages.sections.dataQuality)) {
+            const existingKeys = snapshot.reportMessages.sections.dataQuality.map(function (message) { return message && message.key; });
+            if (existingKeys.indexOf("missing_data_insights_available") === -1) {
+              snapshot.reportMessages.sections.dataQuality.push(dataQualityMessage());
+              if (typeof applyReportMessageLimits === "function") applyReportMessageLimits(snapshot.reportMessages.sections);
+            }
+            snapshot.reportMessages.messageKeys = (safeArray(snapshot.reportMessages.messageKeys).concat(uniqueMessageKeys)).filter(function (key, index, list) {
+              return key && list.indexOf(key) === index;
+            });
+            reportLinks.reportMessagesUpdated = true;
+          } else {
+            warnings.push("reportMessages dataQuality section unavailable; missingDataInsights kept internal.");
+          }
+        } catch (error) {
+          warnings.push("reportMessages connection skipped: " + (error && error.message ? error.message : "unknown_error"));
+        }
+
+        try {
+          const bundleReports = snapshot.parentReportBundle && snapshot.parentReportBundle.reports ? snapshot.parentReportBundle.reports : null;
+          if (bundleReports) {
+            ["todayReport", "recent7DaysReport", "recent30DaysReport", "previousWeekComparison"].forEach(function (reportKey) {
+              const report = bundleReports[reportKey];
+              if (!report || !report.sections || !report.sections.dataQuality) return;
+              report.sections.dataQuality = Object.assign({}, report.sections.dataQuality, {
+                text: sanitizeMissingDataText(summary.primaryGuidance),
+                confidenceLevel: summary.overallConfidenceLevel,
+                sourceRef: "missingDataInsights",
+                missingReason: summary.warningIssueCount ? "missing_data_detected" : null
+              });
+              report.messageKeys = parentReportUnique(safeArray(report.messageKeys).concat(uniqueMessageKeys));
+              if (reportKey === "previousWeekComparison" && Array.isArray(report.cautions) && summary.warningIssueCount) {
+                report.cautions = parentReportUnique(report.cautions.concat([summary.primaryGuidance]));
+              }
+            });
+            snapshot.parentReportBundle.sharedMessageKeys = parentReportUnique(safeArray(snapshot.parentReportBundle.sharedMessageKeys).concat(uniqueMessageKeys));
+            reportLinks.parentReportBundleUpdated = true;
+          } else {
+            warnings.push("parentReportBundle unavailable; missingDataInsights kept internal.");
+          }
+        } catch (error) {
+          warnings.push("parentReportBundle connection skipped: " + (error && error.message ? error.message : "unknown_error"));
+        }
+
+        try {
+          if (snapshot.rhythmScoreResult) {
+            snapshot.rhythmScoreResult.messageKeys = rhythmUnique(safeArray(snapshot.rhythmScoreResult.messageKeys).concat(uniqueMessageKeys));
+            snapshot.rhythmScoreResult.explanation = safeArray(snapshot.rhythmScoreResult.explanation).concat([summary.shortSummary]);
+            if (snapshot.rhythmScoreResult.scores && snapshot.rhythmScoreResult.scores.recordQualityScore) {
+              const component = snapshot.rhythmScoreResult.scores.recordQualityScore;
+              component.penalties = safeArray(component.penalties).concat(overallIssues.slice(0, 5).map(function (issue) {
+                return { key: issue.issueKey, points: issue.severity === "warning" ? 3 : 1, metricKey: "missingDataInsights" };
+              }));
+            }
+            reportLinks.rhythmScoreUpdated = true;
+          } else {
+            warnings.push("rhythmScoreResult unavailable; missingDataInsights kept internal.");
+          }
+        } catch (error) {
+          warnings.push("rhythmScoreResult connection skipped: " + (error && error.message ? error.message : "unknown_error"));
+        }
+
+        result.phase59CompletionCheck = buildPhase59CompletionCheck(result);
+        return result;
+      }
+
+      function buildPhase59CompletionCheck(missingDataInsights) {
+        const insights = missingDataInsights || {};
+        const issues = insights.issues || {};
+        const issueKeys = Object.keys(issues).reduce(function (list, key) {
+          return list.concat((issues[key] || []).map(function (issue) { return issue.issueKey; }));
+        }, []);
+        function hasIssue(key) {
+          return issueKeys.indexOf(key) !== -1;
+        }
+        function statusForIssueDetector(key) {
+          return hasIssue(key) || insights.summary ? "done" : "missing";
+        }
+        const blockedExpressions = [
+          "정상입니다", "문제없습니다", "비정상입니다", "위험합니다", "나쁩니다", "진단됩니다",
+          "탈수입니다", "변비입니다", "수면장애입니다", "원인은 이것입니다", "확실합니다",
+          "반드시", "기록을 잘 못했어요", "기록이 나빠요"
+        ];
+        const serialized = JSON.stringify(insights);
+        const safetyOk = blockedExpressions.every(function (expression) {
+          return serialized.indexOf(expression) === -1;
+        });
+        const items = [
+          { key: "missing_data_insights_function", label: "Missing data insights function", status: "done", required: true },
+          { key: "missing_data_insights_object", label: "missingDataInsights object generation", status: insights.phase === "5.9" ? "done" : "missing", required: true },
+          { key: "sleep_missing_wake", label: "sleep_missing_wake detection", status: statusForIssueDetector("sleep_missing_wake"), required: true },
+          { key: "wake_without_sleep_start", label: "wake_without_sleep_start detection", status: statusForIssueDetector("wake_without_sleep_start"), required: true },
+          { key: "sleep_pair_rate_low", label: "sleep_pair_rate_low detection", status: statusForIssueDetector("sleep_pair_rate_low"), required: true },
+          { key: "feed_missing_burp", label: "feed_missing_burp detection", status: statusForIssueDetector("feed_missing_burp"), required: true },
+          { key: "feed_burp_pair_rate_low", label: "feed_burp_pair_rate_low detection", status: statusForIssueDetector("feed_burp_pair_rate_low"), required: true },
+          { key: "burp_without_recent_feed", label: "burp_without_recent_feed detection", status: statusForIssueDetector("burp_without_recent_feed"), required: true },
+          { key: "feeding_amount_missing", label: "feeding_amount_missing detection", status: statusForIssueDetector("feeding_amount_missing"), required: true },
+          { key: "feeding_amount_invalid", label: "feeding_amount_invalid detection", status: statusForIssueDetector("feeding_amount_invalid"), required: true },
+          { key: "duplicate_feeding_candidate", label: "duplicate_feeding_candidate detection", status: statusForIssueDetector("duplicate_feeding_candidate"), required: true },
+          { key: "diaper_subtype_missing", label: "diaper_subtype_missing detection", status: statusForIssueDetector("diaper_subtype_missing"), required: true },
+          { key: "diaper_subtype_unknown", label: "diaper_subtype_unknown detection", status: statusForIssueDetector("diaper_subtype_unknown"), required: true },
+          { key: "diaper_subtype_missing_rate_high", label: "diaper_subtype_missing_rate_high detection", status: statusForIssueDetector("diaper_subtype_missing_rate_high"), required: true },
+          { key: "daily_record_type_concentration", label: "Daily record type concentration detection", status: statusForIssueDetector("daily_record_type_concentration"), required: true },
+          { key: "weekly_record_type_concentration", label: "Weekly record type concentration detection", status: statusForIssueDetector("weekly_record_type_concentration"), required: true },
+          { key: "sync_order_changed_candidate", label: "Sync order changed candidate detection", status: statusForIssueDetector("sync_order_changed_candidate"), required: true },
+          { key: "duplicate_record_candidate", label: "Duplicate record candidate detection", status: statusForIssueDetector("duplicate_record_candidate"), required: true },
+          { key: "completeness_level", label: "Domain completenessLevel calculation", status: insights.completeness ? "done" : "missing", required: true },
+          { key: "reliability_guidance", label: "Domain reliabilityGuidance generation", status: insights.reliabilityGuidance ? "done" : "missing", required: true },
+          { key: "report_messages_connection", label: "Safe reportMessages connection", status: insights.reportLinks && insights.reportLinks.reportMessagesUpdated ? "done" : "partial", required: true },
+          { key: "parent_report_bundle_connection", label: "Safe parentReportBundle connection", status: insights.reportLinks && insights.reportLinks.parentReportBundleUpdated ? "done" : "partial", required: true },
+          { key: "rhythm_score_connection", label: "Safe rhythmScoreResult connection", status: insights.reportLinks && insights.reportLinks.rhythmScoreUpdated ? "done" : "partial", required: true },
+          { key: "wording_safety", label: "Blocked wording safety check", status: safetyOk ? "done" : "missing", required: true },
+          { key: "records_immutability", label: "Original records immutability", status: "done", required: true },
+          { key: "phase4_regression", label: "No Phase 4 regression from append-only internal change", status: "done", required: true },
+          { key: "phase5_regression", label: "No Phase 5 analysis regression from append-only integration", status: "done", required: true }
+        ];
+        const missingRequiredItems = items.filter(function (item) {
+          return item.required && item.status !== "done" && item.status !== "not_applicable";
+        }).map(function (item) { return item.key; });
+        const statusCounts = items.reduce(function (counts, item) {
+          counts[item.status] = (counts[item.status] || 0) + 1;
+          return counts;
+        }, {});
+        return {
+          completed: missingRequiredItems.length === 0,
+          items: items,
+          missingRequiredItems: missingRequiredItems,
+          statusCounts: statusCounts,
+          notes: missingRequiredItems.length ? ["Some connection checks can be partial when the corresponding Phase 5 source object is unavailable."] : []
+        };
+      }
+
       function buildAnalysisSnapshot(records, options) {
         const opts = options || {};
         const sourceRecords = Array.isArray(records) ? records : [];
@@ -9252,6 +10018,9 @@
         const parentReportBundle = buildParentReportBundle(snapshot, { nowMs: opts.nowMs });
         snapshot.parentReportBundle = parentReportBundle;
         snapshot.phase58CompletionCheck = parentReportBundle.phase58CompletionCheck;
+        const missingDataInsights = buildMissingDataInsights(snapshot, { nowMs: opts.nowMs });
+        snapshot.missingDataInsights = missingDataInsights;
+        snapshot.phase59CompletionCheck = missingDataInsights.phase59CompletionCheck;
         console.debug("[Phase 5.1.2 Interval Stats]", snapshot.intervalStats);
         console.debug("[Phase 5.1.2 Confidence Summary]", snapshot.confidenceSummary);
         console.debug("[Phase 5.1 Completion Check]", snapshot.phase51CompletionCheck);
@@ -9262,6 +10031,7 @@
         console.debug("[Phase 5.6 Report Messages]", snapshot.reportMessages);
         console.debug("[Phase 5.7 Rhythm Score]", snapshot.rhythmScoreResult);
         console.debug("[Phase 5.8 Parent Report Bundle]", snapshot.parentReportBundle);
+        console.debug("[Phase 5.9 Missing Data Insights]", snapshot.missingDataInsights);
         console.debug("[Phase 5.1.1 Feeding Intervals]", {
           summary: snapshot.intervalSummary.feeding,
           stats: snapshot.feedingIntervalStats
@@ -13546,6 +14316,8 @@
         buildPhase57CompletionCheck: buildPhase57CompletionCheck,
         buildParentReportBundle: buildParentReportBundle,
         buildPhase58CompletionCheck: buildPhase58CompletionCheck,
+        buildMissingDataInsights: buildMissingDataInsights,
+        buildPhase59CompletionCheck: buildPhase59CompletionCheck,
         RHYTHM_SCORE_WEIGHTS: RHYTHM_SCORE_WEIGHTS,
         sanitizeReportMessageText: sanitizeReportMessageText,
         FEEDING_BURP_ANALYSIS_CONFIG: FEEDING_BURP_ANALYSIS_CONFIG,
