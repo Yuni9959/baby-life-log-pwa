@@ -889,10 +889,7 @@
       overflow: hidden;
       pointer-events: none;
       user-select: none;
-      background:
-        radial-gradient(circle at 14% 8%, rgba(244, 224, 209, 0.78), transparent 24%),
-        radial-gradient(circle at 88% 18%, rgba(125, 163, 127, 0.18), transparent 26%),
-        linear-gradient(180deg, #FAF6EF 0%, #F6EFE4 100%);
+      background: #FAF6EF;
     }
     .app-wallpaper::after {
       content: "";
@@ -1000,7 +997,7 @@
       font-weight: 800;
     }
 
-    /* Phase 5.5.3 UI match-photo1 overrides */
+    /* Phase 5.5.4 hotfix_UI button-polish overrides */
     body {
       background: var(--bg);
       color: var(--tx);
@@ -1222,7 +1219,24 @@
       gap: 10px;
     }
 
+    .quick-feeding-card {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      min-width: 0;
+      min-height: 132px;
+      padding: 14px;
+      border: var(--bd-btn) solid var(--feed-bd);
+      border-radius: var(--r-btn);
+      background: var(--feed-bg);
+      color: var(--feed-tx);
+    }
+
     .record-action {
+      display: flex;
+      flex-direction: column;
+      align-items: stretch;
+      justify-content: flex-start;
       min-height: 124px;
       padding: 17px;
       border: var(--bd-btn) solid var(--card-bd);
@@ -1235,11 +1249,13 @@
 
     .quick-row-primary .record-action {
       min-height: 132px;
+      gap: 18px;
     }
 
     .quick-row-secondary .record-action {
       min-height: 104px;
-      padding: 14px 12px;
+      padding: 15px 14px;
+      gap: 10px;
     }
 
     .record-action:hover {
@@ -1251,6 +1267,16 @@
       border-color: var(--feed-bd);
       background: var(--feed-bg);
       color: var(--feed-tx);
+    }
+
+    .quick-feeding-card .record-action[data-record-type="feeding"] {
+      flex: 1 1 auto;
+      min-height: 82px;
+      padding: 0;
+      border: 0;
+      border-radius: 0;
+      background: transparent;
+      color: inherit;
     }
 
     .record-action[data-record-type="diaper"] {
@@ -1277,56 +1303,105 @@
       color: var(--wake-tx);
     }
 
-    .action-title {
-      display: grid;
-      gap: 4px;
+    .action-title,
+    .action-heading {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      width: 100%;
       color: currentColor;
       font-size: 16px;
+      font-weight: 700;
+      line-height: 1.2;
+    }
+
+    .action-label {
+      display: inline-flex;
+      align-items: center;
+      min-width: 0;
+      gap: 7px;
+      white-space: nowrap;
+    }
+
+    .action-label::before {
+      content: "";
+      display: inline-grid;
+      place-items: center;
+      flex: 0 0 auto;
+      width: 24px;
+      height: 24px;
+      border: 1.5px solid currentColor;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, .48);
+      font-size: 12px;
+      font-weight: 800;
+      line-height: 1;
+    }
+
+    .record-action[data-record-type="feeding"] .action-label::before { content: "ml"; }
+    .record-action[data-record-type="diaper"] .action-label::before { content: "▣"; }
+    .record-action[data-record-type="burp"] .action-label::before { content: "♪"; }
+    .record-action[data-record-type="sleep"] .action-label::before { content: "☾"; }
+    .record-action[data-record-type="wake"] .action-label::before { content: "☼"; }
+
+    .action-title small,
+    .action-inline {
+      flex: 0 0 auto;
+      padding: 3px 0;
+      color: currentColor;
+      font-size: 11.5px;
+      font-weight: 800;
+      line-height: 1.2;
+      white-space: nowrap;
+    }
+
+    .last-record-group {
+      display: grid;
+      gap: 4px;
+      min-width: 0;
+      margin-top: auto;
+    }
+
+    .last-record-label {
+      color: var(--tx-3);
+      font-size: 11px;
       font-weight: 600;
       line-height: 1.2;
     }
 
-    .quick-row-secondary .record-action .action-title {
-      display: grid;
-      gap: 4px;
-      font-size: 16px;
-    }
-
-    .action-title small {
-      justify-self: start;
-      padding: 3px 8px;
-      border-radius: 999px;
-      background: rgba(255, 255, 255, .54);
-      color: currentColor;
-      font-size: 11.5px;
-      font-weight: 700;
-    }
-
-    .record-action[data-record-type="feeding"] .action-title::before { content: "ml"; }
-    .record-action[data-record-type="diaper"] .action-title::before { content: "▣"; }
-    .record-action[data-record-type="burp"] .action-title::before { content: "♪"; }
-    .record-action[data-record-type="sleep"] .action-title::before { content: "☾"; }
-    .record-action[data-record-type="wake"] .action-title::before { content: "☼"; }
-
-    .record-action .action-title::before {
-      font-size: 19px;
-      line-height: 1;
-    }
-
     .last-record {
-      font-size: 12px;
-      font-weight: 600;
+      display: block;
+      min-width: 0;
+      color: currentColor;
+      font-size: 12.5px;
+      font-weight: 700;
+      line-height: 1.35;
+      overflow-wrap: anywhere;
+    }
+
+    .quick-row-secondary .record-action .action-title {
+      justify-content: flex-start;
+      gap: 8px;
+      font-size: 15px;
+    }
+
+    .quick-row-secondary .last-record {
+      color: var(--tx-2);
+      font-size: 11.5px;
+      font-weight: 650;
     }
 
     .feeding-detail-button {
       min-height: 42px;
+      width: 100%;
       border: var(--bd-btn) solid var(--feed-bd);
       border-radius: var(--r-btn);
       background: rgba(255,255,255,.56);
       color: var(--feed-tx);
       box-shadow: none;
       font-size: 13px;
-      font-weight: 700;
+      font-weight: 800;
     }
 
     .collapsible-head {
@@ -1570,6 +1645,10 @@
     @media (max-width: 430px) {
       .app-shell { padding-inline: 12px; }
       .status-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+      .quick-feeding-card { padding: 12px; }
+      .action-heading { gap: 4px; }
+      .action-label { gap: 6px; }
+      .action-inline { font-size: 10.5px; }
       .illustration-slot { width: clamp(82px, 28vw, 128px); }
       .slot-3 { left: -12%; }
       .slot-4 { right: -12%; }
@@ -1581,6 +1660,10 @@
       .edit-record,
       .delete-record { grid-column: 2; justify-self: start; }
       .status-item { padding: 11px 9px; }
+      .quick-feeding-card { padding: 11px 8px; }
+      .quick-row-primary .record-action,
+      .quick-row-secondary .record-action { padding: 11px 8px; }
+      .quick-feeding-card .record-action[data-record-type="feeding"] { padding: 0; }
     }
   </style>
 </head>
@@ -1709,27 +1792,39 @@
       <div class="quick-row-primary">
         <div class="quick-feeding-card">
           <button type="button" class="record-action" data-record-type="feeding" data-record-direct="true">
-            <span class="action-title">수유 <small>즉시 기록</small></span>
-            <span class="last-record" id="last-feeding">마지막 기록: 없음</span>
+            <span class="action-heading">
+              <span class="action-label">수유</span>
+              <span class="action-inline">즉시 기록 ⚡</span>
+            </span>
+            <span class="last-record-group">
+              <span class="last-record-label">마지막 기록</span>
+              <span class="last-record" id="last-feeding">없음</span>
+            </span>
           </button>
           <button type="button" class="feeding-detail-button" data-sheet-only="feeding">상세설정</button>
         </div>
         <button type="button" class="record-action" data-record-type="diaper" data-sheet-only="diaper">
-          <span class="action-title">기저귀 <small>종류 선택 ›</small></span>
-          <span class="last-record" id="last-diaper">마지막 기록: 없음</span>
+          <span class="action-heading">
+            <span class="action-label">기저귀</span>
+            <span class="action-inline">종류 선택 ›</span>
+          </span>
+          <span class="last-record-group">
+            <span class="last-record-label">마지막 기록</span>
+            <span class="last-record" id="last-diaper">없음</span>
+          </span>
         </button>
       </div>
       <div class="quick-row-secondary">
         <button type="button" class="record-action" data-record-type="burp" data-record-direct="true">
-          <span class="action-title">트림</span>
+          <span class="action-title"><span class="action-label">트림</span></span>
           <span class="last-record" id="last-burp">없음</span>
         </button>
         <button type="button" class="record-action" data-record-type="sleep" data-record-direct="true">
-          <span class="action-title">잠듦</span>
+          <span class="action-title"><span class="action-label">잠듦</span></span>
           <span class="last-record" id="last-sleep">없음</span>
         </button>
         <button type="button" class="record-action" data-record-type="wake" data-record-direct="true">
-          <span class="action-title">깨어남</span>
+          <span class="action-title"><span class="action-label">깨어남</span></span>
           <span class="last-record" id="last-wake">없음</span>
         </button>
       </div>
@@ -2160,12 +2255,12 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="./cloud-config.js?v=5.5.3-ui-match-photo1"></script>
-  <script src="./cloud-supabase.js?v=5.5.3-ui-match-photo1"></script>
+  <script src="./cloud-config.js?v=5.5.4-ui-button-polish"></script>
+  <script src="./cloud-supabase.js?v=5.5.4-ui-button-polish"></script>
   <script>
     document.addEventListener("DOMContentLoaded", function () {
       if ("serviceWorker" in navigator) {
-        navigator.serviceWorker.register("./sw.js?v=5.5.3-ui-match-photo1").catch(function (error) {
+        navigator.serviceWorker.register("./sw.js?v=5.5.4-ui-button-polish").catch(function (error) {
           console.warn("Service worker registration failed", error);
         });
       }
@@ -2359,9 +2454,9 @@
       const PRE_REPAIR_BACKUP_KEY = "baby_life_log_app_backup_before_repair";
       const BACKUP_FORMAT_VERSION = 2;
       const APP_NAME = "baby-life-log";
-      const APP_VERSION = "5.5.3";
-      const APP_PHASE_LABEL = "가족 workspace · UI match-photo1";
-      const SERVICE_WORKER_CACHE_NAME = "babylog-cache-v5-5-3-ui-match-photo1";
+      const APP_VERSION = "5.5.4";
+      const APP_PHASE_LABEL = "가족 workspace · UI button-polish";
+      const SERVICE_WORKER_CACHE_NAME = "babylog-cache-v5-5-4-ui-button-polish";
       const APP_INIT_TIME = new Date().toISOString();
       const ANALYSIS_API_ENDPOINT = "";
       const SERVER_OVERWRITE_BACKUP_KEY = "babylog_records_backup_before_server_overwrite";
@@ -8638,11 +8733,11 @@
         const last = getRecords(type)[0];
         const target = document.getElementById("last-" + type);
         if (!target) return;
-        if (!last) { target.textContent = "마지막 기록: 없음"; return; }
+        if (!last) { target.textContent = "없음"; return; }
         let suffix = "";
         if (type === "feeding") suffix = " · " + feedingSummary(last);
         if (type === "diaper") suffix = last.subtype ? " · " + subtypeLabels[last.subtype] : "";
-        target.textContent = "마지막 기록: " + elapsedText(last.createdAt) + suffix;
+        target.textContent = elapsedText(last.createdAt) + suffix;
       }
 
       function feedingSummary(record) {
