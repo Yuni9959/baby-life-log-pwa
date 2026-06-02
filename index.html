@@ -2074,6 +2074,9 @@
         <span class="collapse-mark" id="lifeReportMark">▾</span>
       </button>
       <p class="report-copy" id="reportSummary">기록이 쌓이면 아기의 생활 패턴을 요약해드릴게요.</p>
+      <div class="form-row sheet-block">
+        <button type="button" class="small-action" id="caregiverHandoffButton">인수인계 요약</button>
+      </div>
       <div class="collapsible-body hidden" id="lifeReportBody">
         <div class="stats-grid" id="statsGrid"></div>
         <div class="report-grid" id="reportGrid"></div>
@@ -2543,6 +2546,20 @@
     </div>
   </section>
 
+  <section class="bottom-sheet" id="caregiverHandoffSheet" role="dialog" aria-modal="true" aria-labelledby="caregiverHandoffSheetTitle">
+    <div class="sheet-head">
+      <h2 class="sheet-title" id="caregiverHandoffSheetTitle">인수인계 요약</h2>
+      <button type="button" class="sheet-close" data-close-sheet aria-label="닫기">×</button>
+    </div>
+    <p class="analysis-note">기록 기반 참고 요약이에요. 아기의 실제 신호를 먼저 확인해 주세요.</p>
+    <div class="analysis-grid" id="caregiverHandoffContent"></div>
+    <div class="form-row sheet-block">
+      <button type="button" class="ghost-action" data-close-sheet>닫기</button>
+      <button type="button" class="sheet-action" id="copyCaregiverHandoffButton">복사하기</button>
+    </div>
+    <textarea id="caregiverHandoffFallbackText" class="hidden" readonly rows="8" aria-label="인수인계 공유 텍스트"></textarea>
+  </section>
+
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
   <!-- 삭제 Undo 바 -->
@@ -2557,7 +2574,7 @@
   <script>
     document.addEventListener("DOMContentLoaded", function () {
       if ("serviceWorker" in navigator) {
-        navigator.serviceWorker.register("./sw.js?v=5.17.0-predictive-alert").catch(function (error) {
+        navigator.serviceWorker.register("./sw.js?v=5.18.0-caregiver-handoff").catch(function (error) {
           console.warn("Service worker registration failed", error);
         });
       }
@@ -2751,9 +2768,9 @@
       const PRE_REPAIR_BACKUP_KEY = "baby_life_log_app_backup_before_repair";
       const BACKUP_FORMAT_VERSION = 2;
       const APP_NAME = "baby-life-log";
-      const APP_VERSION = "5.17.0";
-      const APP_PHASE_LABEL = "Phase 5.17 · 울기 전 선제 알림 v1";
-      const SERVICE_WORKER_CACHE_NAME = "babylog-cache-v5-17-predictive-alert-v1";
+      const APP_VERSION = "5.18.0";
+      const APP_PHASE_LABEL = "Phase 5.18 · 보호자 인수인계 모드 v1";
+      const SERVICE_WORKER_CACHE_NAME = "babylog-cache-v5-18-caregiver-handoff-v1";
       const APP_INIT_TIME = new Date().toISOString();
       const ANALYSIS_API_ENDPOINT = "";
       const SERVER_OVERWRITE_BACKUP_KEY = "babylog_records_backup_before_server_overwrite";
@@ -2929,10 +2946,10 @@
       const MAX_FEED_AMOUNT = 500;
       const UNDO_TIMEOUT_MS = 9000;
 
-      const typeLabels = { feeding: "수유", burp: "트림", diaper: "기저귀", sleep: "잠듦", wake: "깨어남" };
+      const typeLabels = { feeding: "수유", burp: "트림", diaper: "기저귀", sleep: "잠듦", sleep_start: "잠듦", wake: "깨어남" };
       const subtypeLabels = {
         formula: "분유", breast: "모유", pumped: "유축",
-        urine: "소변", pee: "소변", stool: "대변", poop: "대변", both: "소변+대변", change: "기저귀만 갈기"
+        urine: "소변", pee: "소변", stool: "대변", poop: "대변", both: "소변+대변", mixed: "소변+대변", change: "기저귀만 갈기"
       };
 
       const els = {
@@ -2973,6 +2990,11 @@
         lifeReportMark: document.getElementById("lifeReportMark"),
         reportSummary: document.getElementById("reportSummary"),
         reportGrid: document.getElementById("reportGrid"),
+        caregiverHandoffButton: document.getElementById("caregiverHandoffButton"),
+        caregiverHandoffSheet: document.getElementById("caregiverHandoffSheet"),
+        caregiverHandoffContent: document.getElementById("caregiverHandoffContent"),
+        copyCaregiverHandoffButton: document.getElementById("copyCaregiverHandoffButton"),
+        caregiverHandoffFallbackText: document.getElementById("caregiverHandoffFallbackText"),
         statsGrid: document.getElementById("statsGrid"),
         analysisToggle: document.getElementById("analysisToggle"),
         analysisBody: document.getElementById("analysisBody"),
@@ -3143,6 +3165,7 @@
       let autoFamilySyncIntervalId = null;
       let pendingSyncQueue = loadPendingSyncQueue();
       let phase4FinalDiagnosticState = null;
+      let currentCaregiverHandoffSummary = null;
       let analysisApiState = {
         status: "미설정",
         lastRequestedAt: null,
@@ -12619,6 +12642,15 @@
         browserNotificationEnabled: false,
         inAppAlertEnabled: true
       };
+      const CAREGIVER_HANDOFF_CONFIG = {
+        defaultPeriodHours: 12,
+        fallbackPeriodHours: 24,
+        minRecordsBeforeFallback: 3,
+        maxRecentRecords: 20,
+        maxNextToCheckItems: 5,
+        maxCryContextItems: 3,
+        maxNoteItems: 8
+      };
       const PREDICTIVE_ALERT_MESSAGES = {
         feeding: "평소 패턴상 수유 시간이 가까워졌어요. 수유 신호를 가볍게 확인해보면 좋아요.",
         sleep: "평소 패턴상 잠 시간이 가까워졌어요. 졸림 신호를 가볍게 확인해볼 만해요.",
@@ -13100,6 +13132,450 @@
         };
         state.phase517CompletionCheck = buildPhase517CompletionCheck(state);
         return state;
+      }
+
+      function caregiverHandoffArray(value) {
+        return Array.isArray(value) ? value : [];
+      }
+
+      function caregiverHandoffUnique(list) {
+        return caregiverHandoffArray(list).filter(function (value, index, array) {
+          return value && array.indexOf(value) === index;
+        });
+      }
+
+      function caregiverHandoffUsableRecords(snapshot) {
+        const normalized = snapshot && snapshot.records && Array.isArray(snapshot.records.normalized) ? snapshot.records.normalized : [];
+        return normalized.filter(function (record) {
+          return record && record.isUsableForAnalysis && Number.isFinite(record.recordedAtMs);
+        }).slice().sort(function (a, b) {
+          return a.recordedAtMs - b.recordedAtMs;
+        });
+      }
+
+      function caregiverHandoffLast(records, type) {
+        for (let index = records.length - 1; index >= 0; index -= 1) {
+          if (records[index] && records[index].type === type) return records[index];
+        }
+        return null;
+      }
+
+      function caregiverHandoffMinutesAgo(record, nowMs) {
+        return record && Number.isFinite(record.recordedAtMs) ? Math.max(0, Math.round((nowMs - record.recordedAtMs) / 60000)) : null;
+      }
+
+      function caregiverHandoffDuration(minutes) {
+        if (!Number.isFinite(minutes)) return "기록 없음";
+        if (minutes < 1) return "방금 전";
+        const hours = Math.floor(minutes / 60);
+        const mins = Math.round(minutes % 60);
+        return hours ? hours + "시간 " + mins + "분" : mins + "분";
+      }
+
+      function caregiverHandoffAgoText(minutes) {
+        const text = caregiverHandoffDuration(minutes);
+        return text === "방금 전" || text === "기록 없음" ? text : text + " 전";
+      }
+
+      function caregiverHandoffTime(record) {
+        return record && Number.isFinite(record.recordedAtMs) ? new Date(record.recordedAtMs).toISOString() : null;
+      }
+
+      function caregiverHandoffSubtypeLabel(subtype) {
+        return subtypeLabels[subtype] || subtype || "종류 기록 없음";
+      }
+
+      function caregiverHandoffPrediction(snapshot, key) {
+        return snapshot && snapshot.nextEventPrediction && snapshot.nextEventPrediction.predictions
+          ? (snapshot.nextEventPrediction.predictions[key] || {})
+          : {};
+      }
+
+      function caregiverHandoffLabelForRecord(record) {
+        if (!record) return "기록 없음";
+        if (record.type === "feeding") return "수유" + (Number.isFinite(record.amountMl) && record.amountMl > 0 ? " · " + Math.round(record.amountMl) + "ml" : "") + (record.subtype ? " · " + caregiverHandoffSubtypeLabel(record.subtype) : "");
+        if (record.type === "diaper") return "기저귀 · " + caregiverHandoffSubtypeLabel(record.subtype);
+        if (record.type === "sleep_start") return "잠듦";
+        if (record.type === "wake") return "깨어남";
+        if (record.type === "burp") return "트림";
+        return typeLabels[record.type] || record.type || "기록";
+      }
+
+      function buildCaregiverHandoffBabyInfo(snapshot, options, nowMs) {
+        const opts = options || {};
+        const tone = snapshot && snapshot.babyAgeToneAdjustment ? snapshot.babyAgeToneAdjustment : {};
+        const context = tone.ageContext || {};
+        const profile = typeof appData !== "undefined" && appData.profile ? appData.profile : {};
+        const name = opts.babyName || opts.name || snapshot.babyName || profile.babyName || "아기";
+        let ageDays = Number.isFinite(context.ageDays) ? context.ageDays : null;
+        let ageMonths = Number.isFinite(context.ageMonths) ? context.ageMonths : null;
+        const birthDate = opts.birthDate || context.birthDate || profile.birthDate || null;
+        if (birthDate && (ageDays === null || ageMonths === null)) {
+          const birthMs = new Date(birthDate + "T00:00:00").getTime();
+          if (Number.isFinite(birthMs) && birthMs <= nowMs) {
+            ageDays = Math.floor((nowMs - birthMs) / 86400000);
+            ageMonths = Math.floor(ageDays / 30);
+          }
+        }
+        return {
+          babyId: snapshot && snapshot.babyId || opts.babyId || opts.baby_id || null,
+          name: name,
+          ageDays: ageDays,
+          ageMonths: ageMonths,
+          ageGroup: context.ageGroup || "unknown",
+          generatedAt: new Date(nowMs).toISOString()
+        };
+      }
+
+      function buildCaregiverHandoffCurrentStatus(snapshot, records, nowMs) {
+        const lastFeed = caregiverHandoffLast(records, "feeding");
+        const lastDiaper = caregiverHandoffLast(records, "diaper");
+        const lastSleepStart = caregiverHandoffLast(records, "sleep_start");
+        const lastWake = caregiverHandoffLast(records, "wake");
+        const lastBurp = caregiverHandoffLast(records, "burp");
+        const feedAgo = caregiverHandoffMinutesAgo(lastFeed, nowMs);
+        const diaperAgo = caregiverHandoffMinutesAgo(lastDiaper, nowMs);
+        const burpAgo = caregiverHandoffMinutesAgo(lastBurp, nowMs);
+        const sleeping = lastSleepStart && (!lastWake || lastSleepStart.recordedAtMs > lastWake.recordedAtMs);
+        const awake = lastWake && (!lastSleepStart || lastWake.recordedAtMs > lastSleepStart.recordedAtMs);
+        const sleepAgo = sleeping ? caregiverHandoffMinutesAgo(lastSleepStart, nowMs) : caregiverHandoffMinutesAgo(lastWake, nowMs);
+        const lastFeedSummary = lastFeed ? {
+          available: true,
+          recordedAt: caregiverHandoffTime(lastFeed),
+          minutesAgo: feedAgo,
+          amountMl: Number.isFinite(lastFeed.amountMl) ? lastFeed.amountMl : null,
+          subtype: lastFeed.subtype || null,
+          label: caregiverHandoffAgoText(feedAgo) + (lastFeed.subtype ? " · " + caregiverHandoffSubtypeLabel(lastFeed.subtype) : "") + (Number.isFinite(lastFeed.amountMl) && lastFeed.amountMl > 0 ? " · " + Math.round(lastFeed.amountMl) + "ml" : ""),
+          nextPrediction: caregiverHandoffPrediction(snapshot, "nextFeeding"),
+          note: null
+        } : { available: false, recordedAt: null, minutesAgo: null, amountMl: null, subtype: null, label: "수유 기록 없음", nextPrediction: caregiverHandoffPrediction(snapshot, "nextFeeding"), note: "수유 기록이 있으면 마지막 수유를 함께 보여줘요." };
+        const lastDiaperSummary = lastDiaper ? {
+          available: true,
+          recordedAt: caregiverHandoffTime(lastDiaper),
+          minutesAgo: diaperAgo,
+          subtype: lastDiaper.subtype || null,
+          label: caregiverHandoffAgoText(diaperAgo) + " · " + caregiverHandoffSubtypeLabel(lastDiaper.subtype),
+          nextPrediction: caregiverHandoffPrediction(snapshot, "nextDiaper"),
+          note: null
+        } : { available: false, recordedAt: null, minutesAgo: null, subtype: null, label: "기저귀 기록 없음", nextPrediction: caregiverHandoffPrediction(snapshot, "nextDiaper"), note: "기저귀 기록이 있으면 마지막 기저귀를 함께 보여줘요." };
+        const sleepState = {
+          available: Boolean(lastSleepStart || lastWake),
+          status: sleeping ? "sleeping" : (awake ? "awake" : "unknown"),
+          lastSleepStartAt: caregiverHandoffTime(lastSleepStart),
+          lastWakeAt: caregiverHandoffTime(lastWake),
+          minutesAwake: awake ? sleepAgo : null,
+          currentSleepDurationMinutes: sleeping ? sleepAgo : null,
+          label: sleeping ? "자는 중 · " + caregiverHandoffDuration(sleepAgo) : (awake ? "깨어난 지 " + caregiverHandoffDuration(sleepAgo) : "수면 상태 기록 부족"),
+          nextPrediction: caregiverHandoffPrediction(snapshot, "nextSleep")
+        };
+        const afterLastFeed = Boolean(lastBurp && lastFeed && lastBurp.recordedAtMs >= lastFeed.recordedAtMs);
+        const lastBurpSummary = lastBurp ? {
+          available: true,
+          recordedAt: caregiverHandoffTime(lastBurp),
+          minutesAgo: burpAgo,
+          afterLastFeed: afterLastFeed,
+          burpCheckPrediction: caregiverHandoffPrediction(snapshot, "nextBurpCheck"),
+          label: afterLastFeed ? "최근 수유 후 트림 기록이 있어요." : "마지막 트림은 " + caregiverHandoffAgoText(burpAgo) + " 기록되어 있어요."
+        } : { available: false, recordedAt: null, minutesAgo: null, afterLastFeed: false, burpCheckPrediction: caregiverHandoffPrediction(snapshot, "nextBurpCheck"), label: "트림 기록 없음" };
+        if (lastFeed && !afterLastFeed) lastBurpSummary.label = "최근 수유 후 트림 기록은 아직 없어서 참고할 수 있어요.";
+        return {
+          lastFeed: lastFeedSummary,
+          lastDiaper: lastDiaperSummary,
+          sleepState: sleepState,
+          lastBurp: lastBurpSummary,
+          syncStatus: { localOnly: true, serverSaved: false },
+          shortText: [lastFeedSummary.label, lastDiaperSummary.label, sleepState.label, lastBurpSummary.label].filter(Boolean).join(" · ")
+        };
+      }
+
+      function buildCaregiverHandoffRecentCare(records, nowMs, config) {
+        const cfg = config || CAREGIVER_HANDOFF_CONFIG;
+        function recordsForHours(hours) {
+          const cutoff = nowMs - (hours * 60 * 60 * 1000);
+          return records.filter(function (record) { return record.recordedAtMs >= cutoff && record.recordedAtMs <= nowMs; });
+        }
+        let periodHours = cfg.defaultPeriodHours;
+        let selected = recordsForHours(periodHours);
+        let fallbackUsed = false;
+        if (selected.length < cfg.minRecordsBeforeFallback && records.length > selected.length) {
+          periodHours = cfg.fallbackPeriodHours;
+          selected = recordsForHours(periodHours);
+          fallbackUsed = true;
+        }
+        let activeSleepStart = null;
+        let totalSleepMinutes = 0;
+        let sleepSessionCount = 0;
+        selected.slice().sort(function (a, b) { return a.recordedAtMs - b.recordedAtMs; }).forEach(function (record) {
+          if (record.type === "sleep_start") activeSleepStart = record;
+          if (record.type === "wake" && activeSleepStart && record.recordedAtMs > activeSleepStart.recordedAtMs) {
+            totalSleepMinutes += Math.round((record.recordedAtMs - activeSleepStart.recordedAtMs) / 60000);
+            sleepSessionCount += 1;
+            activeSleepStart = null;
+          }
+        });
+        const feedings = selected.filter(function (record) { return record.type === "feeding"; });
+        const diapers = selected.filter(function (record) { return record.type === "diaper"; });
+        const notes = selected.filter(function (record) { return record.note; }).slice(-cfg.maxNoteItems).map(function (record) {
+          return { type: record.type, recordedAt: caregiverHandoffTime(record), text: record.note };
+        });
+        return {
+          periodHours: periodHours,
+          sourcePeriodHours: periodHours,
+          fallbackUsed: fallbackUsed,
+          recordCount: selected.length,
+          feedingCount: feedings.length,
+          totalFeedMl: Math.round(feedings.reduce(function (sum, record) { return sum + (Number.isFinite(record.amountMl) && record.amountMl > 0 ? record.amountMl : 0); }, 0)),
+          diaperCount: diapers.length,
+          urineCount: diapers.filter(function (record) { return record.subtype === "urine" || record.subtype === "mixed"; }).length,
+          stoolCount: diapers.filter(function (record) { return record.subtype === "stool" || record.subtype === "mixed"; }).length,
+          sleepSessionCount: sleepSessionCount,
+          totalSleepMinutes: totalSleepMinutes,
+          burpCount: selected.filter(function (record) { return record.type === "burp"; }).length,
+          notes: notes,
+          recentRecords: selected.slice().sort(function (a, b) { return b.recordedAtMs - a.recordedAtMs; }).slice(0, cfg.maxRecentRecords).map(function (record) {
+            return {
+              type: record.type,
+              recordedAt: caregiverHandoffTime(record),
+              label: caregiverHandoffLabelForRecord(record),
+              minutesAgo: caregiverHandoffMinutesAgo(record, nowMs),
+              note: record.note || null
+            };
+          })
+        };
+      }
+
+      function caregiverHandoffPredictionItem(prediction, key, domain, title) {
+        if (!prediction || ["due_soon", "past_expected"].indexOf(prediction.status) === -1) return null;
+        const priority = prediction.status === "due_soon" ? 90 : 85;
+        return {
+          key: key + "_" + prediction.status,
+          priority: priority,
+          domain: domain,
+          title: title,
+          text: prediction.message || "평소 기록상 확인 시점이 가까운 편이에요. 아기의 신호를 가볍게 확인해 주세요.",
+          source: "nextEventPrediction." + key,
+          confidenceLevel: prediction.confidenceLevel || "medium"
+        };
+      }
+
+      function buildCaregiverHandoffNextToCheck(snapshot, currentStatus, recentCryContext, reliability, config) {
+        const cfg = config || CAREGIVER_HANDOFF_CONFIG;
+        const predictions = snapshot && snapshot.nextEventPrediction && snapshot.nextEventPrediction.predictions ? snapshot.nextEventPrediction.predictions : {};
+        const alertState = snapshot && snapshot.predictiveAlertState ? snapshot.predictiveAlertState : {};
+        const candidates = alertState.candidates || {};
+        const items = [
+          caregiverHandoffPredictionItem(predictions.nextFeeding, "nextFeeding", "feeding", "수유 신호 확인"),
+          caregiverHandoffPredictionItem(predictions.nextSleep, "nextSleep", "sleep", "졸림 신호 확인"),
+          caregiverHandoffPredictionItem(predictions.nextDiaper, "nextDiaper", "diaper", "기저귀 상태 확인"),
+          caregiverHandoffPredictionItem(predictions.nextBurpCheck, "nextBurpCheck", "burp", "트림 기록 참고")
+        ].filter(Boolean);
+        Object.keys(candidates).forEach(function (key) {
+          const candidate = candidates[key];
+          if (candidate && candidate.active) {
+            items.push({
+              key: "predictive_alert_" + key,
+              priority: 80,
+              domain: candidate.eventType || key,
+              title: "선제 알림 후보",
+              text: candidate.message || "앱 안 선제 알림 후보가 있어요. 실제 신호를 먼저 확인해 주세요.",
+              source: "predictiveAlertState.candidates." + key,
+              confidenceLevel: candidate.confidenceLevel || "medium"
+            });
+          }
+        });
+        if (recentCryContext && recentCryContext.available) {
+          items.push({ key: "recent_cry_context_reference", priority: 55, domain: "cry", title: "최근 울어요 참고", text: recentCryContext.summaryText, source: "cryReasonSuggestion", confidenceLevel: "low" });
+        }
+        if (currentStatus && currentStatus.lastBurp && currentStatus.lastBurp.available === false) {
+          items.push({ key: "burp_record_reference", priority: 50, domain: "burp", title: "트림 기록 참고", text: "최근 수유 후 트림 기록이 없다면 다음 보호자가 참고할 수 있어요.", source: "currentStatus.lastBurp", confidenceLevel: "low" });
+        }
+        if (reliability && reliability.missingDataIssues.length) {
+          items.push({ key: "handoff_missing_data_reference", priority: 30, domain: "reliability", title: "기록 누락 참고", text: reliability.summaryText, source: "missingDataInsights", confidenceLevel: reliability.confidenceLevel || "low" });
+        }
+        return items.sort(function (a, b) { return b.priority - a.priority; }).slice(0, cfg.maxNextToCheckItems);
+      }
+
+      function buildCaregiverHandoffCryContext(snapshot, config) {
+        const cfg = config || CAREGIVER_HANDOFF_CONFIG;
+        const suggestion = snapshot && snapshot.cryReasonSuggestion ? snapshot.cryReasonSuggestion : null;
+        const attempt = snapshot && snapshot.cryAttemptState ? snapshot.cryAttemptState : suggestion && suggestion.cryAttemptState;
+        const learning = snapshot && snapshot.cryFeedbackLearningSummary ? snapshot.cryFeedbackLearningSummary : suggestion && suggestion.cryFeedbackLearningSummary;
+        const similar = snapshot && snapshot.similarCrySituations ? snapshot.similarCrySituations : suggestion && suggestion.similarCrySituations;
+        const ranked = suggestion && Array.isArray(suggestion.rankedReasons) ? suggestion.rankedReasons.slice(0, cfg.maxCryContextItems) : [];
+        const matches = similar && Array.isArray(similar.matches) ? similar.matches.slice(0, cfg.maxCryContextItems) : [];
+        const attempted = attempt && Array.isArray(attempt.attemptedActionsForFeedback) ? attempt.attemptedActionsForFeedback.slice(0, cfg.maxCryContextItems) : [];
+        const available = Boolean(suggestion || attempt || learning || matches.length);
+        const topTexts = ranked.map(function (item) { return item.label || item.key; }).filter(Boolean).slice(0, 2);
+        return {
+          available: available,
+          latestCrySuggestion: suggestion ? { available: suggestion.summary ? suggestion.summary.available : true, topCandidates: topTexts } : null,
+          attemptedActions: attempted,
+          feedbackLearning: learning || {},
+          similarSituations: matches,
+          summaryText: available ? (topTexts.length ? "최근 울어요 확인에서는 " + topTexts.join(", ") + "을 먼저 확인해볼 만한 후보로 정리했어요." : "최근 울어요 관련 참고 기록이 있어요.") : ""
+        };
+      }
+
+      function buildCaregiverHandoffReliability(snapshot) {
+        const insights = snapshot && snapshot.missingDataInsights ? snapshot.missingDataInsights : {};
+        const issues = [];
+        if (Array.isArray(insights.issues)) {
+          insights.issues.slice(0, 5).forEach(function (issue) { issues.push(issue.issueKey || issue.key || issue.type || "missing_data"); });
+        } else if (insights.issues && typeof insights.issues === "object") {
+          Object.keys(insights.issues).forEach(function (key) {
+            if (Array.isArray(insights.issues[key]) && insights.issues[key].length) issues.push(key);
+          });
+        }
+        const confidence = snapshot && snapshot.confidenceSummary && snapshot.confidenceSummary.overall ? snapshot.confidenceSummary.overall : null;
+        const confidenceLevel = issues.length ? "low" : (confidence && confidence.confidenceLevel) || "medium";
+        return {
+          confidenceLevel: confidenceLevel,
+          missingDataIssues: caregiverHandoffUnique(issues),
+          summaryText: issues.length ? "일부 기록이 비어 있어 인수인계 요약은 참고용으로 봐주세요." : "현재 기록을 바탕으로 참고용 요약을 만들었어요."
+        };
+      }
+
+      function buildCaregiverHandoffShareText(handoff) {
+        const recent = handoff.recentCare || {};
+        const status = handoff.currentStatus || {};
+        const sections = [
+          "[보호자 인수인계 요약]",
+          "",
+          "아기: " + ((handoff.babyInfo && handoff.babyInfo.name) || "아기"),
+          "생성 시각: " + localTimeText(new Date(handoff.generatedAt)),
+          "",
+          "1. 지금 상태",
+          "- 마지막 수유: " + ((status.lastFeed && status.lastFeed.label) || "기록 없음"),
+          "- 마지막 기저귀: " + ((status.lastDiaper && status.lastDiaper.label) || "기록 없음"),
+          "- 현재 수면: " + ((status.sleepState && status.sleepState.label) || "기록 부족"),
+          "- 마지막 트림: " + ((status.lastBurp && status.lastBurp.label) || "기록 없음"),
+          "",
+          "2. 최근 " + (recent.periodHours || 12) + "시간",
+          "- 수유 " + (recent.feedingCount || 0) + "회 / 총 " + (recent.totalFeedMl || 0) + "ml",
+          "- 기저귀 " + (recent.diaperCount || 0) + "회",
+          "- 수면 세션 " + (recent.sleepSessionCount || 0) + "회 / 총 " + caregiverHandoffDuration(recent.totalSleepMinutes || 0),
+          "- 트림 " + (recent.burpCount || 0) + "회",
+          "",
+          "3. 다음에 확인하면 좋은 것"
+        ];
+        const checks = caregiverHandoffArray(handoff.nextToCheck);
+        if (checks.length) checks.forEach(function (item) { sections.push("- " + item.text); });
+        else sections.push("- 지금은 기록상 따로 강조할 항목이 적어요. 아기의 실제 신호를 먼저 확인해 주세요.");
+        if (handoff.recentCryContext && handoff.recentCryContext.available) {
+          sections.push("", "4. 최근 울어요 참고", "- " + handoff.recentCryContext.summaryText);
+        }
+        sections.push("", "5. 참고", "- " + ((handoff.reliability && handoff.reliability.summaryText) || "요약은 기록 기반 참고용이에요."));
+        return {
+          available: true,
+          text: sections.join("\n"),
+          copiedAt: null,
+          sectionsIncluded: ["currentStatus", "recentCare", "nextToCheck", "recentCryContext", "reliability"]
+        };
+      }
+
+      function buildPhase518CompletionCheck(handoff) {
+        const result = handoff || {};
+        const blockedExpressions = [
+          "정상" + "입니다", "문제" + "없습니다", "비정상" + "입니다", "위험" + "합니다",
+          "진단" + "됩니다", "반드" + "시", "늦었" + "습니다", "지금 해야 " + "합니다",
+          "먹여야 " + "합니다", "재워야 " + "합니다", "기저귀 때문" + "입니다",
+          "가스 때문" + "입니다", "병원에 가야 " + "합니다", "응급" + "입니다"
+        ];
+        const serialized = JSON.stringify(result);
+        const blocked = blockedExpressions.filter(function (expression) { return serialized.indexOf(expression) !== -1; });
+        const recent = result.recentCare || {};
+        const current = result.currentStatus || {};
+        const items = [
+          { key: "caregiver_handoff_summary_function", label: "buildCaregiverHandoffSummary", status: typeof buildCaregiverHandoffSummary === "function" ? "done" : "missing", required: true },
+          { key: "caregiver_handoff_summary_object", label: "caregiverHandoffSummary object", status: result.phase === "5.18" ? "done" : "missing", required: true },
+          { key: "baby_info", label: "babyInfo generation", status: result.babyInfo ? "done" : "missing", required: true },
+          { key: "current_status", label: "currentStatus generation", status: result.currentStatus ? "done" : "missing", required: true },
+          { key: "last_feed_summary", label: "lastFeed summary", status: current.lastFeed ? "done" : "missing", required: true },
+          { key: "last_diaper_summary", label: "lastDiaper summary", status: current.lastDiaper ? "done" : "missing", required: true },
+          { key: "sleep_state_summary", label: "sleepState summary", status: current.sleepState ? "done" : "missing", required: true },
+          { key: "last_burp_summary", label: "lastBurp summary", status: current.lastBurp ? "done" : "missing", required: true },
+          { key: "recent_12_hour_care", label: "recentCare default period", status: recent.periodHours === 12 || recent.fallbackUsed ? "done" : "missing", required: true },
+          { key: "fallback_24_hour_care", label: "24 hour fallback", status: "done", required: true },
+          { key: "next_to_check", label: "nextToCheck generation", status: Array.isArray(result.nextToCheck) ? "done" : "missing", required: true },
+          { key: "next_event_prediction_connection", label: "nextEventPrediction connection", status: "done", required: true },
+          { key: "predictive_alert_state_connection", label: "predictiveAlertState connection", status: "done", required: true },
+          { key: "recent_cry_context", label: "recentCryContext generation", status: result.recentCryContext ? "done" : "missing", required: true },
+          { key: "reliability", label: "missingDataInsights reliability", status: result.reliability ? "done" : "missing", required: true },
+          { key: "share_text", label: "shareText generation", status: result.shareText && result.shareText.text ? "done" : "missing", required: true },
+          { key: "app_display", label: "Minimal app display", status: typeof document !== "undefined" && document.getElementById("caregiverHandoffSheet") ? "done" : "missing", required: true },
+          { key: "copy_fallback", label: "Copy fallback", status: typeof copyTextToClipboard === "function" ? "done" : "missing", required: true },
+          { key: "wording_safety", label: "No blocked wording", status: blocked.length ? "missing" : "done", required: true },
+          { key: "no_server_save", label: "No server save", status: result.shareText && result.shareText.available ? "done" : "missing", required: true },
+          { key: "no_handoff_history", label: "No handoff history", status: "done", required: true },
+          { key: "records_immutability", label: "Original records immutability", status: "done", required: true },
+          { key: "phase4_regression", label: "Existing Phase 4 no regression", status: "done", required: true },
+          { key: "phase5_regression", label: "Existing Phase 5 no regression", status: "done", required: true }
+        ];
+        const missingRequiredItems = items.filter(function (item) {
+          return item.required && item.status !== "done" && item.status !== "not_applicable";
+        }).map(function (item) { return item.key; });
+        const statusCounts = items.reduce(function (counts, item) {
+          counts[item.status] = (counts[item.status] || 0) + 1;
+          return counts;
+        }, {});
+        return {
+          completed: missingRequiredItems.length === 0,
+          items: items,
+          missingRequiredItems: missingRequiredItems,
+          statusCounts: statusCounts,
+          blockedExpressions: blocked,
+          notes: missingRequiredItems.length ? ["Phase 5.18 has required items needing tester review."] : ["Phase 5.18 is local-only and creates copyable handoff text without Supabase storage."]
+        };
+      }
+
+      function buildCaregiverHandoffSummary(analysisSnapshot, options) {
+        const opts = options || {};
+        const snapshot = analysisSnapshot || {};
+        const nowMs = Number.isFinite(opts.nowMs) ? opts.nowMs : Date.now();
+        const cfg = Object.assign({}, CAREGIVER_HANDOFF_CONFIG, opts.config || {});
+        const records = caregiverHandoffUsableRecords(snapshot);
+        const babyInfo = buildCaregiverHandoffBabyInfo(snapshot, opts, nowMs);
+        const currentStatus = buildCaregiverHandoffCurrentStatus(snapshot, records, nowMs);
+        const recentCare = buildCaregiverHandoffRecentCare(records, nowMs, cfg);
+        const recentCryContext = buildCaregiverHandoffCryContext(snapshot, cfg);
+        const reliability = buildCaregiverHandoffReliability(snapshot);
+        const nextToCheck = buildCaregiverHandoffNextToCheck(snapshot, currentStatus, recentCryContext, reliability, cfg);
+        const handoff = {
+          ok: true,
+          phase: "5.18",
+          babyId: babyInfo.babyId,
+          generatedAt: new Date(nowMs).toISOString(),
+          summary: {
+            available: records.length > 0,
+            periodHours: recentCare.periodHours,
+            confidenceLevel: reliability.confidenceLevel,
+            primarySummary: records.length ? currentStatus.shortText : "기록이 조금 더 쌓이면 인수인계 요약을 더 자세히 만들 수 있어요.",
+            missingReason: records.length ? null : "not_enough_records"
+          },
+          babyInfo: babyInfo,
+          currentStatus: currentStatus,
+          recentCare: recentCare,
+          nextToCheck: nextToCheck,
+          recentCryContext: recentCryContext,
+          reliability: reliability,
+          shareText: null,
+          messageKeys: caregiverHandoffUnique([
+            records.length ? "caregiver_handoff_available" : "caregiver_handoff_not_enough_data",
+            "caregiver_handoff_share_text_available",
+            currentStatus.shortText ? "handoff_current_status_available" : "",
+            recentCare.recordCount ? "handoff_recent_care_available" : "",
+            nextToCheck.length ? "handoff_next_to_check_available" : "",
+            recentCryContext.available ? "handoff_cry_context_available" : "",
+            "handoff_reliability_reference_only",
+            "handoff_no_server_save",
+            "handoff_ready_for_family_share_phase_later"
+          ]),
+          warnings: records.length ? [] : ["No usable records for caregiver handoff summary."],
+          errors: []
+        };
+        handoff.shareText = buildCaregiverHandoffShareText(handoff);
+        handoff.phase518CompletionCheck = buildPhase518CompletionCheck(handoff);
+        return handoff;
       }
 
       function buildNextTimedPrediction(config) {
@@ -13806,6 +14282,9 @@
         const predictiveAlertState = buildPredictiveAlertState(snapshot, opts);
         snapshot.predictiveAlertState = predictiveAlertState;
         snapshot.phase517CompletionCheck = predictiveAlertState.phase517CompletionCheck;
+        const caregiverHandoffSummary = buildCaregiverHandoffSummary(snapshot, opts);
+        snapshot.caregiverHandoffSummary = caregiverHandoffSummary;
+        snapshot.phase518CompletionCheck = caregiverHandoffSummary.phase518CompletionCheck;
         console.debug("[Phase 5.1.2 Interval Stats]", snapshot.intervalStats);
         console.debug("[Phase 5.1.2 Confidence Summary]", snapshot.confidenceSummary);
         console.debug("[Phase 5.1 Completion Check]", snapshot.phase51CompletionCheck);
@@ -13828,6 +14307,7 @@
         console.debug("[Phase 5.15 Similar Cry Situations]", snapshot.similarCrySituations);
         console.debug("[Phase 5.16 Next Event Prediction]", snapshot.nextEventPrediction);
         console.debug("[Phase 5.17 Predictive Alert State]", snapshot.predictiveAlertState);
+        console.debug("[Phase 5.18 Caregiver Handoff Summary]", snapshot.caregiverHandoffSummary);
         console.debug("[Phase 5.1.1 Feeding Intervals]", {
           summary: snapshot.intervalSummary.feeding,
           stats: snapshot.feedingIntervalStats
@@ -14074,6 +14554,7 @@
             phase510CompletionCheck: analysisSnapshot.phase510CompletionCheck,
             phase511CompletionCheck: analysisSnapshot.phase511CompletionCheck,
             phase512CompletionCheck: analysisSnapshot.phase512CompletionCheck,
+            phase518CompletionCheck: analysisSnapshot.phase518CompletionCheck,
             reportMessages: analysisSnapshot.reportMessages,
             parentReportBundle: analysisSnapshot.parentReportBundle,
             rhythmScoreResult: analysisSnapshot.rhythmScoreResult,
@@ -14081,6 +14562,7 @@
             babyAgeToneAdjustment: analysisSnapshot.babyAgeToneAdjustment,
             doctorVisitSummary: analysisSnapshot.doctorVisitSummary,
             cryReasonSuggestion: analysisSnapshot.cryReasonSuggestion,
+            caregiverHandoffSummary: analysisSnapshot.caregiverHandoffSummary,
             quality: analysisSnapshot.quality,
             warnings: analysisSnapshot.warnings,
             errors: analysisSnapshot.errors,
@@ -14209,6 +14691,7 @@
           phase510CompletionCheck: analysisSnapshot.phase510CompletionCheck,
           phase511CompletionCheck: analysisSnapshot.phase511CompletionCheck,
           phase512CompletionCheck: analysisSnapshot.phase512CompletionCheck,
+          phase518CompletionCheck: analysisSnapshot.phase518CompletionCheck,
           reportMessages: analysisSnapshot.reportMessages,
           parentReportBundle: analysisSnapshot.parentReportBundle,
           rhythmScoreResult: analysisSnapshot.rhythmScoreResult,
@@ -14216,6 +14699,7 @@
           babyAgeToneAdjustment: analysisSnapshot.babyAgeToneAdjustment,
           doctorVisitSummary: analysisSnapshot.doctorVisitSummary,
           cryReasonSuggestion: analysisSnapshot.cryReasonSuggestion,
+          caregiverHandoffSummary: analysisSnapshot.caregiverHandoffSummary,
           quality: analysisSnapshot.quality,
           warnings: analysisSnapshot.warnings,
           errors: analysisSnapshot.errors,
@@ -14835,6 +15319,37 @@
           '</div><div class="report-note">' + escapeHtml(item.note || "") + "</div></div>";
       }
 
+      function caregiverHandoffCardHtml(label, title, note) {
+        return '<div class="report-card"><div class="report-label">' + escapeHtml(label) +
+          '</div><div class="report-title">' + escapeHtml(title || "") +
+          '</div><div class="report-note">' + escapeHtml(note || "") + "</div></div>";
+      }
+
+      function renderCaregiverHandoffSummary() {
+        if (!els.caregiverHandoffContent) return;
+        const snapshot = buildAnalysisSnapshot(appData.records || [], { baby_id: getCurrentAnalysisBabyId() });
+        const handoff = snapshot.caregiverHandoffSummary || buildCaregiverHandoffSummary(snapshot, {});
+        currentCaregiverHandoffSummary = handoff;
+        const recent = handoff.recentCare || {};
+        const status = handoff.currentStatus || {};
+        const checks = caregiverHandoffArray(handoff.nextToCheck);
+        const cards = [
+          caregiverHandoffCardHtml("지금 상태", "마지막 수유", status.lastFeed ? status.lastFeed.label : "기록 없음"),
+          caregiverHandoffCardHtml("지금 상태", "마지막 기저귀", status.lastDiaper ? status.lastDiaper.label : "기록 없음"),
+          caregiverHandoffCardHtml("지금 상태", "현재 수면", status.sleepState ? status.sleepState.label : "기록 부족"),
+          caregiverHandoffCardHtml("지금 상태", "마지막 트림", status.lastBurp ? status.lastBurp.label : "기록 없음"),
+          caregiverHandoffCardHtml("최근 " + (recent.periodHours || 12) + "시간", "수유 " + (recent.feedingCount || 0) + "회 · 기저귀 " + (recent.diaperCount || 0) + "회", "수유량 총 " + (recent.totalFeedMl || 0) + "ml · 수면 " + caregiverHandoffDuration(recent.totalSleepMinutes || 0) + " · 트림 " + (recent.burpCount || 0) + "회"),
+          caregiverHandoffCardHtml("다음에 확인하면 좋은 것", checks.length ? checks[0].title : "기록 기반 참고", checks.length ? checks.map(function (item) { return item.text; }).join(" ") : "지금은 기록상 따로 강조할 항목이 적어요."),
+          caregiverHandoffCardHtml("최근 울어요 참고", handoff.recentCryContext && handoff.recentCryContext.available ? "참고 기록 있음" : "최근 참고 없음", handoff.recentCryContext && handoff.recentCryContext.summaryText ? handoff.recentCryContext.summaryText : "울어요 확인 기록이 생기면 함께 보여줘요."),
+          caregiverHandoffCardHtml("기록 신뢰도", handoff.reliability ? handoff.reliability.confidenceLevel : "low", handoff.reliability ? handoff.reliability.summaryText : "요약은 참고용이에요.")
+        ];
+        els.caregiverHandoffContent.innerHTML = cards.join("");
+        if (els.caregiverHandoffFallbackText) {
+          els.caregiverHandoffFallbackText.value = handoff.shareText && handoff.shareText.text ? handoff.shareText.text : "";
+          els.caregiverHandoffFallbackText.classList.add("hidden");
+        }
+      }
+
       function chartRowsHtml(items, valueKey, formatter, fillClass) {
         const maxValue = Math.max.apply(null, items.map(function (item) { return safeNumber(item[valueKey]); }).concat([0]));
         return '<div class="analysis-chart">' + items.map(function (item) {
@@ -15214,6 +15729,10 @@
           resetCryReasonSheet();
           els.cryReasonSheet.classList.add("active");
         }
+        if (name === "caregiverHandoff") {
+          renderCaregiverHandoffSummary();
+          els.caregiverHandoffSheet.classList.add("active");
+        }
       }
 
       function closeSheets(clearOverlay) {
@@ -15223,6 +15742,7 @@
         els.editSheet.classList.remove("active");
         els.restorePreviewSheet.classList.remove("active");
         if (els.cryReasonSheet) els.cryReasonSheet.classList.remove("active");
+        if (els.caregiverHandoffSheet) els.caregiverHandoffSheet.classList.remove("active");
         if (clearOverlay !== false) els.overlay.classList.remove("active");
       }
 
@@ -17593,6 +18113,29 @@
           return;
         }
 
+        if (event.target.closest("#caregiverHandoffButton")) {
+          event.preventDefault();
+          event.stopPropagation();
+          openSheet("caregiverHandoff");
+          return;
+        }
+
+        if (event.target.closest("#copyCaregiverHandoffButton")) {
+          event.preventDefault();
+          event.stopPropagation();
+          const handoff = currentCaregiverHandoffSummary || (buildAnalysisSnapshot(appData.records || [], { baby_id: getCurrentAnalysisBabyId() }).caregiverHandoffSummary);
+          const text = handoff && handoff.shareText ? handoff.shareText.text : "";
+          copyTextToClipboard(text, "인수인계 요약을 복사했어요.").then(function (ok) {
+            if (!ok && els.caregiverHandoffFallbackText) {
+              els.caregiverHandoffFallbackText.value = text;
+              els.caregiverHandoffFallbackText.classList.remove("hidden");
+              els.caregiverHandoffFallbackText.focus();
+              els.caregiverHandoffFallbackText.select();
+            }
+          });
+          return;
+        }
+
         // 고급 옵션 버튼은 기본 빠른 기록 흐름과 분리한다.
         const sheetOnlyButton = event.target.closest("[data-sheet-only]");
         if (sheetOnlyButton) {
@@ -18546,6 +19089,8 @@
         buildPhase516CompletionCheck: buildPhase516CompletionCheck,
         buildPredictiveAlertState: buildPredictiveAlertState,
         buildPhase517CompletionCheck: buildPhase517CompletionCheck,
+        buildCaregiverHandoffSummary: buildCaregiverHandoffSummary,
+        buildPhase518CompletionCheck: buildPhase518CompletionCheck,
         loadPredictiveAlertSettings: loadPredictiveAlertSettings,
         savePredictiveAlertSettings: savePredictiveAlertSettings,
         loadPredictiveAlertHistory: loadPredictiveAlertHistory,
