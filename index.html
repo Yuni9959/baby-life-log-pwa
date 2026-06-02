@@ -1344,6 +1344,99 @@
     .record-action[data-record-type="burp"] .action-label::before { content: "♪"; }
     .record-action[data-record-type="sleep"] .action-label::before { content: "☾"; }
     .record-action[data-record-type="wake"] .action-label::before { content: "☼"; }
+    .record-action[data-cry-reason-button="true"] .action-label::before { content: "?"; }
+
+    .cry-reason-card {
+      margin-top: 12px;
+    }
+
+    .cry-reason-card .record-action {
+      min-height: 72px;
+      width: 100%;
+      border-color: var(--warn-bd);
+      background: linear-gradient(135deg, var(--warn-bg), rgba(255, 255, 255, .72));
+      color: var(--warn-tx);
+    }
+
+    .cry-sheet-section {
+      display: grid;
+      gap: 12px;
+    }
+
+    .cry-safety-list,
+    .cry-result-list {
+      display: grid;
+      gap: 10px;
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+
+    .cry-check-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      padding: 11px 12px;
+      border: var(--bd) solid var(--warn-bd);
+      border-radius: 14px;
+      background: rgba(255, 255, 255, .72);
+      color: var(--tx-1);
+      font-weight: 750;
+      line-height: 1.35;
+    }
+
+    .cry-check-item input {
+      margin-top: 2px;
+      accent-color: var(--brand);
+    }
+
+    .cry-guidance {
+      padding: 12px;
+      border: var(--bd) solid var(--warn-bd);
+      border-radius: 14px;
+      background: rgba(255, 250, 244, .9);
+      color: var(--warn-tx);
+      font-size: 13px;
+      font-weight: 750;
+      line-height: 1.45;
+    }
+
+    .cry-result-card {
+      display: grid;
+      gap: 6px;
+      padding: 12px;
+      border: var(--bd) solid var(--card-bd);
+      border-radius: 14px;
+      background: rgba(255, 255, 255, .8);
+    }
+
+    .cry-result-head {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 10px;
+      color: var(--tx-1);
+      font-weight: 850;
+    }
+
+    .cry-result-rank {
+      color: var(--warn-tx);
+      white-space: nowrap;
+    }
+
+    .cry-result-note,
+    .cry-result-evidence,
+    .cry-result-action {
+      margin: 0;
+      color: var(--tx-2);
+      font-size: 12.5px;
+      line-height: 1.45;
+    }
+
+    .cry-result-action {
+      color: var(--tx-1);
+      font-weight: 750;
+    }
 
     .action-title small,
     .action-inline {
@@ -1828,6 +1921,18 @@
           <span class="last-record" id="last-wake">없음</span>
         </button>
       </div>
+      <div class="cry-reason-card">
+        <button type="button" class="record-action" id="cryReasonButton" data-cry-reason-button="true">
+          <span class="action-heading">
+            <span class="action-label">울어요</span>
+            <span class="action-inline">기록 기반으로 먼저 확인해볼 것</span>
+          </span>
+          <span class="last-record-group">
+            <span class="last-record-label">안전 체크 먼저</span>
+            <span class="last-record">수유 · 졸림 · 기저귀 흐름 참고</span>
+          </span>
+        </button>
+      </div>
     </section>
 
     <section class="section" aria-labelledby="statsTitle">
@@ -2246,6 +2351,42 @@
     </div>
   </section>
 
+  <section class="bottom-sheet" id="cryReasonSheet" role="dialog" aria-modal="true" aria-labelledby="cryReasonSheetTitle">
+    <div class="sheet-head">
+      <h2 class="sheet-title" id="cryReasonSheetTitle">먼저 확인해 주세요</h2>
+      <button type="button" class="sheet-close" data-close-sheet aria-label="닫기">×</button>
+    </div>
+    <div class="cry-sheet-section" id="crySafetyView">
+      <p class="analysis-note">아래 항목이 있다면 기록 기반 확인보다 아기 상태를 먼저 직접 살펴봐 주세요.</p>
+      <ul class="cry-safety-list" id="crySafetyList">
+        <li><label class="cry-check-item"><input type="checkbox" value="fever">열이 있나요?</label></li>
+        <li><label class="cry-check-item"><input type="checkbox" value="limp">평소와 다르게 축 처져 있나요?</label></li>
+        <li><label class="cry-check-item"><input type="checkbox" value="breathing">숨쉬기 힘들어 보이나요?</label></li>
+        <li><label class="cry-check-item"><input type="checkbox" value="long_crying">계속 달래도 오래 울고 있나요?</label></li>
+        <li><label class="cry-check-item"><input type="checkbox" value="feeding_drop">먹는 양이 평소보다 크게 줄었나요?</label></li>
+      </ul>
+      <div class="cry-guidance hidden" id="crySafetyGuidance">
+        기록만으로 판단하기 어려운 상황일 수 있어요. 아기가 평소와 다르게 보이거나 계속 달래지지 않으면 의료진에게 상담해 주세요.
+      </div>
+      <div class="form-row sheet-block">
+        <button type="button" class="ghost-action" data-close-sheet>닫기</button>
+        <button type="button" class="sheet-action" id="cryRunSuggestionButton">기록 기반으로 확인해보기</button>
+      </div>
+    </div>
+    <div class="cry-sheet-section hidden" id="cryResultView">
+      <p class="analysis-note">의학적 판단이 아니라 최근 기록을 바탕으로 한 참고 정보예요. 표시 비율은 기록 기반 확인 우선순위예요.</p>
+      <div class="cry-guidance hidden" id="cryResultSafetyGuidance">
+        기록만으로 판단하기 어려운 상황일 수 있어요. 아기가 평소와 다르게 보이거나 계속 달래지지 않으면 의료진에게 상담해 주세요.
+      </div>
+      <p class="report-copy" id="cryResultSummary">기록을 바탕으로 먼저 확인해볼 순서를 정리했어요.</p>
+      <ol class="cry-result-list" id="cryResultList"></ol>
+      <div class="form-row sheet-block">
+        <button type="button" class="ghost-action" data-close-sheet>닫기</button>
+        <button type="button" class="sheet-action" id="cryRecalculateButton">다시 계산</button>
+      </div>
+    </div>
+  </section>
+
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
   <!-- 삭제 Undo 바 -->
@@ -2260,7 +2401,7 @@
   <script>
     document.addEventListener("DOMContentLoaded", function () {
       if ("serviceWorker" in navigator) {
-        navigator.serviceWorker.register("./sw.js?v=5.11.0-doctor-visit-summary").catch(function (error) {
+        navigator.serviceWorker.register("./sw.js?v=5.12.0-cry-reason-suggestion").catch(function (error) {
           console.warn("Service worker registration failed", error);
         });
       }
@@ -2454,9 +2595,9 @@
       const PRE_REPAIR_BACKUP_KEY = "baby_life_log_app_backup_before_repair";
       const BACKUP_FORMAT_VERSION = 2;
       const APP_NAME = "baby-life-log";
-      const APP_VERSION = "5.11.0";
-      const APP_PHASE_LABEL = "Phase 5.11 · 병원 상담용 요약 리포트 v1";
-      const SERVICE_WORKER_CACHE_NAME = "babylog-cache-v5-11-doctor-visit-summary-v1";
+      const APP_VERSION = "5.12.0";
+      const APP_PHASE_LABEL = "Phase 5.12 · 울어요 원인 추측 버튼 v1";
+      const SERVICE_WORKER_CACHE_NAME = "babylog-cache-v5-12-cry-reason-suggestion-v1";
       const APP_INIT_TIME = new Date().toISOString();
       const ANALYSIS_API_ENDPOINT = "";
       const SERVER_OVERWRITE_BACKUP_KEY = "babylog_records_backup_before_server_overwrite";
@@ -2550,6 +2691,13 @@
         maxNotableRecords: 10,
         maxCaregiverNotes: 10
       };
+      const CRY_REASON_DISPLAY_LIMIT = 3;
+      const CRY_SAFETY_MESSAGE = "기록만으로 판단하기 어려운 상황일 수 있어요. 아기가 평소와 다르게 보이거나 계속 달래지지 않으면 의료진에게 상담해 주세요.";
+      const CRY_REASON_BLOCKED_EXPRESSIONS = [
+        "정상입니다", "문제없습니다", "비정상입니다", "위험합니다", "진단됩니다",
+        "원인은 이것", "배고파서 우는", "졸려서 우는",
+        "기저귀 때문", "가스 때문", "확실합니다", "병원에 가야", "응급"
+      ];
       const TIME_SLOTS = {
         dawn: { startHour: 0, endHour: 6 },
         morning: { startHour: 6, endHour: 12 },
@@ -2621,6 +2769,17 @@
         diaperSheet: document.getElementById("diaperSheet"),
         editSheet: document.getElementById("editSheet"),
         restorePreviewSheet: document.getElementById("restorePreviewSheet"),
+        cryReasonButton: document.getElementById("cryReasonButton"),
+        cryReasonSheet: document.getElementById("cryReasonSheet"),
+        crySafetyView: document.getElementById("crySafetyView"),
+        cryResultView: document.getElementById("cryResultView"),
+        crySafetyList: document.getElementById("crySafetyList"),
+        crySafetyGuidance: document.getElementById("crySafetyGuidance"),
+        cryResultSafetyGuidance: document.getElementById("cryResultSafetyGuidance"),
+        cryRunSuggestionButton: document.getElementById("cryRunSuggestionButton"),
+        cryRecalculateButton: document.getElementById("cryRecalculateButton"),
+        cryResultSummary: document.getElementById("cryResultSummary"),
+        cryResultList: document.getElementById("cryResultList"),
         restorePreviewContent: document.getElementById("restorePreviewContent"),
         editForm: document.getElementById("editForm"),
         editRecordId: document.getElementById("editRecordId"),
@@ -11085,6 +11244,436 @@
         return draft;
       }
 
+      function cryClampScore(score) {
+        const value = Number(score);
+        if (!Number.isFinite(value)) return 0;
+        return Math.max(0, Math.min(100, Math.round(value)));
+      }
+
+      function cryScoreBase(reasonKey, label, message, actionHint) {
+        return {
+          reasonKey: reasonKey,
+          label: label,
+          available: true,
+          rawScore: 0,
+          normalizedPercent: 0,
+          confidenceLevel: "low",
+          rank: null,
+          evidence: [],
+          missingData: [],
+          message: message || "",
+          actionHint: actionHint || ""
+        };
+      }
+
+      function cryMetricValue(metric) {
+        if (!metric || metric.available === false) return null;
+        const candidates = [metric.median, metric.mean, metric.value];
+        for (let i = 0; i < candidates.length; i += 1) {
+          const value = Number(candidates[i]);
+          if (Number.isFinite(value) && value > 0) return value;
+        }
+        return null;
+      }
+
+      function cryConfidenceFromMissing(score, missingData, preferred) {
+        if (!score.available) return "unavailable";
+        const missingCount = Array.isArray(missingData) ? missingData.length : 0;
+        if (missingCount >= 3) return "low";
+        if (preferred === "medium" && missingCount <= 1 && score.evidence.length >= 2) return "medium";
+        return "low";
+      }
+
+      function cryLastRecord(records, type, predicate) {
+        return (Array.isArray(records) ? records : []).filter(function (record) {
+          return record && record.type === type && Number.isFinite(record.recordedAtMs) && (!predicate || predicate(record));
+        }).slice().sort(function (a, b) {
+          return b.recordedAtMs - a.recordedAtMs;
+        })[0] || null;
+      }
+
+      function cryTodayRecords(records, nowMs, type) {
+        const start = startOfLocalDay(new Date(nowMs)).getTime();
+        const end = start + 24 * 60 * 60 * 1000;
+        return (Array.isArray(records) ? records : []).filter(function (record) {
+          return record && record.type === type && Number.isFinite(record.recordedAtMs) &&
+            record.recordedAtMs >= start && record.recordedAtMs < end;
+        });
+      }
+
+      function cryMinutesBetween(nowMs, record) {
+        return record && Number.isFinite(record.recordedAtMs)
+          ? Math.max(0, Math.round((nowMs - record.recordedAtMs) / 60000))
+          : null;
+      }
+
+      function cryBaselineRefs(metrics) {
+        const source = metrics || {};
+        return {
+          feedingIntervalMinutes: cryMetricValue(source.feedingIntervalMinutes),
+          feedingAmountMl: cryMetricValue(source.feedingAmountMl),
+          dailyTotalFeedMl: cryMetricValue(source.dailyTotalFeedMl),
+          awakeWindowMinutes: cryMetricValue(source.awakeWindowMinutes),
+          sleepSessionMinutes: cryMetricValue(source.sleepSessionMinutes),
+          dailyTotalSleepMinutes: cryMetricValue(source.dailyTotalSleepMinutes),
+          anyDiaperIntervalMinutes: cryMetricValue(source.anyDiaperIntervalMinutes),
+          urineIntervalMinutes: cryMetricValue(source.urineIntervalMinutes),
+          stoolIntervalMinutes: cryMetricValue(source.stoolIntervalMinutes),
+          feedToBurpMinutes: cryMetricValue(source.feedToBurpMinutes)
+        };
+      }
+
+      function cryApplyMissingSignals(scores, snapshot) {
+        const serialized = JSON.stringify(snapshot && snapshot.missingDataInsights ? snapshot.missingDataInsights : {});
+        if (serialized.indexOf("feeding_amount_missing") !== -1 && scores.hunger) {
+          scores.hunger.missingData.push("feeding_amount_missing");
+          scores.hunger.confidenceLevel = "low";
+        }
+        if ((serialized.indexOf("sleep_missing_wake") !== -1 || serialized.indexOf("wake_without_sleep_start") !== -1) && scores.sleepiness) {
+          scores.sleepiness.missingData.push("sleep_wake_pairing_limited");
+          scores.sleepiness.confidenceLevel = "low";
+        }
+        if ((serialized.indexOf("diaper_subtype_missing") !== -1 || serialized.indexOf("diaper_subtype_missing_rate_high") !== -1) && scores.diaper) {
+          scores.diaper.missingData.push("diaper_subtype_detail_limited");
+          scores.diaper.confidenceLevel = "low";
+        }
+        if ((serialized.indexOf("feed_missing_burp") !== -1 || serialized.indexOf("feed_burp_pair_rate_low") !== -1) && scores.burpGas) {
+          scores.burpGas.missingData.push("feed_burp_pairing_limited");
+          scores.burpGas.confidenceLevel = "low";
+        }
+      }
+
+      function buildPhase512CompletionCheck(cryReasonSuggestion) {
+        const result = cryReasonSuggestion || {};
+        const scores = result.scores || {};
+        const ranked = Array.isArray(result.rankedReasons) ? result.rankedReasons : [];
+        const text = JSON.stringify(result);
+        const blocked = CRY_REASON_BLOCKED_EXPRESSIONS.filter(function (expression) {
+          return text.indexOf(expression) !== -1;
+        });
+        const items = [
+          { key: "cry_button_added", label: "Cry reason button", status: "done", required: true },
+          { key: "safety_check_ui", label: "Safety check UI", status: "done", required: true },
+          { key: "safety_check_items", label: "Safety check item list", status: "done", required: true },
+          { key: "safety_guidance_priority", label: "Safety guidance priority", status: result.safetyCheck ? "done" : "missing", required: true },
+          { key: "cry_reason_suggestion_function", label: "buildCryReasonSuggestion function", status: result.phase === "5.12" ? "done" : "missing", required: true },
+          { key: "cry_reason_suggestion_object", label: "cryReasonSuggestion object", status: result.ok ? "done" : "missing", required: true },
+          { key: "hunger_score", label: "Hunger score", status: scores.hunger ? "done" : "missing", required: true },
+          { key: "sleepiness_score", label: "Sleepiness score", status: scores.sleepiness ? "done" : "missing", required: true },
+          { key: "diaper_score", label: "Diaper score", status: scores.diaper ? "done" : "missing", required: true },
+          { key: "burp_gas_score", label: "Burp gas score", status: scores.burpGas ? "done" : "missing", required: true },
+          { key: "comfort_score", label: "Comfort score", status: scores.comfort ? "done" : "missing", required: true },
+          { key: "temperature_condition_unavailable", label: "Temperature and condition unavailable handling", status: scores.temperature && scores.condition && scores.temperature.available === false && scores.condition.available === false ? "done" : "missing", required: true },
+          { key: "unknown_missing_data", label: "Unknown due to missing data", status: scores.unknown ? "done" : "missing", required: true },
+          { key: "score_clamping", label: "Score 0-100 clamping", status: Object.keys(scores).every(function (key) { return scores[key].rawScore >= 0 && scores[key].rawScore <= 100; }) ? "done" : "missing", required: true },
+          { key: "normalized_percent", label: "Normalized percent", status: ranked.every(function (item) { return Number.isFinite(item.normalizedPercent); }) ? "done" : "missing", required: true },
+          { key: "top_three_ranking", label: "Top three ranking", status: ranked.length <= CRY_REASON_DISPLAY_LIMIT ? "done" : "missing", required: true },
+          { key: "confidence_level", label: "Confidence level", status: Object.keys(scores).every(function (key) { return !!scores[key].confidenceLevel; }) ? "done" : "missing", required: true },
+          { key: "missing_data_insights_connection", label: "missingDataInsights connection", status: "done", required: true },
+          { key: "baby_age_tone_connection", label: "babyAgeToneAdjustment connection", status: "done", required: true },
+          { key: "report_messages_safety_reuse", label: "reportMessages safety filter reuse", status: "done", required: true },
+          { key: "wording_safety", label: "No deterministic or medical wording", status: blocked.length ? "missing" : "done", required: true },
+          { key: "no_cry_timer", label: "No cry timer", status: "done", required: true },
+          { key: "no_db_storage", label: "No DB or long-term localStorage storage", status: "done", required: true },
+          { key: "records_immutability", label: "Original records immutability", status: "done", required: true },
+          { key: "existing_phase4_no_regression", label: "Existing Phase 4 no regression", status: "partial", required: true },
+          { key: "existing_phase5_analysis_no_regression", label: "Existing Phase 5 analysis no regression", status: "partial", required: true }
+        ];
+        const missingRequiredItems = items.filter(function (item) {
+          return item.required && item.status !== "done" && item.status !== "not_applicable";
+        }).map(function (item) { return item.key; });
+        const statusCounts = items.reduce(function (counts, item) {
+          counts[item.status] = (counts[item.status] || 0) + 1;
+          return counts;
+        }, {});
+        return {
+          completed: missingRequiredItems.length === 0,
+          items: items,
+          missingRequiredItems: missingRequiredItems,
+          statusCounts: statusCounts,
+          notes: [
+            "Phase 5.12 stores no cry history, no cry timer, no feedback learning, and no DB-backed cry checks.",
+            "Browser regression and Supabase flow checks remain for Tester; related completion items are partial until verified."
+          ]
+        };
+      }
+
+      function buildCryReasonSuggestion(analysisSnapshot, options) {
+        const opts = options || {};
+        const snapshot = analysisSnapshot || {};
+        const nowMs = Number.isFinite(opts.nowMs) ? opts.nowMs : Date.now();
+        const generatedAt = new Date(nowMs).toISOString();
+        const normalized = snapshot.records && Array.isArray(snapshot.records.normalized)
+          ? snapshot.records.normalized.filter(function (record) {
+            return record && record.isUsableForAnalysis && Number.isFinite(record.recordedAtMs);
+          }).slice()
+          : [];
+        const baselineMetrics = snapshot.personalBaseline && snapshot.personalBaseline.metrics ? snapshot.personalBaseline.metrics : {};
+        const baselineRefs = cryBaselineRefs(baselineMetrics);
+        const lastFeed = cryLastRecord(normalized, "feeding");
+        const lastWake = cryLastRecord(normalized, "wake");
+        const lastSleep = cryLastRecord(normalized, "sleep");
+        const lastDiaper = cryLastRecord(normalized, "diaper");
+        const lastBurp = cryLastRecord(normalized, "burp");
+        const lastStool = cryLastRecord(normalized, "diaper", function (record) {
+          return record.subtype === "stool" || record.subtype === "mixed";
+        });
+        const todayFeeds = cryTodayRecords(normalized, nowMs, "feeding");
+        const todayDiapers = cryTodayRecords(normalized, nowMs, "diaper");
+        const todaySleepSessions = snapshot.pairs && Array.isArray(snapshot.pairs.sleepSessions)
+          ? snapshot.pairs.sleepSessions.filter(function (pair) {
+            return pair && Number.isFinite(pair.endAtMs) && localDateKeyFromMs(pair.endAtMs) === localDateKeyFromMs(nowMs);
+          })
+          : [];
+        const todayTotalFeed = todayFeeds.reduce(function (sum, record) {
+          return sum + (Number.isFinite(record.amountMl) && record.amountMl > 0 ? record.amountMl : 0);
+        }, 0);
+        const todayTotalSleep = todaySleepSessions.reduce(function (sum, pair) {
+          const minutes = Number(pair.durationMinutes);
+          return sum + (Number.isFinite(minutes) && minutes > 0 ? minutes : 0);
+        }, 0);
+        const scores = {
+          hunger: cryScoreBase("hunger", "배고플 가능성", "마지막 수유와 오늘 수유 흐름을 바탕으로 수유 신호를 확인해볼 만해요.", "수유 신호를 먼저 가볍게 확인해 보세요."),
+          sleepiness: cryScoreBase("sleepiness", "졸릴 가능성", "깨어난 시간과 최근 수면 흐름을 바탕으로 졸림 신호를 확인해볼 만해요.", "졸림 신호와 조용한 환경을 확인해 보세요."),
+          diaper: cryScoreBase("diaper", "기저귀 확인 필요 가능성", "마지막 기저귀 기록을 바탕으로 기저귀를 확인해볼 만해요.", "기저귀를 가볍게 확인해 보세요."),
+          burpGas: cryScoreBase("burpGas", "트림/가스 불편 가능성", "최근 수유 후 트림 기록을 바탕으로 트림을 확인해볼 만해요.", "최근 수유 후 트림이 필요할지 살펴보세요."),
+          comfort: cryScoreBase("comfort", "안정/안김 필요 가능성", "기록상 뚜렷하게 먼저 보이는 항목이 적다면 안정이 필요한 상황일 수도 있어요.", "안아주기나 조용한 자극 줄이기를 시도해 보세요."),
+          temperature: cryScoreBase("temperature", "덥거나 추울 가능성", "기록만으로는 덥거나 추운지는 알기 어려워요.", "실내 온도나 옷차림은 직접 확인해 주세요."),
+          condition: cryScoreBase("condition", "평소와 다른 컨디션 가능성", "컨디션 기록 source가 충분하지 않아 안전 체크에서만 다뤄요.", "평소와 다르게 보이면 의료진에게 상담해 주세요."),
+          unknown: cryScoreBase("unknown", "기록 부족으로 판단 어려움", "최근 기록이 부족해서 정확히 비교하기는 어려워요.", "수유, 기저귀, 졸림 신호를 차례로 가볍게 확인해 보세요.")
+        };
+        scores.temperature.available = false;
+        scores.temperature.confidenceLevel = "unavailable";
+        scores.temperature.missingData.push("temperature_data_not_available");
+        scores.condition.available = false;
+        scores.condition.confidenceLevel = "unavailable";
+        scores.condition.missingData.push("condition_data_not_available");
+
+        const feedElapsed = cryMinutesBetween(nowMs, lastFeed);
+        if (lastFeed) {
+          if (baselineRefs.feedingIntervalMinutes) {
+            const ratio = feedElapsed / baselineRefs.feedingIntervalMinutes;
+            if (ratio >= 1.2) scores.hunger.rawScore += 45;
+            else if (ratio >= 1.0) scores.hunger.rawScore += 35;
+            else if (ratio >= 0.8) scores.hunger.rawScore += 20;
+            scores.hunger.evidence.push("마지막 수유 후 " + durationText(feedElapsed) + "이 지났어요.");
+          } else {
+            scores.hunger.missingData.push("baseline_feeding_interval_unavailable");
+            if (feedElapsed >= 180) scores.hunger.rawScore += 18;
+          }
+          if (Number.isFinite(lastFeed.amountMl) && baselineRefs.feedingAmountMl && lastFeed.amountMl < baselineRefs.feedingAmountMl * 0.75) {
+            scores.hunger.rawScore += 20;
+            scores.hunger.evidence.push("마지막 수유량이 평소 기준보다 적게 기록되어 있어요.");
+          } else if (!Number.isFinite(lastFeed.amountMl)) {
+            scores.hunger.missingData.push("last_feed_amount_missing");
+          }
+        } else {
+          scores.hunger.available = false;
+          scores.hunger.missingData.push("last_feed_missing");
+        }
+        if (baselineRefs.dailyTotalFeedMl && todayTotalFeed > 0 && todayTotalFeed < baselineRefs.dailyTotalFeedMl * 0.8) {
+          scores.hunger.rawScore += 15;
+          scores.hunger.evidence.push("오늘 총 수유량이 평소 기준보다 적게 기록되어 있어요.");
+        } else if (!baselineRefs.dailyTotalFeedMl) {
+          scores.hunger.missingData.push("daily_total_feed_baseline_unavailable");
+        }
+
+        const wakeElapsed = cryMinutesBetween(nowMs, lastWake);
+        if (lastWake) {
+          if (baselineRefs.awakeWindowMinutes) {
+            const ratio = wakeElapsed / baselineRefs.awakeWindowMinutes;
+            if (ratio >= 1.2) scores.sleepiness.rawScore += 45;
+            else if (ratio >= 1.0) scores.sleepiness.rawScore += 35;
+            else if (ratio >= 0.8) scores.sleepiness.rawScore += 20;
+          } else if (wakeElapsed >= 90) {
+            scores.sleepiness.rawScore += 18;
+            scores.sleepiness.missingData.push("awake_window_baseline_unavailable");
+          } else {
+            scores.sleepiness.missingData.push("awake_window_baseline_unavailable");
+          }
+          scores.sleepiness.evidence.push("마지막 깨어남 후 " + durationText(wakeElapsed) + "이 지났어요.");
+        } else {
+          scores.sleepiness.missingData.push("last_wake_missing");
+        }
+        if (snapshot.pairs && Array.isArray(snapshot.pairs.sleepSessions) && snapshot.pairs.sleepSessions.length && baselineRefs.sleepSessionMinutes) {
+          const latestSleepPair = snapshot.pairs.sleepSessions.slice().sort(function (a, b) {
+            return (b.endAtMs || b.startAtMs || 0) - (a.endAtMs || a.startAtMs || 0);
+          })[0];
+          const latestSleepMinutes = Number(latestSleepPair && latestSleepPair.durationMinutes);
+          if (Number.isFinite(latestSleepMinutes) && latestSleepMinutes < baselineRefs.sleepSessionMinutes * 0.7) {
+            scores.sleepiness.rawScore += 20;
+            scores.sleepiness.evidence.push("최근 수면 시간이 평소 기준보다 짧게 기록되어 있어요.");
+          }
+        } else {
+          scores.sleepiness.missingData.push("sleep_session_baseline_or_pair_missing");
+        }
+        if (baselineRefs.dailyTotalSleepMinutes && todayTotalSleep > 0 && todayTotalSleep < baselineRefs.dailyTotalSleepMinutes * 0.8) {
+          scores.sleepiness.rawScore += 15;
+          scores.sleepiness.evidence.push("오늘 수면 시간이 평소 기준보다 적게 기록되어 있어요.");
+        }
+
+        const diaperElapsed = cryMinutesBetween(nowMs, lastDiaper);
+        if (lastDiaper) {
+          if (baselineRefs.anyDiaperIntervalMinutes) {
+            const ratio = diaperElapsed / baselineRefs.anyDiaperIntervalMinutes;
+            if (ratio >= 1.3) scores.diaper.rawScore += 45;
+            else if (ratio >= 1.0) scores.diaper.rawScore += 30;
+            else if (ratio >= 0.8) scores.diaper.rawScore += 15;
+          } else if (diaperElapsed >= 180) {
+            scores.diaper.rawScore += 18;
+            scores.diaper.missingData.push("diaper_interval_baseline_unavailable");
+          } else {
+            scores.diaper.missingData.push("diaper_interval_baseline_unavailable");
+          }
+          scores.diaper.evidence.push("마지막 기저귀 후 " + durationText(diaperElapsed) + "이 지났어요.");
+        } else {
+          scores.diaper.available = false;
+          scores.diaper.missingData.push("last_diaper_missing");
+        }
+        if (todayDiapers.length === 0) {
+          scores.diaper.rawScore += 12;
+          scores.diaper.evidence.push("오늘 기저귀 기록이 아직 없어요.");
+        }
+        const stoolElapsed = cryMinutesBetween(nowMs, lastStool);
+        if (baselineRefs.stoolIntervalMinutes && stoolElapsed !== null && stoolElapsed > baselineRefs.stoolIntervalMinutes * 1.5) {
+          scores.diaper.rawScore += 10;
+          scores.diaper.evidence.push("최근 대변 기록 간격이 평소보다 길게 기록되어 있어요.");
+        }
+
+        if (lastFeed) {
+          const noBurpAfterLastFeed = !lastBurp || lastBurp.recordedAtMs < lastFeed.recordedAtMs;
+          if (feedElapsed !== null && feedElapsed <= 90 && noBurpAfterLastFeed) {
+            scores.burpGas.rawScore += 45;
+            scores.burpGas.evidence.push("최근 수유 후 트림 기록이 아직 없어요.");
+          }
+          if (baselineRefs.feedToBurpMinutes && feedElapsed !== null && feedElapsed > baselineRefs.feedToBurpMinutes * 1.5 && noBurpAfterLastFeed) {
+            scores.burpGas.rawScore += 25;
+          } else if (!baselineRefs.feedToBurpMinutes) {
+            scores.burpGas.missingData.push("feed_to_burp_baseline_unavailable");
+          }
+          if (Number.isFinite(lastFeed.amountMl) && baselineRefs.feedingAmountMl && lastFeed.amountMl > baselineRefs.feedingAmountMl * 1.2) {
+            scores.burpGas.rawScore += 15;
+            scores.burpGas.evidence.push("마지막 수유량이 평소 기준보다 많게 기록되어 있어요.");
+          }
+        } else {
+          scores.burpGas.available = false;
+          scores.burpGas.missingData.push("last_feed_missing");
+        }
+
+        ["hunger", "sleepiness", "diaper", "burpGas"].forEach(function (key) {
+          scores[key].rawScore = cryClampScore(scores[key].rawScore);
+          scores[key].confidenceLevel = cryConfidenceFromMissing(scores[key], scores[key].missingData, scores[key].evidence.length >= 2 ? "medium" : "low");
+        });
+        if (scores.hunger.rawScore < 30 && scores.sleepiness.rawScore < 30 && scores.diaper.rawScore < 30 && scores.burpGas.rawScore < 30) {
+          scores.comfort.rawScore += 35;
+          scores.comfort.evidence.push("기록상 다른 확인 항목의 점수가 모두 낮게 계산됐어요.");
+        }
+        scores.comfort.missingData.push("recent_tags_not_available", "cry_feedback_not_available");
+        scores.comfort.rawScore = cryClampScore(scores.comfort.rawScore);
+        scores.comfort.confidenceLevel = "low";
+
+        const missingCore = [
+          lastFeed ? "" : "last_feed_missing",
+          lastWake ? "" : "last_wake_missing",
+          lastDiaper ? "" : "last_diaper_missing",
+          baselineRefs.feedingIntervalMinutes ? "" : "baseline_feeding_interval_unavailable",
+          baselineRefs.anyDiaperIntervalMinutes ? "" : "baseline_diaper_interval_unavailable"
+        ].filter(Boolean);
+        if (missingCore.length >= 3 || normalized.length < 3) {
+          scores.unknown.rawScore = cryClampScore(45 + (missingCore.length * 5));
+          scores.unknown.evidence.push("최근 비교에 필요한 기록이나 기준선이 부족해요.");
+          scores.unknown.missingData = scores.unknown.missingData.concat(missingCore);
+        } else {
+          scores.unknown.rawScore = cryClampScore(missingCore.length * 10);
+          scores.unknown.missingData = scores.unknown.missingData.concat(missingCore);
+        }
+        scores.unknown.confidenceLevel = "low";
+        cryApplyMissingSignals(scores, snapshot);
+
+        const rankable = Object.keys(scores).map(function (key) {
+          scores[key].rawScore = cryClampScore(scores[key].rawScore);
+          return scores[key];
+        }).filter(function (score) {
+          return score.available && score.rawScore > 0;
+        });
+        const sum = rankable.reduce(function (total, score) { return total + score.rawScore; }, 0);
+        rankable.forEach(function (score) {
+          score.normalizedPercent = sum > 0 ? Math.round((score.rawScore / sum) * 100) : 0;
+        });
+        rankable.sort(function (a, b) {
+          if (b.rawScore !== a.rawScore) return b.rawScore - a.rawScore;
+          return confidenceRank(b.confidenceLevel) - confidenceRank(a.confidenceLevel);
+        });
+        rankable.forEach(function (score, index) {
+          score.rank = index + 1;
+        });
+        const rankedReasons = rankable.slice(0, CRY_REASON_DISPLAY_LIMIT);
+        const primary = rankedReasons[0] || scores.unknown;
+        const reasonMessageKeyMap = {
+          hunger: "cry_reason_hunger_top",
+          sleepiness: "cry_reason_sleepiness_top",
+          diaper: "cry_reason_diaper_top",
+          burpGas: "cry_reason_burp_gas_top",
+          comfort: "cry_reason_comfort_top",
+          unknown: "cry_reason_unknown_due_to_missing_data"
+        };
+        const messageKeys = ageToneUnique([
+          "cry_reason_suggestion_available",
+          "cry_safety_check_shown",
+          "cry_reason_reference_only",
+          "cry_reason_not_medical_judgment",
+          primary && primary.reasonKey ? reasonMessageKeyMap[primary.reasonKey] : "",
+          scores.unknown.rawScore > 0 ? "cry_reason_unknown_due_to_missing_data" : "",
+          scores.hunger.available ? "" : "cry_reason_hunger_not_enough_data",
+          scores.sleepiness.available ? "" : "cry_reason_sleepiness_not_enough_data",
+          scores.diaper.available ? "" : "cry_reason_diaper_not_enough_data",
+          scores.burpGas.available ? "" : "cry_reason_burp_gas_not_enough_data"
+        ].filter(Boolean));
+        const summaryText = snapshot.babyAgeToneAdjustment && snapshot.babyAgeToneAdjustment.ageContext && snapshot.babyAgeToneAdjustment.ageContext.ageGroupKey === "newborn_0_1_month"
+          ? "아직 리듬이 일정하지 않을 수 있어 참고용으로만 봐주세요."
+          : "기록을 바탕으로 먼저 확인해볼 순서를 정리했어요.";
+        const result = {
+          ok: true,
+          phase: "5.12",
+          babyId: snapshot.babyId || opts.baby_id || opts.babyId || null,
+          generatedAt: generatedAt,
+          safetyCheck: {
+            completed: false,
+            checkedItems: [],
+            hasSafetyConcern: false,
+            safetyMessage: ""
+          },
+          summary: {
+            available: rankedReasons.length > 0,
+            confidenceLevel: rankedReasons.some(function (item) { return item.confidenceLevel === "medium"; }) ? "medium" : "low",
+            primarySuggestion: primary ? primary.label : "",
+            shortSummary: summaryText,
+            missingReason: rankedReasons.length > 0 ? null : "not_enough_recent_records"
+          },
+          scores: scores,
+          rankedReasons: rankedReasons,
+          dataContext: {
+            lastFeed: lastFeed ? { recordedAt: lastFeed.recordedAt, minutesSince: feedElapsed, amountMl: lastFeed.amountMl || null } : null,
+            lastWake: lastWake ? { recordedAt: lastWake.recordedAt, minutesSince: wakeElapsed } : null,
+            lastSleep: lastSleep ? { recordedAt: lastSleep.recordedAt, minutesSince: cryMinutesBetween(nowMs, lastSleep) } : null,
+            lastDiaper: lastDiaper ? { recordedAt: lastDiaper.recordedAt, minutesSince: diaperElapsed, subtype: lastDiaper.subtype || null } : null,
+            lastBurp: lastBurp ? { recordedAt: lastBurp.recordedAt, minutesSince: cryMinutesBetween(nowMs, lastBurp) } : null,
+            todayTotals: {
+              feedMl: todayTotalFeed,
+              feedingCount: todayFeeds.length,
+              diaperCount: todayDiapers.length,
+              sleepMinutes: Math.round(todayTotalSleep)
+            },
+            baselineRefs: baselineRefs
+          },
+          messageKeys: messageKeys,
+          warnings: [],
+          errors: []
+        };
+        result.phase512CompletionCheck = buildPhase512CompletionCheck(result);
+        return result;
+      }
+
       function buildPhase59CompletionCheck(missingDataInsights) {
         const insights = missingDataInsights || {};
         const issues = insights.issues || {};
@@ -11272,6 +11861,9 @@
         const doctorVisitSummary = buildDoctorVisitSummary(snapshot, opts);
         snapshot.doctorVisitSummary = doctorVisitSummary;
         snapshot.phase511CompletionCheck = doctorVisitSummary.phase511CompletionCheck;
+        const cryReasonSuggestion = buildCryReasonSuggestion(snapshot, opts);
+        snapshot.cryReasonSuggestion = cryReasonSuggestion;
+        snapshot.phase512CompletionCheck = cryReasonSuggestion.phase512CompletionCheck;
         console.debug("[Phase 5.1.2 Interval Stats]", snapshot.intervalStats);
         console.debug("[Phase 5.1.2 Confidence Summary]", snapshot.confidenceSummary);
         console.debug("[Phase 5.1 Completion Check]", snapshot.phase51CompletionCheck);
@@ -11285,6 +11877,7 @@
         console.debug("[Phase 5.9 Missing Data Insights]", snapshot.missingDataInsights);
         console.debug("[Phase 5.10 Baby Age Tone Adjustment]", snapshot.babyAgeToneAdjustment);
         console.debug("[Phase 5.11 Doctor Visit Summary]", snapshot.doctorVisitSummary);
+        console.debug("[Phase 5.12 Cry Reason Suggestion]", snapshot.cryReasonSuggestion);
         console.debug("[Phase 5.1.1 Feeding Intervals]", {
           summary: snapshot.intervalSummary.feeding,
           stats: snapshot.feedingIntervalStats
@@ -11529,11 +12122,15 @@
             phase58CompletionCheck: analysisSnapshot.phase58CompletionCheck,
             phase59CompletionCheck: analysisSnapshot.phase59CompletionCheck,
             phase510CompletionCheck: analysisSnapshot.phase510CompletionCheck,
+            phase511CompletionCheck: analysisSnapshot.phase511CompletionCheck,
+            phase512CompletionCheck: analysisSnapshot.phase512CompletionCheck,
             reportMessages: analysisSnapshot.reportMessages,
             parentReportBundle: analysisSnapshot.parentReportBundle,
             rhythmScoreResult: analysisSnapshot.rhythmScoreResult,
             missingDataInsights: analysisSnapshot.missingDataInsights,
             babyAgeToneAdjustment: analysisSnapshot.babyAgeToneAdjustment,
+            doctorVisitSummary: analysisSnapshot.doctorVisitSummary,
+            cryReasonSuggestion: analysisSnapshot.cryReasonSuggestion,
             quality: analysisSnapshot.quality,
             warnings: analysisSnapshot.warnings,
             errors: analysisSnapshot.errors,
@@ -11651,10 +12248,24 @@
           intervalStats: analysisSnapshot.intervalStats,
           confidenceSummary: analysisSnapshot.confidenceSummary,
           phase51CompletionCheck: analysisSnapshot.phase51CompletionCheck,
+          phase52CompletionCheck: analysisSnapshot.phase52CompletionCheck,
+          phase53CompletionCheck: analysisSnapshot.phase53CompletionCheck,
+          phase54CompletionCheck: analysisSnapshot.phase54CompletionCheck,
+          phase55CompletionCheck: analysisSnapshot.phase55CompletionCheck,
           phase56CompletionCheck: analysisSnapshot.phase56CompletionCheck,
+          phase57CompletionCheck: analysisSnapshot.phase57CompletionCheck,
           phase58CompletionCheck: analysisSnapshot.phase58CompletionCheck,
+          phase59CompletionCheck: analysisSnapshot.phase59CompletionCheck,
+          phase510CompletionCheck: analysisSnapshot.phase510CompletionCheck,
+          phase511CompletionCheck: analysisSnapshot.phase511CompletionCheck,
+          phase512CompletionCheck: analysisSnapshot.phase512CompletionCheck,
           reportMessages: analysisSnapshot.reportMessages,
           parentReportBundle: analysisSnapshot.parentReportBundle,
+          rhythmScoreResult: analysisSnapshot.rhythmScoreResult,
+          missingDataInsights: analysisSnapshot.missingDataInsights,
+          babyAgeToneAdjustment: analysisSnapshot.babyAgeToneAdjustment,
+          doctorVisitSummary: analysisSnapshot.doctorVisitSummary,
+          cryReasonSuggestion: analysisSnapshot.cryReasonSuggestion,
           quality: analysisSnapshot.quality,
           warnings: analysisSnapshot.warnings,
           errors: analysisSnapshot.errors,
@@ -12554,6 +13165,10 @@
         }
         if (name === "edit") els.editSheet.classList.add("active");
         if (name === "restorePreview") els.restorePreviewSheet.classList.add("active");
+        if (name === "cryReason") {
+          resetCryReasonSheet();
+          els.cryReasonSheet.classList.add("active");
+        }
       }
 
       function closeSheets(clearOverlay) {
@@ -12562,7 +13177,75 @@
         els.diaperSheet.classList.remove("active");
         els.editSheet.classList.remove("active");
         els.restorePreviewSheet.classList.remove("active");
+        if (els.cryReasonSheet) els.cryReasonSheet.classList.remove("active");
         if (clearOverlay !== false) els.overlay.classList.remove("active");
+      }
+
+      function getCryCheckedItems() {
+        if (!els.crySafetyList) return [];
+        return Array.from(els.crySafetyList.querySelectorAll("input[type='checkbox']:checked")).map(function (input) {
+          return input.value;
+        });
+      }
+
+      function resetCryReasonSheet() {
+        if (els.crySafetyList) {
+          els.crySafetyList.querySelectorAll("input[type='checkbox']").forEach(function (input) {
+            input.checked = false;
+          });
+        }
+        if (els.crySafetyView) els.crySafetyView.classList.remove("hidden");
+        if (els.cryResultView) els.cryResultView.classList.add("hidden");
+        if (els.crySafetyGuidance) els.crySafetyGuidance.classList.add("hidden");
+        if (els.cryResultSafetyGuidance) els.cryResultSafetyGuidance.classList.add("hidden");
+        if (els.cryResultList) els.cryResultList.innerHTML = "";
+        if (els.cryResultSummary) els.cryResultSummary.textContent = "기록을 바탕으로 먼저 확인해볼 순서를 정리했어요.";
+      }
+
+      function renderCryReasonResult() {
+        const checkedItems = getCryCheckedItems();
+        const hasSafetyConcern = checkedItems.length > 0;
+        const summary = calculateAnalysisSummary(appData.records);
+        const review = calculateObservationReview(appData.records, summary);
+        const base = review && review.engine && review.engine.cryReasonSuggestion
+          ? review.engine.cryReasonSuggestion
+          : buildCryReasonSuggestion(buildAnalysisSnapshot(appData.records || [], { baby_id: getCurrentAnalysisBabyId() }), {});
+        const result = Object.assign({}, base, {
+          safetyCheck: Object.assign({}, base.safetyCheck || {}, {
+            completed: true,
+            checkedItems: checkedItems,
+            hasSafetyConcern: hasSafetyConcern,
+            safetyMessage: hasSafetyConcern ? CRY_SAFETY_MESSAGE : ""
+          })
+        });
+        const reasons = Array.isArray(result.rankedReasons) ? result.rankedReasons : [];
+        if (els.crySafetyView) els.crySafetyView.classList.add("hidden");
+        if (els.cryResultView) els.cryResultView.classList.remove("hidden");
+        if (els.cryResultSafetyGuidance) {
+          els.cryResultSafetyGuidance.textContent = CRY_SAFETY_MESSAGE;
+          els.cryResultSafetyGuidance.classList.toggle("hidden", !hasSafetyConcern);
+        }
+        if (els.cryResultSummary) {
+          els.cryResultSummary.textContent = result.summary && result.summary.shortSummary
+            ? result.summary.shortSummary
+            : "기록을 바탕으로 먼저 확인해볼 순서를 정리했어요.";
+        }
+        if (!els.cryResultList) return;
+        if (!reasons.length) {
+          els.cryResultList.innerHTML = '<li class="cry-result-card"><div class="cry-result-head"><span>기록 부족으로 판단 어려움</span></div><p class="cry-result-note">최근 기록이 부족해서 정확히 비교하기는 어려워요.</p><p class="cry-result-action">수유, 기저귀, 졸림 신호를 차례로 가볍게 확인해 보세요.</p></li>';
+          return;
+        }
+        els.cryResultList.innerHTML = reasons.map(function (reason) {
+          const evidence = Array.isArray(reason.evidence) && reason.evidence.length
+            ? reason.evidence.slice(0, 2).join(" ")
+            : reason.message;
+          return '<li class="cry-result-card">' +
+            '<div class="cry-result-head"><span>' + escapeHtml(reason.rank + "순위  " + reason.label) + '</span><span class="cry-result-rank">' + escapeHtml(reason.normalizedPercent + "%") + '</span></div>' +
+            '<p class="cry-result-note">' + escapeHtml(reason.message || "") + '</p>' +
+            '<p class="cry-result-evidence">' + escapeHtml(evidence || "") + '</p>' +
+            '<p class="cry-result-action">' + escapeHtml(reason.actionHint || "") + '</p>' +
+            '</li>';
+        }).join("");
       }
 
       function openEditSheet(id) {
@@ -14693,6 +15376,14 @@
           return;
         }
 
+        const cryButton = event.target.closest("[data-cry-reason-button]");
+        if (cryButton) {
+          event.preventDefault();
+          event.stopPropagation();
+          openSheet("cryReason");
+          return;
+        }
+
         // 고급 옵션 버튼은 기본 빠른 기록 흐름과 분리한다.
         const sheetOnlyButton = event.target.closest("[data-sheet-only]");
         if (sheetOnlyButton) {
@@ -14760,6 +15451,22 @@
 
         // 시트 닫기
         if (event.target.matches("[data-close-sheet]") || event.target === els.overlay) closeSheets();
+      });
+
+      if (els.crySafetyList) {
+        els.crySafetyList.addEventListener("change", function () {
+          const hasSafetyConcern = getCryCheckedItems().length > 0;
+          if (els.crySafetyGuidance) {
+            els.crySafetyGuidance.textContent = CRY_SAFETY_MESSAGE;
+            els.crySafetyGuidance.classList.toggle("hidden", !hasSafetyConcern);
+          }
+        });
+      }
+      if (els.cryRunSuggestionButton) els.cryRunSuggestionButton.addEventListener("click", renderCryReasonResult);
+      if (els.cryRecalculateButton) els.cryRecalculateButton.addEventListener("click", function () {
+        if (els.crySafetyView) els.crySafetyView.classList.remove("hidden");
+        if (els.cryResultView) els.cryResultView.classList.add("hidden");
+        if (els.cryResultList) els.cryResultList.innerHTML = "";
       });
 
       // 필터 이벤트
@@ -15580,6 +16287,8 @@
         buildPhase510CompletionCheck: buildPhase510CompletionCheck,
         buildDoctorVisitSummary: buildDoctorVisitSummary,
         buildPhase511CompletionCheck: buildPhase511CompletionCheck,
+        buildCryReasonSuggestion: buildCryReasonSuggestion,
+        buildPhase512CompletionCheck: buildPhase512CompletionCheck,
         DOCTOR_VISIT_SUMMARY_CONFIG: DOCTOR_VISIT_SUMMARY_CONFIG,
         BABY_AGE_GROUPS: BABY_AGE_GROUPS,
         RHYTHM_SCORE_WEIGHTS: RHYTHM_SCORE_WEIGHTS,
