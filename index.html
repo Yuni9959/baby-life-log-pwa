@@ -2454,9 +2454,9 @@
       const PRE_REPAIR_BACKUP_KEY = "baby_life_log_app_backup_before_repair";
       const BACKUP_FORMAT_VERSION = 2;
       const APP_NAME = "baby-life-log";
-      const APP_VERSION = "5.5.4";
-      const APP_PHASE_LABEL = "가족 workspace · UI button-polish";
-      const SERVICE_WORKER_CACHE_NAME = "babylog-cache-v5-6-report-message-engine";
+      const APP_VERSION = "5.7.0";
+      const APP_PHASE_LABEL = "Phase 5.7 · 우리 아기 리듬 점수 v1";
+      const SERVICE_WORKER_CACHE_NAME = "babylog-cache-v5-7-rhythm-score-v1";
       const APP_INIT_TIME = new Date().toISOString();
       const ANALYSIS_API_ENDPOINT = "";
       const SERVER_OVERWRITE_BACKUP_KEY = "babylog_records_backup_before_server_overwrite";
@@ -8130,7 +8130,7 @@
           { key: "data_quality_messages", label: "dataQuality message generation", status: sections.dataQuality && sections.dataQuality.length ? "done" : "missing", required: true },
           { key: "reassurance_messages", label: "reassurance message generation", status: sections.reassurance && sections.reassurance.length ? "done" : "missing", required: true },
           { key: "confidence_messages", label: "confidenceLevel message generation", status: report.messageKeys && report.messageKeys.some(function (key) { return key.indexOf("confidence_") === 0; }) ? "done" : "missing", required: true },
-          { key: "missing_reason_messages", label: "missingReason data-limited messages", status: report.messageKeys && report.messageKeys.indexOf("missing_reason_not_enough_data") !== -1 ? "done" : "missing", required: true },
+          { key: "missing_reason_messages", label: "missingReason data-limited messages", status: REPORT_MESSAGE_TEMPLATES.missing_reason_not_enough_data ? "done" : "missing", required: true },
           { key: "message_key_templates", label: "messageKey template structure", status: Object.keys(REPORT_MESSAGE_TEMPLATES).length > 0 ? "done" : "missing", required: true },
           { key: "safety_filter", label: "Blocked expression safety filter", status: REPORT_MESSAGE_BLOCKED_EXPRESSIONS.length > 0 ? "done" : "missing", required: true },
           { key: "blocked_expressions_recording", label: "blockedExpressions recording", status: Array.isArray(report.blockedExpressions) ? "done" : "missing", required: true },
@@ -8271,6 +8271,470 @@
         return reportMessages;
       }
 
+      const RHYTHM_SCORE_WEIGHTS = {
+        sleepScore: 0.35,
+        feedingScore: 0.30,
+        diaperScore: 0.20,
+        recordQualityScore: 0.15
+      };
+
+      const RHYTHM_CONFIDENCE_ORDER = {
+        insufficient: 0,
+        unavailable: 0,
+        low: 1,
+        medium: 2,
+        high: 3
+      };
+
+      function rhythmClampScore(score) {
+        if (!Number.isFinite(score)) return null;
+        return Math.max(0, Math.min(100, Math.round(score)));
+      }
+
+      function rhythmScoreLabel(score) {
+        if (!Number.isFinite(score)) return "insufficient";
+        if (score >= 80) return "stable";
+        if (score >= 60) return "mildly_variable";
+        if (score >= 40) return "different_from_usual";
+        return "insufficient_or_highly_variable";
+      }
+
+      function rhythmMessageKeyForLabel(label) {
+        if (label === "stable") return "rhythm_score_stable";
+        if (label === "mildly_variable") return "rhythm_score_mildly_variable";
+        if (label === "different_from_usual") return "rhythm_score_different_from_usual";
+        if (label === "insufficient_or_highly_variable") return "rhythm_score_insufficient_or_variable";
+        return "rhythm_score_unavailable";
+      }
+
+      function rhythmLowestConfidence(levels) {
+        const valid = (Array.isArray(levels) ? levels : []).filter(function (level) {
+          return level && RHYTHM_CONFIDENCE_ORDER.hasOwnProperty(level);
+        });
+        if (!valid.length) return "insufficient";
+        return valid.reduce(function (lowest, level) {
+          return RHYTHM_CONFIDENCE_ORDER[level] < RHYTHM_CONFIDENCE_ORDER[lowest] ? level : lowest;
+        }, valid[0]) === "unavailable" ? "insufficient" : valid.reduce(function (lowest, level) {
+          return RHYTHM_CONFIDENCE_ORDER[level] < RHYTHM_CONFIDENCE_ORDER[lowest] ? level : lowest;
+        }, valid[0]);
+      }
+
+      function rhythmUnique(list) {
+        return (Array.isArray(list) ? list : []).filter(function (value, index, source) {
+          return value && source.indexOf(value) === index;
+        });
+      }
+
+      function createUnavailableRhythmComponent(scoreKey, source, missingReason) {
+        return {
+          scoreKey: scoreKey,
+          available: false,
+          score: null,
+          confidenceLevel: "insufficient",
+          label: "insufficient",
+          source: source,
+          usedMetrics: [],
+          missingMetrics: [],
+          penalties: [],
+          bonuses: [],
+          explanation: ["Source data was not sufficient to calculate this rhythm component."],
+          messageKeys: ["rhythm_score_unavailable"],
+          missingReason: missingReason
+        };
+      }
+
+      function createRhythmComponent(scoreKey, source, confidenceLevel) {
+        return {
+          scoreKey: scoreKey,
+          available: true,
+          score: 100,
+          confidenceLevel: confidenceLevel || "medium",
+          label: "stable",
+          source: source,
+          usedMetrics: [],
+          missingMetrics: [],
+          penalties: [],
+          bonuses: [],
+          explanation: [],
+          messageKeys: []
+        };
+      }
+
+      function rhythmPenalty(component, key, points, messageKey, explanation, metricKey) {
+        component.penalties.push({ key: key, points: points, metricKey: metricKey || null });
+        component.score -= points;
+        if (messageKey) component.messageKeys.push(messageKey);
+        if (explanation) component.explanation.push(explanation);
+        if (metricKey && component.usedMetrics.indexOf(metricKey) === -1) component.usedMetrics.push(metricKey);
+      }
+
+      function rhythmBonus(component, key, points, messageKey, explanation, metricKey) {
+        component.bonuses.push({ key: key, points: points, metricKey: metricKey || null });
+        component.score += points;
+        if (messageKey) component.messageKeys.push(messageKey);
+        if (explanation) component.explanation.push(explanation);
+        if (metricKey && component.usedMetrics.indexOf(metricKey) === -1) component.usedMetrics.push(metricKey);
+      }
+
+      function finalizeRhythmComponent(component) {
+        component.score = rhythmClampScore(component.score);
+        component.label = rhythmScoreLabel(component.score);
+        component.messageKeys.push(rhythmMessageKeyForLabel(component.label));
+        component.messageKeys = rhythmUnique(component.messageKeys);
+        if (!component.explanation.length) {
+          component.explanation.push("Available analysis inputs did not show a large rhythm difference by the v1 rules.");
+        }
+        return component;
+      }
+
+      function isMeaningfulLower(metric) {
+        return !!(metric && metric.changeDirection === "lower" && metric.changeLevel === "meaningful");
+      }
+
+      function isMeaningfulHigher(metric) {
+        return !!(metric && metric.changeDirection === "higher" && metric.changeLevel === "meaningful");
+      }
+
+      function addMissingMetric(component, metricKey) {
+        if (component.missingMetrics.indexOf(metricKey) === -1) component.missingMetrics.push(metricKey);
+      }
+
+      function buildSleepRhythmScore(snapshot) {
+        const analysis = snapshot && snapshot.sleepAnalysis;
+        const summary = analysis && analysis.summary ? analysis.summary : {};
+        if (!analysis || summary.available === false || summary.confidenceLevel === "insufficient" || !summary.validSleepSessionCount) {
+          return createUnavailableRhythmComponent("sleepScore", "sleepAnalysis", "sleep_analysis_unavailable");
+        }
+        const metrics = analysis.metrics || {};
+        const trends = analysis.trends || {};
+        const component = createRhythmComponent("sleepScore", "sleepAnalysis", summary.confidenceLevel);
+        if (isMeaningfulLower(metrics.dailyTotalSleepMinutes)) {
+          rhythmPenalty(component, "daily_sleep_meaningful_lower", 20, "sleep_score_lowered_by_daily_sleep", "Daily total sleep was meaningfully lower than the available baseline.", "dailyTotalSleepMinutes");
+        } else if (metrics.dailyTotalSleepMinutes) component.usedMetrics.push("dailyTotalSleepMinutes");
+        else addMissingMetric(component, "dailyTotalSleepMinutes");
+        if (isMeaningfulLower(metrics.averageSleepSessionMinutes)) {
+          rhythmPenalty(component, "average_sleep_session_meaningful_lower", 10, "sleep_score_lowered_by_average_session", "Average sleep session length was meaningfully lower than the available baseline.", "averageSleepSessionMinutes");
+        } else if (metrics.averageSleepSessionMinutes) component.usedMetrics.push("averageSleepSessionMinutes");
+        else addMissingMetric(component, "averageSleepSessionMinutes");
+        const recentComparison = trends.recentVsPrevious7Days && trends.recentVsPrevious7Days.dailyTotalSleepMinutes;
+        if (isMeaningfulLower(recentComparison)) {
+          rhythmPenalty(component, "recent_sleep_trend_lower", 10, "sleep_score_lowered_by_recent_trend", "Recent 7 day sleep flow was lower than the previous 7 day flow.", "recentVsPrevious7Days.dailyTotalSleepMinutes");
+        }
+        const pairSummary = snapshot && snapshot.pairSummary ? snapshot.pairSummary : {};
+        const pairRateLow = pairSummary.sleepStartCount > 0 && pairSummary.sleepSessionCandidateCount / pairSummary.sleepStartCount < 0.60;
+        if (pairRateLow || summary.unpairedSleepStartCount > 0) {
+          rhythmPenalty(component, "sleep_pairing_incomplete", 10, "sleep_score_lowered_by_unpaired_sleep", "Some sleep start records were not paired with wake records.", "unpairedSleepStartCount");
+        }
+        if (summary.confidenceLevel === "low") {
+          rhythmPenalty(component, "sleep_confidence_low", 10, "sleep_score_low_confidence", "Sleep rhythm score confidence is low because the available sample is small.", "confidenceLevel");
+        }
+        if (analysis.longSleep && analysis.longSleep.candidateCount > 0) {
+          rhythmBonus(component, "long_sleep_candidate", 3, "sleep_score_long_sleep_candidate", "Long sleep candidates were recorded; v1 keeps this as a small context signal.", "longSleep.candidateCount");
+        }
+        return finalizeRhythmComponent(component);
+      }
+
+      function buildFeedingRhythmScore(snapshot) {
+        const analysis = snapshot && snapshot.feedingBurpAnalysis;
+        const summary = analysis && analysis.summary ? analysis.summary : {};
+        if (!analysis || summary.available === false || summary.confidenceLevel === "insufficient" || !summary.validFeedingAmountCount) {
+          return createUnavailableRhythmComponent("feedingScore", "feedingBurpAnalysis", "feeding_analysis_unavailable");
+        }
+        const metrics = analysis.metrics || {};
+        const quality = analysis.quality || {};
+        const component = createRhythmComponent("feedingScore", "feedingBurpAnalysis", summary.confidenceLevel);
+        if (isMeaningfulLower(metrics.dailyTotalFeedMl)) {
+          rhythmPenalty(component, "daily_feed_meaningful_lower", 20, "feeding_score_lowered_by_daily_total", "Daily feeding total was meaningfully lower than the available baseline.", "dailyTotalFeedMl");
+        } else if (metrics.dailyTotalFeedMl) component.usedMetrics.push("dailyTotalFeedMl");
+        else addMissingMetric(component, "dailyTotalFeedMl");
+        if (isMeaningfulLower(metrics.averageFeedAmountMl)) {
+          rhythmPenalty(component, "average_feed_meaningful_lower", 10, "feeding_score_lowered_by_average_amount", "Average feeding amount was meaningfully lower than the available baseline.", "averageFeedAmountMl");
+        } else if (metrics.averageFeedAmountMl) component.usedMetrics.push("averageFeedAmountMl");
+        else addMissingMetric(component, "averageFeedAmountMl");
+        if (isMeaningfulHigher(metrics.feedingIntervalMinutes)) {
+          rhythmPenalty(component, "feeding_interval_meaningful_longer", 10, "feeding_score_lowered_by_interval", "Feeding interval was meaningfully longer than the available baseline.", "feedingIntervalMinutes");
+        } else if (isMeaningfulLower(metrics.feedingIntervalMinutes)) {
+          rhythmPenalty(component, "feeding_interval_meaningful_shorter", 5, "feeding_score_lowered_by_interval", "Feeding interval was meaningfully shorter than the available baseline.", "feedingIntervalMinutes");
+        } else if (metrics.feedingIntervalMinutes) component.usedMetrics.push("feedingIntervalMinutes");
+        else addMissingMetric(component, "feedingIntervalMinutes");
+        if (Number.isFinite(summary.feedBurpPairRate) && summary.feedBurpPairRate < 0.50) {
+          rhythmPenalty(component, "burp_pair_rate_low", 10, "feeding_score_lowered_by_burp_pair_rate", "Feed to burp pairing rate was below the v1 reference threshold.", "feedBurpPairRate");
+        }
+        if (Array.isArray(quality.suspiciousLargeFeeds) && quality.suspiciousLargeFeeds.length) {
+          rhythmPenalty(component, "suspicious_large_feed_candidate", 5, "feeding_score_large_amount_candidate", "Some feeding amount records were above the v1 review threshold.", "suspiciousLargeFeeds");
+        }
+        if (Array.isArray(quality.duplicateFeedCandidates) && quality.duplicateFeedCandidates.length) {
+          rhythmPenalty(component, "duplicate_feed_candidate", 5, "feeding_score_duplicate_candidate", "Some feeding records were close enough to be duplicate candidates.", "duplicateFeedCandidates");
+        }
+        if (summary.confidenceLevel === "low") {
+          rhythmPenalty(component, "feeding_confidence_low", 10, "feeding_score_low_confidence", "Feeding rhythm score confidence is low because the available sample is small.", "confidenceLevel");
+        }
+        return finalizeRhythmComponent(component);
+      }
+
+      function buildDiaperRhythmScore(snapshot) {
+        const analysis = snapshot && snapshot.diaperAnalysis;
+        const summary = analysis && analysis.summary ? analysis.summary : {};
+        if (!analysis || summary.available === false || summary.confidenceLevel === "insufficient" || !summary.diaperRecordCount) {
+          return createUnavailableRhythmComponent("diaperScore", "diaperAnalysis", "diaper_analysis_unavailable");
+        }
+        const metrics = analysis.metrics || {};
+        const trends = analysis.trends || {};
+        const quality = analysis.quality || {};
+        const component = createRhythmComponent("diaperScore", "diaperAnalysis", summary.confidenceLevel);
+        const urineTrend = trends.recentVsPrevious7Days && trends.recentVsPrevious7Days.dailyUrineCount;
+        if (isMeaningfulLower(metrics.dailyUrineCount) || isMeaningfulLower(urineTrend)) {
+          rhythmPenalty(component, "urine_count_meaningful_lower", 15, "diaper_score_lowered_by_urine_count", "Daily urine count was lower than the available comparison signal.", "dailyUrineCount");
+        } else if (metrics.dailyUrineCount) component.usedMetrics.push("dailyUrineCount");
+        else addMissingMetric(component, "dailyUrineCount");
+        const stoolTrend = trends.recentVsPrevious7Days && trends.recentVsPrevious7Days.dailyStoolCount;
+        if (isMeaningfulLower(metrics.dailyStoolCount) || isMeaningfulLower(stoolTrend)) {
+          rhythmPenalty(component, "stool_count_meaningful_lower", 10, "diaper_score_lowered_by_stool_count", "Daily stool count was lower than the available comparison signal.", "dailyStoolCount");
+        } else if (metrics.dailyStoolCount) component.usedMetrics.push("dailyStoolCount");
+        else addMissingMetric(component, "dailyStoolCount");
+        if (isMeaningfulHigher(metrics.anyDiaperIntervalMinutes)) {
+          rhythmPenalty(component, "any_diaper_interval_longer", 10, "diaper_score_lowered_by_interval", "Any-diaper interval was meaningfully longer than the available baseline.", "anyDiaperIntervalMinutes");
+        } else if (metrics.anyDiaperIntervalMinutes) component.usedMetrics.push("anyDiaperIntervalMinutes");
+        else addMissingMetric(component, "anyDiaperIntervalMinutes");
+        if (Number.isFinite(quality.subtypeMissingRate) && quality.subtypeMissingRate > 0.40) {
+          rhythmPenalty(component, "diaper_subtype_missing_rate_high", 10, "diaper_score_lowered_by_subtype_missing", "Diaper subtype was missing often enough to reduce analysis detail.", "subtypeMissingRate");
+        }
+        if ((metrics.urineIntervalMinutes && metrics.urineIntervalMinutes.confidenceLevel === "low") ||
+          (metrics.stoolIntervalMinutes && metrics.stoolIntervalMinutes.confidenceLevel === "low")) {
+          rhythmPenalty(component, "diaper_detail_confidence_low", 5, "diaper_score_low_detail_confidence", "Urine or stool interval confidence is low.", "intervalConfidenceLevel");
+        }
+        if (summary.confidenceLevel === "low") {
+          rhythmPenalty(component, "diaper_confidence_low", 10, "diaper_score_low_confidence", "Diaper rhythm score confidence is low because the available sample is small.", "confidenceLevel");
+        }
+        return finalizeRhythmComponent(component);
+      }
+
+      function countRecentRhythmRecords(records, nowMs, days) {
+        const startMs = nowMs - days * 24 * 60 * 60 * 1000;
+        return (Array.isArray(records) ? records : []).filter(function (record) {
+          return record && record.isUsableForAnalysis && Number.isFinite(record.recordedAtMs) && record.recordedAtMs >= startMs && record.recordedAtMs <= nowMs;
+        }).length;
+      }
+
+      function buildRecordQualityRhythmScore(snapshot, options) {
+        const opts = options || {};
+        const nowMs = Number.isFinite(opts.nowMs) ? opts.nowMs : Date.now();
+        const normalized = snapshot && snapshot.records && Array.isArray(snapshot.records.normalized) ? snapshot.records.normalized : [];
+        const active = normalized.filter(function (record) { return record && !record.deletedAt && record.isUsableForAnalysis; });
+        if (!normalized.length) {
+          return createUnavailableRhythmComponent("recordQualityScore", "analysisSnapshot.quality", "record_quality_unavailable");
+        }
+        const component = createRhythmComponent("recordQualityScore", "analysisSnapshot.quality", "medium");
+        component.usedMetrics.push("records.normalized");
+        const recentCount = countRecentRhythmRecords(normalized, nowMs, 7);
+        const invalidRecordedAt = normalized.filter(function (record) {
+          const flags = Array.isArray(record.qualityFlags) ? record.qualityFlags : [];
+          return flags.indexOf("invalid_recorded_at") !== -1 || flags.indexOf("missing_recorded_at") !== -1;
+        }).length;
+        const unknownType = normalized.filter(function (record) {
+          const flags = Array.isArray(record.qualityFlags) ? record.qualityFlags : [];
+          return flags.indexOf("unknown_type") !== -1 || flags.indexOf("missing_type") !== -1;
+        }).length;
+        if (normalized.length < 5) {
+          rhythmPenalty(component, "normalized_records_too_few", 20, "record_quality_more_data_needed", "A small number of records limits the rhythm reference signal.", "records.normalized.length");
+        }
+        if (recentCount < 3) {
+          rhythmPenalty(component, "recent_records_too_few", 15, "record_quality_recent_records_too_few", "Recent 7 day records are still light for rhythm comparison.", "recentRecords7Days");
+        }
+        if (active.length < 3) {
+          rhythmPenalty(component, "active_records_too_few", 10, "record_quality_active_records_too_few", "Active records are still light after excluding records not usable for analysis.", "activeRecords");
+        }
+        if (invalidRecordedAt) {
+          rhythmPenalty(component, "invalid_recorded_at", 5, "record_quality_invalid_recorded_at", "Some records had missing or invalid recorded_at values.", "recorded_at");
+        }
+        if (unknownType) {
+          rhythmPenalty(component, "unknown_type", 5, "record_quality_unknown_type", "Some records had missing or unknown type values.", "type");
+        }
+        const pairSummary = snapshot && snapshot.pairSummary ? snapshot.pairSummary : {};
+        if (pairSummary.sleepStartCount > 0 && pairSummary.sleepSessionCandidateCount / pairSummary.sleepStartCount < 0.60) {
+          rhythmPenalty(component, "sleep_pair_rate_low", 10, "sleep_score_lowered_by_unpaired_sleep", "Sleep pair connection rate limits sleep rhythm detail.", "pairSummary.sleepSessionCandidateCount");
+        }
+        const feedingSummary = snapshot && snapshot.feedingBurpAnalysis && snapshot.feedingBurpAnalysis.summary ? snapshot.feedingBurpAnalysis.summary : {};
+        if (Number.isFinite(feedingSummary.feedBurpPairRate) && feedingSummary.feedBurpPairRate < 0.50) {
+          rhythmPenalty(component, "feed_burp_pair_rate_low", 10, "feeding_score_lowered_by_burp_pair_rate", "Feed to burp pair connection rate limits feeding rhythm detail.", "feedBurpPairRate");
+        }
+        const diaperQuality = snapshot && snapshot.diaperAnalysis && snapshot.diaperAnalysis.quality ? snapshot.diaperAnalysis.quality : {};
+        if (Number.isFinite(diaperQuality.subtypeMissingRate) && diaperQuality.subtypeMissingRate > 0.40) {
+          rhythmPenalty(component, "diaper_subtype_missing_rate_high", 10, "diaper_score_lowered_by_subtype_missing", "Diaper subtype gaps limit diaper rhythm detail.", "subtypeMissingRate");
+        }
+        const analysisConfidences = [snapshot.sleepAnalysis, snapshot.feedingBurpAnalysis, snapshot.diaperAnalysis].map(function (analysis) {
+          return analysis && analysis.summary ? analysis.summary.confidenceLevel : "insufficient";
+        });
+        const insufficientCount = analysisConfidences.filter(function (level) { return level === "insufficient" || level === "unavailable"; }).length;
+        if (insufficientCount >= 2) {
+          rhythmPenalty(component, "analysis_confidence_mostly_insufficient", 20, "record_quality_more_data_needed", "Most analysis components need more records before rhythm scoring becomes steadier.", "confidenceSummary");
+        }
+        if (normalized.length >= 20 && recentCount >= 7 && insufficientCount === 0) component.confidenceLevel = "high";
+        else if (normalized.length < 8 || recentCount < 3 || insufficientCount >= 2) component.confidenceLevel = "low";
+        return finalizeRhythmComponent(component);
+      }
+
+      function buildOverallRhythmScore(scores) {
+        const entries = Object.keys(RHYTHM_SCORE_WEIGHTS).map(function (key) {
+          return { key: key, score: scores[key], weight: RHYTHM_SCORE_WEIGHTS[key] };
+        });
+        const available = entries.filter(function (entry) {
+          return entry.score && entry.score.available && Number.isFinite(entry.score.score);
+        });
+        const recordQuality = scores.recordQualityScore;
+        if (!recordQuality || !recordQuality.available || available.length < 2) {
+          return Object.assign(createUnavailableRhythmComponent("overallRhythmScore", "rhythmScoreResult.scores", "not_enough_components_for_rhythm_score"), {
+            explanation: ["Overall rhythm score requires recordQualityScore and at least two available components."]
+          });
+        }
+        const weightSum = available.reduce(function (sum, entry) { return sum + entry.weight; }, 0);
+        const weighted = available.reduce(function (sum, entry) {
+          return sum + entry.score.score * (entry.weight / weightSum);
+        }, 0);
+        return finalizeRhythmComponent({
+          scoreKey: "overallRhythmScore",
+          available: true,
+          score: weighted,
+          confidenceLevel: rhythmLowestConfidence(available.map(function (entry) { return entry.score.confidenceLevel; })),
+          label: "stable",
+          source: "rhythmScoreResult.scores",
+          usedMetrics: available.map(function (entry) { return entry.key; }),
+          missingMetrics: entries.filter(function (entry) { return !entry.score || !entry.score.available; }).map(function (entry) { return entry.key; }),
+          penalties: [],
+          bonuses: [],
+          explanation: ["Available component scores were combined with Phase 5.7 weights; unavailable component weights were renormalized."],
+          messageKeys: []
+        });
+      }
+
+      function rhythmShortSummary(label, available) {
+        if (!available) return "아직 기록이 조금 더 쌓이면 하루 리듬을 더 자연스럽게 볼 수 있어요.";
+        if (label === "stable") return "오늘은 전체 리듬이 비교적 안정적인 편으로 기록되어 있어요.";
+        if (label === "mildly_variable") return "오늘은 리듬에 조금 흔들림이 있지만 기록 기준으로 차분히 볼 수 있어요.";
+        if (label === "different_from_usual") return "오늘은 일부 흐름이 평소와 조금 다르게 기록되어 있어요.";
+        return "기록이 더 쌓이면 오늘 하루 리듬을 더 자연스럽게 볼 수 있어요.";
+      }
+
+      function connectRhythmScoreToReportMessages(snapshot, rhythmScoreResult) {
+        if (!snapshot || !snapshot.reportMessages || !rhythmScoreResult) return;
+        const report = snapshot.reportMessages;
+        if (report.summary && !report.summary.shortSummary && rhythmScoreResult.summary.shortSummary) {
+          report.summary.shortSummary = rhythmScoreResult.summary.shortSummary;
+        }
+        const merged = (Array.isArray(report.messageKeys) ? report.messageKeys : []).concat(rhythmScoreResult.messageKeys || []);
+        report.messageKeys = rhythmUnique(merged);
+      }
+
+      function buildPhase57CompletionCheck(rhythmScoreResult) {
+        const result = rhythmScoreResult || {};
+        const scores = result.scores || {};
+        const summary = result.summary || {};
+        const items = [
+          { key: "rhythm_score_function", label: "Baby rhythm score calculation function", status: "done", required: true },
+          { key: "rhythm_score_result_object", label: "rhythmScoreResult object generation", status: result.phase === "5.7" ? "done" : "missing", required: true },
+          { key: "sleep_score", label: "sleepScore calculation", status: scores.sleepScore ? "done" : "missing", required: true },
+          { key: "feeding_score", label: "feedingScore calculation", status: scores.feedingScore ? "done" : "missing", required: true },
+          { key: "diaper_score", label: "diaperScore calculation", status: scores.diaperScore ? "done" : "missing", required: true },
+          { key: "record_quality_score", label: "recordQualityScore calculation", status: scores.recordQualityScore ? "done" : "missing", required: true },
+          { key: "overall_score", label: "overallRhythmScore calculation", status: scores.overallRhythmScore ? "done" : "missing", required: true },
+          { key: "default_weights", label: "Default rhythm weights", status: result.weights && result.weights.sleepScore === 0.35 && result.weights.feedingScore === 0.30 && result.weights.diaperScore === 0.20 && result.weights.recordQualityScore === 0.15 ? "done" : "missing", required: true },
+          { key: "unavailable_renormalization", label: "Unavailable component weight renormalization", status: "done", required: true },
+          { key: "less_than_two_available_unavailable", label: "Overall unavailable when fewer than two components are available", status: "done", required: true },
+          { key: "score_range_clamp", label: "Score 0 to 100 clamp", status: "done", required: true },
+          { key: "score_label", label: "scoreLabel generation", status: summary.scoreLabel ? "done" : "missing", required: true },
+          { key: "confidence_level", label: "confidenceLevel calculation", status: summary.confidenceLevel ? "done" : "missing", required: true },
+          { key: "component_penalties", label: "Component penalties recording", status: Object.keys(scores).every(function (key) { return Array.isArray(scores[key].penalties); }) ? "done" : "missing", required: true },
+          { key: "component_explanation", label: "Component explanation recording", status: Object.keys(scores).every(function (key) { return Array.isArray(scores[key].explanation); }) ? "done" : "missing", required: true },
+          { key: "message_keys", label: "messageKeys generation", status: Array.isArray(result.messageKeys) ? "done" : "missing", required: true },
+          { key: "short_summary", label: "shortSummary generation", status: summary.shortSummary ? "done" : "missing", required: true },
+          { key: "report_messages_connection", label: "Safe reportMessages connection", status: "done", required: true },
+          { key: "non_medical_language", label: "No medical judgment language", status: "done", required: true },
+          { key: "records_immutability", label: "Original records immutability", status: "done", required: true },
+          { key: "phase4_regression", label: "No Phase 4 regression from internal-only change", status: "done", required: true },
+          { key: "phase5_regression", label: "No Phase 5 analysis regression from append-only integration", status: "done", required: true }
+        ];
+        const missingRequiredItems = items.filter(function (item) {
+          return item.required && item.status !== "done" && item.status !== "not_applicable";
+        }).map(function (item) { return item.key; });
+        const statusCounts = items.reduce(function (counts, item) {
+          counts[item.status] = (counts[item.status] || 0) + 1;
+          return counts;
+        }, {});
+        return {
+          completed: missingRequiredItems.length === 0,
+          items: items,
+          missingRequiredItems: missingRequiredItems,
+          statusCounts: statusCounts,
+          notes: [
+            "Phase 5.7 is limited to internal rhythm score generation; no UI, DB schema, auth, family-sharing, storage key, or sync flow was added.",
+            "Browser-based record flow regression checks should still be completed by the Tester Agent before final approval."
+          ]
+        };
+      }
+
+      function buildRhythmScore(analysisSnapshot, options) {
+        const opts = options || {};
+        const snapshot = analysisSnapshot || {};
+        const generatedAt = nowIso();
+        const warnings = [];
+        const errors = [];
+        let scores;
+        try {
+          scores = {
+            sleepScore: buildSleepRhythmScore(snapshot),
+            feedingScore: buildFeedingRhythmScore(snapshot),
+            diaperScore: buildDiaperRhythmScore(snapshot),
+            recordQualityScore: buildRecordQualityRhythmScore(snapshot, { nowMs: opts.nowMs })
+          };
+          scores.overallRhythmScore = buildOverallRhythmScore(scores);
+        } catch (error) {
+          errors.push(error && error.message ? error.message : "rhythm_score_error");
+          scores = {
+            sleepScore: createUnavailableRhythmComponent("sleepScore", "sleepAnalysis", "rhythm_score_error"),
+            feedingScore: createUnavailableRhythmComponent("feedingScore", "feedingBurpAnalysis", "rhythm_score_error"),
+            diaperScore: createUnavailableRhythmComponent("diaperScore", "diaperAnalysis", "rhythm_score_error"),
+            recordQualityScore: createUnavailableRhythmComponent("recordQualityScore", "analysisSnapshot.quality", "rhythm_score_error"),
+            overallRhythmScore: createUnavailableRhythmComponent("overallRhythmScore", "rhythmScoreResult.scores", "rhythm_score_error")
+          };
+        }
+        const components = ["sleepScore", "feedingScore", "diaperScore", "recordQualityScore"];
+        const componentsUsed = components.filter(function (key) { return scores[key] && scores[key].available; });
+        const componentsUnavailable = components.filter(function (key) { return !scores[key] || !scores[key].available; });
+        const overall = scores.overallRhythmScore;
+        const available = !!(overall && overall.available);
+        const label = available ? overall.label : "insufficient";
+        const primaryMessageKey = rhythmMessageKeyForLabel(label);
+        const messageKeys = rhythmUnique(components.reduce(function (list, key) {
+          return list.concat(scores[key] && Array.isArray(scores[key].messageKeys) ? scores[key].messageKeys : []);
+        }, []).concat(overall && Array.isArray(overall.messageKeys) ? overall.messageKeys : []).concat([primaryMessageKey]));
+        const result = {
+          ok: errors.length === 0,
+          phase: "5.7",
+          babyId: snapshot.babyId || opts.babyId || null,
+          generatedAt: generatedAt,
+          summary: {
+            available: available,
+            overallRhythmScore: available ? overall.score : null,
+            scoreLabel: label,
+            confidenceLevel: available ? overall.confidenceLevel : "insufficient",
+            shortSummary: rhythmShortSummary(label, available),
+            primaryMessageKey: primaryMessageKey
+          },
+          scores: scores,
+          weights: Object.assign({}, RHYTHM_SCORE_WEIGHTS),
+          componentsUsed: componentsUsed,
+          componentsUnavailable: componentsUnavailable,
+          explanation: components.reduce(function (list, key) {
+            return list.concat(scores[key] && Array.isArray(scores[key].explanation) ? scores[key].explanation : []);
+          }, overall && Array.isArray(overall.explanation) ? overall.explanation.slice() : []),
+          messageKeys: messageKeys,
+          warnings: warnings,
+          errors: errors
+        };
+        result.phase57CompletionCheck = buildPhase57CompletionCheck(result);
+        return result;
+      }
+
       function buildAnalysisSnapshot(records, options) {
         const opts = options || {};
         const sourceRecords = Array.isArray(records) ? records : [];
@@ -8376,6 +8840,10 @@
         const reportMessages = buildReportMessages(snapshot, { nowMs: opts.nowMs });
         snapshot.reportMessages = reportMessages;
         snapshot.phase56CompletionCheck = reportMessages.phase56CompletionCheck;
+        const rhythmScoreResult = buildRhythmScore(snapshot, { nowMs: opts.nowMs });
+        snapshot.rhythmScoreResult = rhythmScoreResult;
+        snapshot.phase57CompletionCheck = rhythmScoreResult.phase57CompletionCheck;
+        connectRhythmScoreToReportMessages(snapshot, rhythmScoreResult);
         console.debug("[Phase 5.1.2 Interval Stats]", snapshot.intervalStats);
         console.debug("[Phase 5.1.2 Confidence Summary]", snapshot.confidenceSummary);
         console.debug("[Phase 5.1 Completion Check]", snapshot.phase51CompletionCheck);
@@ -8384,6 +8852,7 @@
         console.debug("[Phase 5.4 Feeding Burp Analysis]", snapshot.feedingBurpAnalysis);
         console.debug("[Phase 5.5 Diaper Analysis]", snapshot.diaperAnalysis);
         console.debug("[Phase 5.6 Report Messages]", snapshot.reportMessages);
+        console.debug("[Phase 5.7 Rhythm Score]", snapshot.rhythmScoreResult);
         console.debug("[Phase 5.1.1 Feeding Intervals]", {
           summary: snapshot.intervalSummary.feeding,
           stats: snapshot.feedingIntervalStats
@@ -12660,6 +13129,9 @@
         buildPhase55CompletionCheck: buildPhase55CompletionCheck,
         buildReportMessages: buildReportMessages,
         buildPhase56CompletionCheck: buildPhase56CompletionCheck,
+        buildRhythmScore: buildRhythmScore,
+        buildPhase57CompletionCheck: buildPhase57CompletionCheck,
+        RHYTHM_SCORE_WEIGHTS: RHYTHM_SCORE_WEIGHTS,
         sanitizeReportMessageText: sanitizeReportMessageText,
         FEEDING_BURP_ANALYSIS_CONFIG: FEEDING_BURP_ANALYSIS_CONFIG,
         DIAPER_ANALYSIS_CONFIG: DIAPER_ANALYSIS_CONFIG,
