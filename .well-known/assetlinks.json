@@ -1,0 +1,8 @@
+[{
+  "relation": ["delegate_permission/common.handle_all_urls"],
+  "target": {
+    "namespace": "android_app",
+    "package_name": "com.yuni.touchbebe",
+    "sha256_cert_fingerprints": "0A:0E:5B:CE:F7:66:89:1B:27:9E:E0:01:EE:8F:74:9D:C8:17:EE:77:18:A3:26:9F:7F:C7:EE:A4:9F:B6:18:92"]
+  }
+}]
