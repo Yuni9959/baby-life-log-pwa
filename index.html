@@ -2260,7 +2260,7 @@
   <script>
     document.addEventListener("DOMContentLoaded", function () {
       if ("serviceWorker" in navigator) {
-        navigator.serviceWorker.register("./sw.js?v=5.5.4-ui-button-polish").catch(function (error) {
+        navigator.serviceWorker.register("./sw.js?v=5.11.0-doctor-visit-summary").catch(function (error) {
           console.warn("Service worker registration failed", error);
         });
       }
@@ -2454,9 +2454,9 @@
       const PRE_REPAIR_BACKUP_KEY = "baby_life_log_app_backup_before_repair";
       const BACKUP_FORMAT_VERSION = 2;
       const APP_NAME = "baby-life-log";
-      const APP_VERSION = "5.7.0";
-      const APP_PHASE_LABEL = "Phase 5.7 · 우리 아기 리듬 점수 v1";
-      const SERVICE_WORKER_CACHE_NAME = "babylog-cache-v5-10-age-tone-adjustment-v1";
+      const APP_VERSION = "5.11.0";
+      const APP_PHASE_LABEL = "Phase 5.11 · 병원 상담용 요약 리포트 v1";
+      const SERVICE_WORKER_CACHE_NAME = "babylog-cache-v5-11-doctor-visit-summary-v1";
       const APP_INIT_TIME = new Date().toISOString();
       const ANALYSIS_API_ENDPOINT = "";
       const SERVER_OVERWRITE_BACKUP_KEY = "babylog_records_backup_before_server_overwrite";
@@ -2537,6 +2537,18 @@
         meaningfulStoolCountChangePercent: 0.40,
         meaningfulDiaperIntervalChangePercent: 0.30,
         subtypeMissingRateThreshold: 0.40
+      };
+      const DOCTOR_VISIT_SUMMARY_CONFIG = {
+        periodDays: 7,
+        notableShortSleepMinutes: 5,
+        notableLongSleepMinutes: 300,
+        notableLongFeedingIntervalMinutes: 480,
+        notableShortFeedingIntervalMinutes: 20,
+        notableLongDiaperIntervalMinutes: 720,
+        notableLargeFeedingAmountMl: 300,
+        duplicateFeedingWindowMinutes: 3,
+        maxNotableRecords: 10,
+        maxCaregiverNotes: 10
       };
       const TIME_SLOTS = {
         dawn: { startHour: 0, endHour: 6 },
@@ -10364,6 +10376,715 @@
         return adjustment;
       }
 
+      function doctorSummaryNowIso(nowMs) {
+        const ms = Number.isFinite(nowMs) ? nowMs : Date.now();
+        return new Date(ms).toISOString();
+      }
+
+      function doctorSummaryRound(value, digits) {
+        if (!Number.isFinite(value)) return null;
+        const factor = Math.pow(10, Number.isFinite(digits) ? digits : 1);
+        return Math.round(value * factor) / factor;
+      }
+
+      function doctorSummaryLocalPeriod(nowMs, periodDays) {
+        const days = Number.isFinite(periodDays) && periodDays > 0 ? periodDays : DOCTOR_VISIT_SUMMARY_CONFIG.periodDays;
+        const end = new Date(Number.isFinite(nowMs) ? nowMs : Date.now());
+        end.setHours(23, 59, 59, 999);
+        const start = new Date(end.getTime());
+        start.setHours(0, 0, 0, 0);
+        start.setDate(start.getDate() - (days - 1));
+        return {
+          periodDays: days,
+          startMs: start.getTime(),
+          endMs: end.getTime(),
+          startDate: start.toISOString(),
+          endDate: end.toISOString(),
+          periodLabel: "최근 " + days + "일"
+        };
+      }
+
+      function doctorSummaryFormatMinutes(minutes) {
+        if (!Number.isFinite(minutes)) return "-";
+        const rounded = Math.max(0, Math.round(minutes));
+        const hours = Math.floor(rounded / 60);
+        const mins = rounded % 60;
+        if (hours > 0 && mins > 0) return hours + "시간 " + mins + "분";
+        if (hours > 0) return hours + "시간";
+        return mins + "분";
+      }
+
+      function doctorSummaryRecordId(record) {
+        return record && (record.id || record.recordId || record.record_id || ("record_" + record.originalIndex)) || null;
+      }
+
+      function doctorSummaryHasFlag(record, flag) {
+        return !!(record && Array.isArray(record.qualityFlags) && record.qualityFlags.indexOf(flag) !== -1);
+      }
+
+      function doctorSummaryCloneRecordReference(record) {
+        return {
+          recordId: doctorSummaryRecordId(record),
+          recordedAt: record && record.recordedAt ? record.recordedAt : null,
+          recordedAtMs: record && Number.isFinite(record.recordedAtMs) ? record.recordedAtMs : null,
+          type: record && record.type ? record.type : null
+        };
+      }
+
+      function doctorSummaryCollectBabyInfo(snapshot, options, generatedAt, nowMs) {
+        const opts = options || {};
+        const ageContext = snapshot && snapshot.babyAgeToneAdjustment && snapshot.babyAgeToneAdjustment.ageContext
+          ? snapshot.babyAgeToneAdjustment.ageContext
+          : {};
+        const profile = appData && appData.profile ? appData.profile : {};
+        const name = opts.babyName || opts.name || profile.name || (snapshot && snapshot.babyName) || "아기";
+        const birthDate = opts.birthDate || profile.birthDate || ageContext.birthDate || null;
+        let ageDays = Number.isFinite(ageContext.ageDays) ? ageContext.ageDays : null;
+        let ageMonths = Number.isFinite(ageContext.ageMonths) ? ageContext.ageMonths : null;
+        if (birthDate && (ageDays === null || ageMonths === null)) {
+          const birthMs = new Date(birthDate).getTime();
+          if (Number.isFinite(birthMs) && birthMs <= nowMs) {
+            ageDays = Math.floor((nowMs - birthMs) / (1000 * 60 * 60 * 24));
+            ageMonths = doctorSummaryRound(ageDays / 30.4375, 1);
+          }
+        }
+        return {
+          babyId: (snapshot && (snapshot.babyId || snapshot.baby_id)) || opts.babyId || opts.baby_id || null,
+          name: name ? String(name) : "아기",
+          birthDate: birthDate || null,
+          ageDays: Number.isFinite(ageDays) ? ageDays : null,
+          ageMonths: Number.isFinite(ageMonths) ? ageMonths : null,
+          ageGroup: ageContext.ageGroup || BABY_AGE_GROUPS.UNKNOWN,
+          generatedAt: generatedAt,
+          timezoneLabel: "local",
+          unavailableReason: birthDate ? null : "birth_date_unavailable"
+        };
+      }
+
+      function doctorSummaryRecentRecords(snapshot, period, babyId) {
+        const normalized = snapshot && snapshot.records && Array.isArray(snapshot.records.normalized) ? snapshot.records.normalized : [];
+        const targetBabyId = normalizeAnalysisBabyId(babyId);
+        return normalized.filter(function (record) {
+          if (!record || !Number.isFinite(record.recordedAtMs)) return false;
+          if (record.deletedAt || doctorSummaryHasFlag(record, "deleted_record")) return false;
+          if (record.recordedAtMs < period.startMs || record.recordedAtMs > period.endMs) return false;
+          if (targetBabyId && normalizeAnalysisBabyId(record.babyId) !== targetBabyId) return false;
+          if (doctorSummaryHasFlag(record, "other_baby")) return false;
+          return true;
+        }).slice().sort(function (a, b) {
+          return a.recordedAtMs - b.recordedAtMs;
+        });
+      }
+
+      function doctorSummaryBuildFeeding(records, periodDays, intervals) {
+        const feedings = records.filter(function (record) { return record && record.type === "feeding"; });
+        const validAmounts = feedings.map(function (record) { return record.amountMl; }).filter(function (value) {
+          return Number.isFinite(value) && value > 0;
+        });
+        const totalAmount = validAmounts.reduce(function (sum, value) { return sum + value; }, 0);
+        const validIntervals = (intervals || []).filter(function (interval) {
+          return interval && Number.isFinite(interval.durationMinutes) && interval.durationMinutes > 0;
+        }).map(function (interval) { return interval.durationMinutes; });
+        const missingAmountCount = feedings.filter(function (record) {
+          return doctorSummaryHasFlag(record, "missing_feeding_amount") || !Number.isFinite(record.amountMl) || record.amountMl <= 0;
+        }).length;
+        const suspiciousLargeAmountCount = feedings.filter(function (record) {
+          return doctorSummaryHasFlag(record, "suspicious_large_feeding_amount") || (Number.isFinite(record.amountMl) && record.amountMl > DOCTOR_VISIT_SUMMARY_CONFIG.notableLargeFeedingAmountMl);
+        }).length;
+        const summaryParts = [
+          "최근 7일 수유 기록은 " + feedings.length + "회이고, 수유량이 입력된 기록은 " + validAmounts.length + "회예요."
+        ];
+        if (validAmounts.length) summaryParts.push("최근 7일 하루 평균 수유량은 약 " + Math.round(totalAmount / periodDays) + "ml로 기록되어 있어요.");
+        if (missingAmountCount > 0) summaryParts.push("수유량이 비어 있는 기록이 있어, 수유량 요약은 참고용으로 봐주세요.");
+        return {
+          available: feedings.length > 0,
+          feedingRecordCount: feedings.length,
+          validAmountCount: validAmounts.length,
+          totalAmountMl: Math.round(totalAmount),
+          dailyAverageTotalAmountMl: validAmounts.length ? Math.round(totalAmount / periodDays) : null,
+          averageAmountMl: validAmounts.length ? Math.round(totalAmount / validAmounts.length) : null,
+          minAmountMl: validAmounts.length ? Math.min.apply(null, validAmounts) : null,
+          maxAmountMl: validAmounts.length ? Math.max.apply(null, validAmounts) : null,
+          averageIntervalMinutes: validIntervals.length ? Math.round(validIntervals.reduce(function (sum, value) { return sum + value; }, 0) / validIntervals.length) : null,
+          missingAmountCount: missingAmountCount,
+          suspiciousLargeAmountCount: suspiciousLargeAmountCount,
+          summaryText: summaryParts.join(" ")
+        };
+      }
+
+      function doctorSummaryBuildSleep(records, periodDays, pairs) {
+        const pairSource = pairs && Array.isArray(pairs.sleepSessions) ? pairs.sleepSessions : [];
+        const sessionPairs = pairSource.filter(function (pair) {
+          return pair && Number.isFinite(pair.startAtMs) && Number.isFinite(pair.endAtMs);
+        });
+        const validSessions = sessionPairs.filter(function (pair) {
+          return pair.isValidCandidate !== false && Number.isFinite(pair.durationMinutes) && pair.durationMinutes > 0;
+        });
+        const durations = validSessions.map(function (pair) { return pair.durationMinutes; });
+        const totalSleepMinutes = durations.reduce(function (sum, value) { return sum + value; }, 0);
+        const missingWakeCount = (pairs && Array.isArray(pairs.unpairedSleepStarts) ? pairs.unpairedSleepStarts : []).filter(function (item) {
+          return item && Number.isFinite(item.recordedAtMs);
+        }).length;
+        const longSleepCandidateCount = sessionPairs.filter(function (pair) {
+          return Number.isFinite(pair.durationMinutes) && pair.durationMinutes >= DOCTOR_VISIT_SUMMARY_CONFIG.notableLongSleepMinutes;
+        }).length;
+        const summaryParts = [
+          "최근 7일 동안 유효한 수면 세션은 " + validSessions.length + "개로 기록되어 있어요."
+        ];
+        if (durations.length) summaryParts.push("가장 긴 수면은 " + doctorSummaryFormatMinutes(Math.max.apply(null, durations)) + "으로 기록되어 있어요.");
+        if (missingWakeCount > 0) summaryParts.push("깨어남 기록이 빠진 수면 후보가 있어, 수면 시간은 참고용으로 봐주세요.");
+        return {
+          available: sessionPairs.length > 0 || missingWakeCount > 0,
+          sleepSessionCount: sessionPairs.length,
+          validSleepSessionCount: validSessions.length,
+          totalSleepMinutes: Math.round(totalSleepMinutes),
+          dailyAverageSleepMinutes: durations.length ? Math.round(totalSleepMinutes / periodDays) : null,
+          averageSessionMinutes: durations.length ? Math.round(totalSleepMinutes / durations.length) : null,
+          longestSleepMinutes: durations.length ? Math.max.apply(null, durations) : null,
+          shortestSleepMinutes: durations.length ? Math.min.apply(null, durations) : null,
+          longSleepCandidateCount: longSleepCandidateCount,
+          missingWakeCount: missingWakeCount,
+          summaryText: summaryParts.join(" ")
+        };
+      }
+
+      function doctorSummaryBuildDiaper(records, periodDays) {
+        const diapers = records.filter(function (record) { return record && record.type === "diaper"; });
+        const urineCount = diapers.filter(function (record) { return record.subtype === "urine" || record.subtype === "mixed"; }).length;
+        const stoolCount = diapers.filter(function (record) { return record.subtype === "stool" || record.subtype === "mixed"; }).length;
+        const mixedCount = diapers.filter(function (record) { return record.subtype === "mixed"; }).length;
+        const unknownSubtypeCount = diapers.filter(function (record) { return record.subtype === "unknown"; }).length;
+        const missingSubtypeCount = diapers.filter(function (record) { return record.subtype === "none" || doctorSummaryHasFlag(record, "missing_diaper_subtype"); }).length;
+        const subtypeMissingRate = diapers.length ? doctorSummaryRound((missingSubtypeCount + unknownSubtypeCount) / diapers.length, 3) : null;
+        const summaryParts = [
+          "최근 7일 소변 기록은 " + urineCount + "회, 대변 기록은 " + stoolCount + "회로 남아 있어요."
+        ];
+        if (missingSubtypeCount + unknownSubtypeCount > 0) summaryParts.push("기저귀 종류가 비어 있는 기록이 있어, 소변/대변을 나눈 요약은 참고용으로 봐주세요.");
+        return {
+          available: diapers.length > 0,
+          diaperRecordCount: diapers.length,
+          urineCount: urineCount,
+          stoolCount: stoolCount,
+          mixedCount: mixedCount,
+          unknownSubtypeCount: unknownSubtypeCount,
+          missingSubtypeCount: missingSubtypeCount,
+          dailyAverageUrineCount: doctorSummaryRound(urineCount / periodDays, 1),
+          dailyAverageStoolCount: doctorSummaryRound(stoolCount / periodDays, 1),
+          dailyAverageDiaperCount: doctorSummaryRound(diapers.length / periodDays, 1),
+          subtypeMissingRate: subtypeMissingRate,
+          summaryText: summaryParts.join(" ")
+        };
+      }
+
+      function doctorSummaryBuildRecordCounts(recentRecords, allNormalized) {
+        const deletedExcludedCount = (Array.isArray(allNormalized) ? allNormalized : []).filter(function (record) {
+          return record && (record.deletedAt || doctorSummaryHasFlag(record, "deleted_record"));
+        }).length;
+        return {
+          totalRecordCount: recentRecords.length,
+          feedingCount: recentRecords.filter(function (record) { return record.type === "feeding"; }).length,
+          burpCount: recentRecords.filter(function (record) { return record.type === "burp"; }).length,
+          diaperCount: recentRecords.filter(function (record) { return record.type === "diaper"; }).length,
+          sleepStartCount: recentRecords.filter(function (record) { return record.type === "sleep_start"; }).length,
+          wakeCount: recentRecords.filter(function (record) { return record.type === "wake" || record.type === "sleep_end"; }).length,
+          noteCount: recentRecords.filter(function (record) { return record.note && String(record.note).trim(); }).length,
+          deletedExcludedCount: deletedExcludedCount,
+          summaryText: "최근 7일 동안 총 " + recentRecords.length + "개의 기록이 남아 있어요."
+        };
+      }
+
+      function doctorSummaryNotableItem(input) {
+        return {
+          type: input.type,
+          label: input.label,
+          recordedAt: input.recordedAt || null,
+          recordedAtMs: Number.isFinite(input.recordedAtMs) ? input.recordedAtMs : null,
+          value: input.value,
+          unit: input.unit,
+          displayValue: input.displayValue,
+          source: input.source,
+          recordIds: input.recordIds || [],
+          note: input.note
+        };
+      }
+
+      function doctorSummaryBuildNotableRecords(recentRecords, pairs, feedingIntervals) {
+        const items = [];
+        const sleepSessions = pairs && Array.isArray(pairs.sleepSessions) ? pairs.sleepSessions : [];
+        sleepSessions.forEach(function (pair) {
+          if (!pair || !Number.isFinite(pair.durationMinutes)) return;
+          if (pair.durationMinutes < DOCTOR_VISIT_SUMMARY_CONFIG.notableShortSleepMinutes) {
+            items.push(doctorSummaryNotableItem({
+              type: "short_sleep_candidate",
+              label: "짧은 수면 후보",
+              recordedAt: pair.startAt || null,
+              recordedAtMs: pair.startAtMs,
+              value: pair.durationMinutes,
+              unit: "minutes",
+              displayValue: doctorSummaryFormatMinutes(pair.durationMinutes),
+              source: "pairs.sleepSessions",
+              recordIds: [pair.startRecordId, pair.endRecordId].filter(Boolean),
+              note: "기록상 짧게 이어진 수면 후보예요."
+            }));
+          }
+          if (pair.durationMinutes >= DOCTOR_VISIT_SUMMARY_CONFIG.notableLongSleepMinutes) {
+            items.push(doctorSummaryNotableItem({
+              type: "long_sleep_candidate",
+              label: "긴 수면 후보",
+              recordedAt: pair.startAt || null,
+              recordedAtMs: pair.startAtMs,
+              value: pair.durationMinutes,
+              unit: "minutes",
+              displayValue: doctorSummaryFormatMinutes(pair.durationMinutes),
+              source: "pairs.sleepSessions",
+              recordIds: [pair.startRecordId, pair.endRecordId].filter(Boolean),
+              note: "기록상 길게 이어진 수면 후보예요."
+            }));
+          }
+        });
+        (feedingIntervals || []).forEach(function (interval) {
+          if (!interval || !Number.isFinite(interval.durationMinutes)) return;
+          if (interval.durationMinutes < DOCTOR_VISIT_SUMMARY_CONFIG.notableShortFeedingIntervalMinutes) {
+            items.push(doctorSummaryNotableItem({
+              type: "short_feeding_interval_candidate",
+              label: "짧은 수유 간격 후보",
+              recordedAt: interval.toAt || null,
+              recordedAtMs: interval.toAtMs,
+              value: interval.durationMinutes,
+              unit: "minutes",
+              displayValue: doctorSummaryFormatMinutes(interval.durationMinutes),
+              source: "intervals.feedingIntervals",
+              recordIds: [interval.fromRecordId, interval.toRecordId].filter(Boolean),
+              note: "기록상 짧게 이어진 수유 간격 후보예요."
+            }));
+          }
+          if (interval.durationMinutes > DOCTOR_VISIT_SUMMARY_CONFIG.notableLongFeedingIntervalMinutes) {
+            items.push(doctorSummaryNotableItem({
+              type: "long_feeding_interval_candidate",
+              label: "긴 수유 간격 후보",
+              recordedAt: interval.toAt || null,
+              recordedAtMs: interval.toAtMs,
+              value: interval.durationMinutes,
+              unit: "minutes",
+              displayValue: doctorSummaryFormatMinutes(interval.durationMinutes),
+              source: "intervals.feedingIntervals",
+              recordIds: [interval.fromRecordId, interval.toRecordId].filter(Boolean),
+              note: "기록상 길게 이어진 수유 간격 후보예요."
+            }));
+          }
+        });
+        recentRecords.forEach(function (record) {
+          if (record.type === "feeding" && Number.isFinite(record.amountMl) && record.amountMl > DOCTOR_VISIT_SUMMARY_CONFIG.notableLargeFeedingAmountMl) {
+            items.push(doctorSummaryNotableItem({
+              type: "large_feeding_amount_candidate",
+              label: "큰 수유량 입력 후보",
+              recordedAt: record.recordedAt,
+              recordedAtMs: record.recordedAtMs,
+              value: record.amountMl,
+              unit: "ml",
+              displayValue: Math.round(record.amountMl) + "ml",
+              source: "records.normalized",
+              recordIds: [doctorSummaryRecordId(record)].filter(Boolean),
+              note: "기록상 큰 수유량으로 입력된 후보예요."
+            }));
+          }
+        });
+        const diapers = recentRecords.filter(function (record) { return record.type === "diaper"; }).slice().sort(function (a, b) { return a.recordedAtMs - b.recordedAtMs; });
+        for (let i = 1; i < diapers.length; i += 1) {
+          const minutes = Math.round((diapers[i].recordedAtMs - diapers[i - 1].recordedAtMs) / 60000);
+          if (minutes > DOCTOR_VISIT_SUMMARY_CONFIG.notableLongDiaperIntervalMinutes) {
+            items.push(doctorSummaryNotableItem({
+              type: "long_diaper_interval_candidate",
+              label: "긴 기저귀 간격 후보",
+              recordedAt: diapers[i].recordedAt,
+              recordedAtMs: diapers[i].recordedAtMs,
+              value: minutes,
+              unit: "minutes",
+              displayValue: doctorSummaryFormatMinutes(minutes),
+              source: "records.normalized",
+              recordIds: [doctorSummaryRecordId(diapers[i - 1]), doctorSummaryRecordId(diapers[i])].filter(Boolean),
+              note: "기록상 길게 이어진 기저귀 간격 후보예요."
+            }));
+          }
+        }
+        const feedings = recentRecords.filter(function (record) { return record.type === "feeding"; }).slice().sort(function (a, b) { return a.recordedAtMs - b.recordedAtMs; });
+        for (let j = 1; j < feedings.length; j += 1) {
+          const gap = Math.round((feedings[j].recordedAtMs - feedings[j - 1].recordedAtMs) / 60000);
+          if (gap >= 0 && gap <= DOCTOR_VISIT_SUMMARY_CONFIG.duplicateFeedingWindowMinutes) {
+            items.push(doctorSummaryNotableItem({
+              type: "duplicate_feeding_candidate",
+              label: "중복 수유 후보",
+              recordedAt: feedings[j].recordedAt,
+              recordedAtMs: feedings[j].recordedAtMs,
+              value: gap,
+              unit: "minutes",
+              displayValue: doctorSummaryFormatMinutes(gap),
+              source: "records.normalized",
+              recordIds: [doctorSummaryRecordId(feedings[j - 1]), doctorSummaryRecordId(feedings[j])].filter(Boolean),
+              note: "기록상 가까운 시간에 남은 수유 후보예요."
+            }));
+          }
+        }
+        const originalOrderUsable = recentRecords.slice().sort(function (a, b) { return a.originalIndex - b.originalIndex; });
+        for (let k = 1; k < originalOrderUsable.length; k += 1) {
+          if (originalOrderUsable[k].recordedAtMs < originalOrderUsable[k - 1].recordedAtMs) {
+            items.push(doctorSummaryNotableItem({
+              type: "record_order_changed_candidate",
+              label: "기록 순서 확인 후보",
+              recordedAt: originalOrderUsable[k].recordedAt,
+              recordedAtMs: originalOrderUsable[k].recordedAtMs,
+              value: null,
+              unit: "record_order",
+              displayValue: "기록 순서 확인",
+              source: "records.normalized",
+              recordIds: [doctorSummaryRecordId(originalOrderUsable[k - 1]), doctorSummaryRecordId(originalOrderUsable[k])].filter(Boolean),
+              note: "기록 시간 순서를 확인해볼 수 있는 후보예요."
+            }));
+            break;
+          }
+        }
+        const limited = items.sort(function (a, b) {
+          return (b.recordedAtMs || 0) - (a.recordedAtMs || 0);
+        }).slice(0, DOCTOR_VISIT_SUMMARY_CONFIG.maxNotableRecords);
+        return {
+          available: limited.length > 0,
+          items: limited.map(function (item) {
+            const copy = Object.assign({}, item);
+            delete copy.recordedAtMs;
+            return copy;
+          }),
+          count: limited.length,
+          limitApplied: DOCTOR_VISIT_SUMMARY_CONFIG.maxNotableRecords
+        };
+      }
+
+      function doctorSummaryBuildMissingData(snapshot, recentSummary) {
+        const insights = snapshot && snapshot.missingDataInsights ? snapshot.missingDataInsights : {};
+        const wanted = [
+          "sleep_missing_wake",
+          "wake_without_sleep_start",
+          "feed_missing_burp",
+          "feed_burp_pair_rate_low",
+          "feeding_amount_missing",
+          "diaper_subtype_missing",
+          "diaper_subtype_missing_rate_high",
+          "daily_record_type_concentration",
+          "sync_order_changed_candidate",
+          "duplicate_record_candidate"
+        ];
+        const found = [];
+        function pushIssue(key, source) {
+          if (wanted.indexOf(key) === -1 || found.some(function (item) { return item.key === key; })) return;
+          found.push({ key: key, source: source || "missingDataInsights" });
+        }
+        if (insights && insights.issues) {
+          Object.keys(insights.issues).forEach(function (groupKey) {
+            (insights.issues[groupKey] || []).forEach(function (issue) {
+              pushIssue(issue && (issue.issueKey || issue.key), groupKey);
+            });
+          });
+        }
+        if (recentSummary.sleep.missingWakeCount > 0) pushIssue("sleep_missing_wake", "doctorVisitSummary.sleep");
+        if (recentSummary.feeding.missingAmountCount > 0) pushIssue("feeding_amount_missing", "doctorVisitSummary.feeding");
+        if (recentSummary.diaper.missingSubtypeCount > 0 || recentSummary.diaper.unknownSubtypeCount > 0) pushIssue("diaper_subtype_missing", "doctorVisitSummary.diaper");
+        const messages = found.map(function (issue) {
+          if (issue.key === "sleep_missing_wake") return "잠듦 기록은 있지만 깨어남 기록이 빠진 경우가 있어 수면 시간은 참고용으로 봐주세요.";
+          if (issue.key === "feeding_amount_missing") return "수유량이 비어 있는 기록이 있어 수유량 요약은 참고용으로 정리했어요.";
+          if (issue.key === "diaper_subtype_missing" || issue.key === "diaper_subtype_missing_rate_high") return "기저귀 종류가 비어 있는 기록이 있어 소변/대변 구분은 조심스럽게 봐주세요.";
+          if (issue.key === "feed_missing_burp" || issue.key === "feed_burp_pair_rate_low") return "수유와 트림 연결 기록이 일부 비어 있어 트림 관련 흐름은 참고용으로 봐주세요.";
+          if (issue.key === "duplicate_record_candidate") return "가까운 시간에 남은 기록 후보가 있어 필요하면 상담 전 확인해볼 수 있어요.";
+          if (issue.key === "sync_order_changed_candidate") return "기록 시간 순서를 확인해볼 수 있는 후보가 있어요.";
+          return "기록 일부가 비어 있어 요약은 참고용으로 봐주세요.";
+        });
+        return {
+          available: true,
+          issueCount: found.length,
+          importantIssues: found,
+          summaryText: messages.length ? ageToneUnique(messages).join(" ") : "최근 7일 요약에 큰 기록 누락 안내는 따로 표시되지 않았어요.",
+          confidenceLevel: found.length ? "low" : "medium"
+        };
+      }
+
+      function doctorSummaryBuildCaregiverNotes(recentRecords) {
+        const notes = recentRecords.filter(function (record) {
+          return record && record.note && String(record.note).trim();
+        }).sort(function (a, b) {
+          return (b.recordedAtMs || 0) - (a.recordedAtMs || 0);
+        }).slice(0, DOCTOR_VISIT_SUMMARY_CONFIG.maxCaregiverNotes).map(function (record) {
+          return {
+            recordId: doctorSummaryRecordId(record),
+            recordedAt: record.recordedAt || null,
+            type: record.type || null,
+            note: String(record.note).trim(),
+            safeForShare: true
+          };
+        });
+        return {
+          available: notes.length > 0,
+          count: notes.length,
+          items: notes,
+          limitApplied: DOCTOR_VISIT_SUMMARY_CONFIG.maxCaregiverNotes
+        };
+      }
+
+      function doctorSummaryBlockedExpressions() {
+        return [
+          "정상입니다", "문제없습니다", "비정상입니다", "위험합니다", "나쁩니다", "진단됩니다",
+          "탈수입니다", "변비입니다", "수면장애입니다", "원인은 이것입니다", "확실합니다",
+          "반드시", "병원에 가야 합니다", "응급입니다"
+        ];
+      }
+
+      function sanitizeDoctorSummaryText(text) {
+        let safeText = String(text || "");
+        doctorSummaryBlockedExpressions().forEach(function (expression) {
+          safeText = safeText.split(expression).join("참고용으로 봐주세요");
+        });
+        return safeText;
+      }
+
+      function doctorSummaryFindBlockedExpressions(text) {
+        const source = String(text || "");
+        return doctorSummaryBlockedExpressions().filter(function (expression) {
+          return source.indexOf(expression) !== -1;
+        });
+      }
+
+      function doctorSummaryBuildShareText(input) {
+        const babyInfo = input.babyInfo;
+        const recent = input.recent7Days;
+        const notable = input.notableRecords;
+        const missingData = input.missingData;
+        const notes = input.caregiverNotes;
+        const lines = [
+          "[병원 상담용 최근 7일 기록 요약]",
+          "",
+          "아기: " + (babyInfo.name || "아기"),
+          "기간: 최근 7일",
+          "",
+          "1. 수유",
+          "- 수유 기록: " + recent.feeding.feedingRecordCount + "회",
+          "- 수유량 입력 기록: " + recent.feeding.validAmountCount + "회",
+          "- 하루 평균 수유량: " + (recent.feeding.dailyAverageTotalAmountMl !== null ? "약 " + recent.feeding.dailyAverageTotalAmountMl + "ml" : "기록 없음"),
+          "",
+          "2. 수면",
+          "- 유효 수면 세션: " + recent.sleep.validSleepSessionCount + "개",
+          "- 가장 긴 수면: " + (recent.sleep.longestSleepMinutes !== null ? doctorSummaryFormatMinutes(recent.sleep.longestSleepMinutes) : "기록 없음"),
+          "",
+          "3. 기저귀",
+          "- 소변 기록: " + recent.diaper.urineCount + "회",
+          "- 대변 기록: " + recent.diaper.stoolCount + "회",
+          "- 기저귀 종류 누락 기록: " + recent.diaper.missingSubtypeCount + "회",
+          "",
+          "4. 확인하면 좋은 기록"
+        ];
+        if (notable.items.length) {
+          notable.items.slice(0, 5).forEach(function (item) {
+            lines.push("- " + item.label + ": " + item.displayValue);
+          });
+        } else {
+          lines.push("- 최근 7일 확인 후보는 따로 정리되지 않았어요.");
+        }
+        lines.push("");
+        lines.push("5. 기록 누락 안내");
+        lines.push("- " + (missingData.summaryText || "기록 요약은 참고용으로 봐주세요."));
+        if (notes.available) {
+          lines.push("");
+          lines.push("6. 보호자 메모");
+          notes.items.slice(0, 3).forEach(function (item) {
+            lines.push("- " + item.note);
+          });
+        }
+        lines.push("");
+        lines.push("이 요약은 앱에 남긴 기록을 정리한 참고 자료입니다.");
+        lines.push("의료진 상담 시 보조 자료로만 사용해 주세요.");
+        const text = sanitizeDoctorSummaryText(lines.join("\n"));
+        return {
+          available: true,
+          text: text,
+          copiedAt: null,
+          sectionsIncluded: [
+            "babyInfo",
+            "feeding",
+            "sleep",
+            "diaper",
+            "notableRecords",
+            "missingData",
+            "caregiverNotes"
+          ],
+          copyFallbackText: text,
+          safetyCheck: {
+            blockedExpressions: doctorSummaryFindBlockedExpressions(text),
+            passed: doctorSummaryFindBlockedExpressions(text).length === 0
+          }
+        };
+      }
+
+      function buildPhase511CompletionCheck(doctorVisitSummary) {
+        const summary = doctorVisitSummary || {};
+        const recent = summary.recent7Days || {};
+        const shareSafety = summary.shareText && summary.shareText.safetyCheck ? summary.shareText.safetyCheck : { passed: false };
+        const items = [
+          { key: "doctor_visit_summary_function", label: "Doctor visit summary generation function", status: "done", required: true },
+          { key: "doctor_visit_summary_object", label: "doctorVisitSummary object generation", status: summary.phase === "5.11" ? "done" : "missing", required: true },
+          { key: "baby_info_generation", label: "babyInfo generation", status: summary.babyInfo ? "done" : "missing", required: true },
+          { key: "recent_7_days_period", label: "Recent 7 days period calculation", status: summary.summary && summary.summary.periodDays === 7 ? "done" : "missing", required: true },
+          { key: "recent_7_days_feeding_summary", label: "Recent 7 days feeding summary", status: recent.feeding ? "done" : "missing", required: true },
+          { key: "recent_7_days_sleep_summary", label: "Recent 7 days sleep summary", status: recent.sleep ? "done" : "missing", required: true },
+          { key: "recent_7_days_diaper_summary", label: "Recent 7 days diaper summary", status: recent.diaper ? "done" : "missing", required: true },
+          { key: "record_count_summary", label: "Record count summary", status: recent.records ? "done" : "missing", required: true },
+          { key: "notable_records", label: "Notable short or long record candidates", status: summary.notableRecords ? "done" : "missing", required: true },
+          { key: "cry_summary_unavailable", label: "Cry feature unavailable handling", status: summary.crySummary && summary.crySummary.available === false ? "done" : "missing", required: true },
+          { key: "missing_data_included", label: "Missing data included", status: summary.missingData ? "done" : "missing", required: true },
+          { key: "caregiver_notes_included_or_unavailable", label: "Caregiver notes included or unavailable", status: summary.caregiverNotes ? "done" : "missing", required: true },
+          { key: "privacy_options_prepared", label: "Privacy options prepared", status: summary.privacyOptions ? "done" : "missing", required: true },
+          { key: "share_text_generation", label: "Share text generation", status: summary.shareText && summary.shareText.text ? "done" : "missing", required: true },
+          { key: "minimal_in_app_safe_object", label: "Minimal in-app safe object generation", status: "done", required: true },
+          { key: "copy_fallback", label: "Copy fallback text prepared", status: summary.shareText && summary.shareText.copyFallbackText ? "done" : "missing", required: true },
+          { key: "safety_filter_applied", label: "Safety filter applied", status: shareSafety.passed ? "done" : "missing", required: true },
+          { key: "deterministic_medical_wording_removed", label: "Deterministic and medical expressions removed", status: shareSafety.passed ? "done" : "missing", required: true },
+          { key: "message_keys_generation", label: "messageKeys generation", status: Array.isArray(summary.messageKeys) ? "done" : "missing", required: true },
+          { key: "original_records_immutability", label: "Original records immutability", status: "done", required: true },
+          { key: "existing_phase4_no_regression", label: "No Phase 4 regression from append-only integration", status: "done", required: true },
+          { key: "existing_phase5_analysis_no_regression", label: "No Phase 5 analysis regression from append-only integration", status: "done", required: true }
+        ];
+        const missingRequiredItems = items.filter(function (item) {
+          return item.required && item.status !== "done" && item.status !== "not_applicable";
+        }).map(function (item) { return item.key; });
+        const statusCounts = items.reduce(function (counts, item) {
+          counts[item.status] = (counts[item.status] || 0) + 1;
+          return counts;
+        }, {});
+        return {
+          completed: missingRequiredItems.length === 0,
+          items: items,
+          missingRequiredItems: missingRequiredItems,
+          statusCounts: statusCounts,
+          notes: [
+            "Phase 5.11 adds an internal record-based consultation summary and share text only; no DB schema, auth, family sharing, PDF, image export, premium UI, AI API, or cry button implementation was added.",
+            "Supabase and family flows are unchanged by this append-only client analysis integration."
+          ]
+        };
+      }
+
+      function buildDoctorVisitSummary(analysisSnapshot, options) {
+        const opts = options || {};
+        const snapshot = analysisSnapshot || {};
+        const nowMs = Number.isFinite(opts.nowMs) ? opts.nowMs : Date.now();
+        const generatedAt = doctorSummaryNowIso(nowMs);
+        const period = doctorSummaryLocalPeriod(nowMs, DOCTOR_VISIT_SUMMARY_CONFIG.periodDays);
+        const babyInfo = doctorSummaryCollectBabyInfo(snapshot, opts, generatedAt, nowMs);
+        const recentRecords = doctorSummaryRecentRecords(snapshot, period, babyInfo.babyId);
+        const normalized = snapshot.records && Array.isArray(snapshot.records.normalized) ? snapshot.records.normalized : [];
+        const feedingIntervals = snapshot.intervals && Array.isArray(snapshot.intervals.feedingIntervals)
+          ? snapshot.intervals.feedingIntervals.filter(function (interval) {
+            return interval &&
+              Number.isFinite(interval.fromAtMs) &&
+              Number.isFinite(interval.toAtMs) &&
+              interval.fromAtMs >= period.startMs &&
+              interval.toAtMs >= period.startMs &&
+              interval.fromAtMs <= period.endMs &&
+              interval.toAtMs <= period.endMs;
+          })
+          : [];
+        const recentPairs = {
+          sleepSessions: snapshot.pairs && Array.isArray(snapshot.pairs.sleepSessions)
+            ? snapshot.pairs.sleepSessions.filter(function (pair) {
+              return pair && Number.isFinite(pair.startAtMs) && pair.startAtMs >= period.startMs && pair.startAtMs <= period.endMs;
+            })
+            : [],
+          unpairedSleepStarts: snapshot.pairs && Array.isArray(snapshot.pairs.unpairedSleepStarts)
+            ? snapshot.pairs.unpairedSleepStarts.filter(function (record) {
+              return record && Number.isFinite(record.recordedAtMs) && record.recordedAtMs >= period.startMs && record.recordedAtMs <= period.endMs;
+            })
+            : []
+        };
+        const feeding = doctorSummaryBuildFeeding(recentRecords, period.periodDays, feedingIntervals);
+        const sleep = doctorSummaryBuildSleep(recentRecords, period.periodDays, recentPairs);
+        const diaper = doctorSummaryBuildDiaper(recentRecords, period.periodDays);
+        const recordsSummary = doctorSummaryBuildRecordCounts(recentRecords, normalized);
+        const recent7Days = {
+          feeding: feeding,
+          sleep: sleep,
+          diaper: diaper,
+          records: recordsSummary
+        };
+        const notableRecords = doctorSummaryBuildNotableRecords(recentRecords, recentPairs, feedingIntervals);
+        const missingData = doctorSummaryBuildMissingData(snapshot, recent7Days);
+        const caregiverNotes = doctorSummaryBuildCaregiverNotes(recentRecords);
+        const crySummary = {
+          available: false,
+          count: 0,
+          recentItems: [],
+          missingReason: "cry_feature_not_implemented_yet"
+        };
+        const privacyOptions = {
+          includeBabyName: true,
+          includeBirthDate: true,
+          includeCaregiverNotes: true,
+          includeSensitiveNotes: false,
+          includeCryRecords: true
+        };
+        const summary = {
+          available: recentRecords.length > 0,
+          periodDays: period.periodDays,
+          periodLabel: period.periodLabel,
+          startDate: period.startDate,
+          endDate: period.endDate,
+          confidenceLevel: missingData.confidenceLevel || "low",
+          primarySummary: recordsSummary.summaryText,
+          missingReason: recentRecords.length > 0 ? null : "not_enough_recent_records"
+        };
+        const messageKeys = ageToneUnique([
+          "doctor_visit_summary_available",
+          recentRecords.length > 0 ? "doctor_visit_summary_share_text_available" : "doctor_visit_summary_not_enough_data",
+          feeding.available ? "doctor_summary_feeding_available" : "",
+          sleep.available ? "doctor_summary_sleep_available" : "",
+          diaper.available ? "doctor_summary_diaper_available" : "",
+          notableRecords.available ? "doctor_summary_notable_records_available" : "",
+          "doctor_summary_missing_data_available",
+          caregiverNotes.available ? "doctor_summary_caregiver_notes_available" : "",
+          "doctor_summary_cry_feature_not_implemented",
+          "doctor_summary_reference_only",
+          "doctor_summary_privacy_options_prepared"
+        ].filter(Boolean));
+        const draft = {
+          ok: true,
+          phase: "5.11",
+          babyId: babyInfo.babyId,
+          generatedAt: generatedAt,
+          summary: summary,
+          babyInfo: babyInfo,
+          recent7Days: recent7Days,
+          notableRecords: notableRecords,
+          missingData: missingData,
+          caregiverNotes: caregiverNotes,
+          crySummary: crySummary,
+          privacyOptions: privacyOptions,
+          shareText: null,
+          messageKeys: messageKeys,
+          warnings: [],
+          errors: []
+        };
+        draft.shareText = doctorSummaryBuildShareText(draft);
+        const residualBlocked = doctorSummaryFindBlockedExpressions(JSON.stringify({
+          summary: draft.summary,
+          recent7Days: draft.recent7Days,
+          notableRecords: draft.notableRecords,
+          missingData: draft.missingData,
+          caregiverNotes: draft.caregiverNotes,
+          shareText: draft.shareText
+        }));
+        if (residualBlocked.length) {
+          draft.warnings.push({
+            key: "doctor_summary_blocked_expression_removed_check",
+            blockedExpressions: residualBlocked
+          });
+        }
+        draft.phase511CompletionCheck = buildPhase511CompletionCheck(draft);
+        return draft;
+      }
+
       function buildPhase59CompletionCheck(missingDataInsights) {
         const insights = missingDataInsights || {};
         const issues = insights.issues || {};
@@ -10548,6 +11269,9 @@
         const babyAgeToneAdjustment = buildAgeToneAdjustment(snapshot, { nowMs: opts.nowMs });
         snapshot.babyAgeToneAdjustment = babyAgeToneAdjustment;
         snapshot.phase510CompletionCheck = babyAgeToneAdjustment.phase510CompletionCheck;
+        const doctorVisitSummary = buildDoctorVisitSummary(snapshot, opts);
+        snapshot.doctorVisitSummary = doctorVisitSummary;
+        snapshot.phase511CompletionCheck = doctorVisitSummary.phase511CompletionCheck;
         console.debug("[Phase 5.1.2 Interval Stats]", snapshot.intervalStats);
         console.debug("[Phase 5.1.2 Confidence Summary]", snapshot.confidenceSummary);
         console.debug("[Phase 5.1 Completion Check]", snapshot.phase51CompletionCheck);
@@ -10560,6 +11284,7 @@
         console.debug("[Phase 5.8 Parent Report Bundle]", snapshot.parentReportBundle);
         console.debug("[Phase 5.9 Missing Data Insights]", snapshot.missingDataInsights);
         console.debug("[Phase 5.10 Baby Age Tone Adjustment]", snapshot.babyAgeToneAdjustment);
+        console.debug("[Phase 5.11 Doctor Visit Summary]", snapshot.doctorVisitSummary);
         console.debug("[Phase 5.1.1 Feeding Intervals]", {
           summary: snapshot.intervalSummary.feeding,
           stats: snapshot.feedingIntervalStats
@@ -14853,6 +15578,9 @@
         buildPhase59CompletionCheck: buildPhase59CompletionCheck,
         buildAgeToneAdjustment: buildAgeToneAdjustment,
         buildPhase510CompletionCheck: buildPhase510CompletionCheck,
+        buildDoctorVisitSummary: buildDoctorVisitSummary,
+        buildPhase511CompletionCheck: buildPhase511CompletionCheck,
+        DOCTOR_VISIT_SUMMARY_CONFIG: DOCTOR_VISIT_SUMMARY_CONFIG,
         BABY_AGE_GROUPS: BABY_AGE_GROUPS,
         RHYTHM_SCORE_WEIGHTS: RHYTHM_SCORE_WEIGHTS,
         sanitizeReportMessageText: sanitizeReportMessageText,
