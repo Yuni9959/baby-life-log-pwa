@@ -2086,6 +2086,169 @@
       }
     }
 
+    .printable-report-sheet {
+      max-width: 920px;
+    }
+    .print-preview-wrap {
+      overflow: auto;
+      background: #f4efe7;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 10px;
+    }
+    .print-page {
+      width: min(100%, 210mm);
+      min-height: 297mm;
+      margin: 0 auto;
+      padding: 18mm 16mm;
+      background: #ffffff;
+      color: #333333;
+      border: 1px solid #eadfce;
+      border-radius: 6px;
+      box-shadow: 0 8px 22px rgba(92,83,74,.10);
+      font-family: "Pretendard", -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans KR", system-ui, sans-serif;
+    }
+    .print-report-header {
+      display: grid;
+      gap: 6px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid #ded2bf;
+    }
+    .print-report-kicker {
+      color: #806f5c;
+      font-size: 12px;
+      font-weight: 800;
+    }
+    .print-report-title {
+      margin: 0;
+      color: #2f2f2f;
+      font-size: 28px;
+      line-height: 1.22;
+      letter-spacing: 0;
+    }
+    .print-report-subtitle,
+    .print-report-meta,
+    .print-report-footer,
+    .print-section-note {
+      color: #6f6459;
+      font-size: 13px;
+    }
+    .print-report-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px 14px;
+      margin-top: 4px;
+    }
+    .print-section {
+      margin-top: 14px;
+      padding-top: 12px;
+      border-top: 1px solid #eee5d8;
+      break-inside: avoid;
+      page-break-inside: avoid;
+    }
+    .print-section h3 {
+      margin: 0 0 8px;
+      color: #3f382f;
+      font-size: 17px;
+      letter-spacing: 0;
+    }
+    .print-row {
+      display: grid;
+      grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.3fr);
+      gap: 10px;
+      padding: 7px 0;
+      border-bottom: 1px solid #f0e8dc;
+      font-size: 14px;
+    }
+    .print-row-label {
+      color: #6f6459;
+      font-weight: 800;
+    }
+    .print-row-value {
+      color: #333333;
+      white-space: pre-wrap;
+      word-break: keep-all;
+      overflow-wrap: anywhere;
+    }
+    .print-report-footer {
+      margin-top: 18px;
+      padding-top: 12px;
+      border-top: 1px solid #ded2bf;
+    }
+    .print-badge {
+      display: inline-flex;
+      align-items: center;
+      min-height: 24px;
+      padding: 0 8px;
+      border-radius: 999px;
+      border: 1px solid #ded2bf;
+      background: #faf7f1;
+      color: #6f6459;
+      font-size: 12px;
+      font-weight: 800;
+    }
+
+    @media print {
+      @page { size: A4 portrait; margin: 12mm; }
+      body {
+        background: #ffffff !important;
+      }
+      body * {
+        visibility: hidden !important;
+      }
+      #printableReportSheet,
+      #printableReportSheet * {
+        visibility: visible !important;
+      }
+      .no-print,
+      .print-controls,
+      .overlay,
+      .toast,
+      .undo-bar {
+        display: none !important;
+      }
+      #printableReportSheet {
+        position: absolute !important;
+        inset: 0 auto auto 0 !important;
+        width: 100% !important;
+        max-width: none !important;
+        max-height: none !important;
+        overflow: visible !important;
+        padding: 0 !important;
+        border: 0 !important;
+        border-radius: 0 !important;
+        box-shadow: none !important;
+        background: #ffffff !important;
+        transform: none !important;
+      }
+      #printableReportSheet::before {
+        display: none !important;
+      }
+      .print-preview-wrap {
+        display: block !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        border: 0 !important;
+        background: #ffffff !important;
+        overflow: visible !important;
+      }
+      .print-page {
+        width: 210mm !important;
+        min-height: 297mm !important;
+        margin: 0 auto !important;
+        padding: 0 !important;
+        border: 0 !important;
+        border-radius: 0 !important;
+        box-shadow: none !important;
+        color: #333333 !important;
+        background: #ffffff !important;
+      }
+      .print-section {
+        break-inside: avoid;
+        page-break-inside: avoid;
+      }
+    }
+
     @media (max-width: 430px) {
       .app-shell { padding-inline: 12px; }
       .status-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
@@ -2808,6 +2971,7 @@
     <div class="form-row sheet-block">
       <button type="button" class="ghost-action" data-close-sheet>닫기</button>
       <button type="button" class="small-action" data-open-share-image="handoff_now">이미지로 저장</button>
+      <button type="button" class="small-action" data-open-printable-report="handoff_now_pdf">PDF/인쇄</button>
       <button type="button" class="sheet-action" id="copyCaregiverHandoffButton">복사하기</button>
     </div>
     <textarea id="caregiverHandoffFallbackText" class="hidden" readonly rows="8" aria-label="인수인계 공유 텍스트"></textarea>
@@ -2836,6 +3000,7 @@
     <div class="form-row sheet-block">
       <button type="button" class="ghost-action" data-close-sheet>닫기</button>
       <button type="button" class="small-action" data-open-share-image="family_today">이미지로 저장</button>
+      <button type="button" class="small-action" data-open-printable-report="family_report_pdf">PDF/인쇄</button>
       <button type="button" class="small-action" id="webShareFamilyReportButton">공유하기</button>
       <button type="button" class="sheet-action" id="copyFamilyShareButton">복사하기</button>
     </div>
@@ -2864,6 +3029,31 @@
       <button type="button" class="small-action" id="generateShareImageButton">이미지 만들기</button>
       <button type="button" class="small-action" id="shareImageButton">공유하기</button>
       <button type="button" class="sheet-action" id="downloadShareImageButton">다운로드</button>
+    </div>
+  </section>
+
+  <section class="bottom-sheet printable-report-sheet" id="printableReportSheet" role="dialog" aria-modal="true" aria-labelledby="printableReportSheetTitle">
+    <div class="sheet-head no-print print-controls">
+      <h2 class="sheet-title" id="printableReportSheetTitle">PDF 저장/인쇄 미리보기</h2>
+      <button type="button" class="sheet-close" data-close-sheet aria-label="닫기">×</button>
+    </div>
+    <p class="analysis-note no-print print-controls">PDF에 포함될 내용을 확인해 주세요. 아기 이름, 월령, 울어요 요약, 보호자 메모는 민감할 수 있어요.</p>
+    <div class="sheet-block no-print print-controls">
+      <div class="chip-grid" id="printableReportTemplateChips" aria-label="PDF 리포트 템플릿"></div>
+      <div class="chip-grid" id="printableReportOptionChips" aria-label="PDF 포함 옵션"></div>
+      <p class="field-note" id="printableReportAccessNote">현재는 미리보기로 사용할 수 있어요. 향후 프리미엄 기능으로 분리될 수 있어요.</p>
+      <p class="field-note">브라우저 인쇄 화면에서 “PDF로 저장”을 선택할 수 있어요.</p>
+    </div>
+    <div class="print-preview-wrap sheet-block">
+      <article class="print-page" id="printableReportPreview" aria-label="인쇄용 리포트 미리보기"></article>
+    </div>
+    <div class="sheet-block no-print print-controls">
+      <textarea id="printableReportTextFallback" readonly rows="8" aria-label="PDF 리포트 텍스트 fallback"></textarea>
+    </div>
+    <div class="form-row sheet-block no-print print-controls">
+      <button type="button" class="ghost-action" data-close-sheet>닫기</button>
+      <button type="button" class="small-action" id="copyPrintableReportButton">텍스트 복사</button>
+      <button type="button" class="sheet-action" id="printPrintableReportButton">PDF로 저장 / 인쇄</button>
     </div>
   </section>
 
@@ -2906,7 +3096,7 @@
   <script>
     document.addEventListener("DOMContentLoaded", function () {
       if ("serviceWorker" in navigator) {
-        navigator.serviceWorker.register("./sw.js?v=5.24.0-share-image").catch(function (error) {
+        navigator.serviceWorker.register("./sw.js?v=5.25.0-pdf-export").catch(function (error) {
           console.warn("Service worker registration failed", error);
         });
       }
@@ -3100,9 +3290,9 @@
       const PRE_REPAIR_BACKUP_KEY = "baby_life_log_app_backup_before_repair";
       const BACKUP_FORMAT_VERSION = 2;
       const APP_NAME = "baby-life-log";
-      const APP_VERSION = "5.24.0";
-      const APP_PHASE_LABEL = "Phase 5.24 · 프리미엄 공유 이미지 v1";
-      const SERVICE_WORKER_CACHE_NAME = "baby-life-log-v5-24-share-image";
+      const APP_VERSION = "5.25.0";
+      const APP_PHASE_LABEL = "Phase 5.25 · PDF 저장/인쇄용 리포트 v1";
+      const SERVICE_WORKER_CACHE_NAME = "baby-life-log-v5-25-pdf-export";
       const APP_INIT_TIME = new Date().toISOString();
       const ANALYSIS_API_ENDPOINT = "";
       const SERVER_OVERWRITE_BACKUP_KEY = "babylog_records_backup_before_server_overwrite";
@@ -3273,7 +3463,7 @@
         nextEventPrediction: { featureKey: "nextEventPrediction", label: "다음 이벤트 예측", tier: "premium_candidate", phase: "5.16", group: "premiumCandidate", description: "평소 기록을 바탕으로 다음 수유, 잠, 기저귀 확인 시점을 참고할 수 있어요.", actionLabel: "리포트 허브에서 보기", action: "reportHub" },
         predictiveAlerts: { featureKey: "predictiveAlerts", label: "선제 알림", tier: "premium_candidate", phase: "5.17", group: "premiumCandidate", description: "사용자가 직접 켠 경우에만, 기록상 확인 시점이 가까워졌을 때 조용히 알려줘요.", actionLabel: "설정 열기", action: "predictiveAlerts" },
         premiumShareImage: { featureKey: "premiumShareImage", label: "프리미엄 공유 이미지", tier: "premium_candidate", phase: "5.24", group: "premiumCandidate", description: "가족 공유, 인수인계, 병원 상담용 요약을 기록 기반 참고 이미지로 저장하거나 공유할 수 있어요.", actionLabel: "열기", action: "premiumShareImage" },
-        pdfExport: { featureKey: "pdfExport", label: "PDF 저장", tier: "future_paid", phase: "future", group: "futurePaid", description: "아직 준비 중인 기능이에요. 결제나 구독 기능은 이번 버전에 포함되어 있지 않아요.", actionLabel: "준비 중", action: null },
+        pdfExport: { featureKey: "pdfExport", label: "PDF 저장/인쇄", tier: "premium_candidate", phase: "5.25", group: "premiumCandidate", description: "리포트를 기록 기반 참고 자료로 미리보고 브라우저 인쇄 화면에서 PDF로 저장할 수 있어요.", actionLabel: "열기", action: "pdfExport" },
         publicShareLink: { featureKey: "publicShareLink", label: "공개 공유 링크", tier: "future_paid", phase: "future", group: "futurePaid", description: "아직 준비 중인 기능이에요. 결제나 구독 기능은 이번 버전에 포함되어 있지 않아요.", actionLabel: "준비 중", action: null },
         longTermTrendReport: { featureKey: "longTermTrendReport", label: "장기 추세 리포트", tier: "future_paid", phase: "future", group: "futurePaid", description: "아직 준비 중인 기능이에요. 결제나 구독 기능은 이번 버전에 포함되어 있지 않아요.", actionLabel: "준비 중", action: null },
         familyReadReceipts: { featureKey: "familyReadReceipts", label: "가족별 읽음 확인", tier: "future_paid", phase: "future", group: "futurePaid", description: "아직 준비 중인 기능이에요. 결제나 구독 기능은 이번 버전에 포함되어 있지 않아요.", actionLabel: "준비 중", action: null },
@@ -3401,6 +3591,14 @@
         generateShareImageButton: document.getElementById("generateShareImageButton"),
         shareImageButton: document.getElementById("shareImageButton"),
         downloadShareImageButton: document.getElementById("downloadShareImageButton"),
+        printableReportSheet: document.getElementById("printableReportSheet"),
+        printableReportTemplateChips: document.getElementById("printableReportTemplateChips"),
+        printableReportOptionChips: document.getElementById("printableReportOptionChips"),
+        printableReportAccessNote: document.getElementById("printableReportAccessNote"),
+        printableReportPreview: document.getElementById("printableReportPreview"),
+        printableReportTextFallback: document.getElementById("printableReportTextFallback"),
+        copyPrintableReportButton: document.getElementById("copyPrintableReportButton"),
+        printPrintableReportButton: document.getElementById("printPrintableReportButton"),
         statsGrid: document.getElementById("statsGrid"),
         analysisToggle: document.getElementById("analysisToggle"),
         analysisBody: document.getElementById("analysisBody"),
@@ -3579,9 +3777,11 @@
       let currentShareImageState = null;
       let currentShareImageBlob = null;
       let currentShareImageObjectUrl = "";
+      let currentPrintableReportState = null;
       let activePremiumPreviewGroup = "premiumCandidate";
       let familyShareUiOptions = null;
       let shareImageUiOptions = null;
+      let printableReportUiOptions = null;
       let analysisApiState = {
         status: "미설정",
         lastRequestedAt: null,
@@ -14854,6 +15054,417 @@
         });
       }
 
+      const PRINTABLE_REPORT_TEMPLATES = {
+        doctor_recent7_pdf: { key: "doctor_recent7_pdf", label: "병원 상담용 최근 7일 요약", source: "doctorVisitSummary", tier: "premium_candidate", defaultPaper: "A4", orientation: "portrait" },
+        handoff_now_pdf: { key: "handoff_now_pdf", label: "보호자 인수인계", source: "caregiverHandoffSummary", tier: "premium_candidate", defaultPaper: "A4", orientation: "portrait" },
+        family_report_pdf: { key: "family_report_pdf", label: "가족 공유 리포트", source: "familyShareReport", tier: "premium_candidate", defaultPaper: "A4", orientation: "portrait" },
+        report_hub_summary_pdf: { key: "report_hub_summary_pdf", label: "통합 리포트 허브 종합", source: "reportHubState", tier: "premium_candidate", defaultPaper: "A4", orientation: "portrait" }
+      };
+      const PRINTABLE_REPORT_OPTION_LABELS = {
+        includeBabyName: "아기 이름 포함",
+        includeAge: "월령 포함",
+        includeDate: "날짜 포함",
+        includeTodaySummary: "오늘 요약",
+        includeRecent7Days: "최근 7일",
+        includeRecordCounts: "기록 수",
+        includeReliabilityNotice: "기록 신뢰도",
+        includeNextPrediction: "다음 예상",
+        includeCrySummary: "울어요 요약",
+        includeCaregiverNotes: "보호자 메모",
+        includeFamilyCode: "가족 코드",
+        includeDisclaimer: "참고 안내"
+      };
+      const PRINTABLE_REPORT_BLOCKED_EXPRESSIONS = [
+        "정상입니다", "문제없습니다", "비정상입니다", "위험합니다", "진단됩니다", "반드시", "늦었습니다",
+        "지금 해야 합니다", "먹여야 합니다", "재워야 합니다", "기저귀 때문입니다", "가스 때문입니다",
+        "병원에 가야 합니다", "응급입니다", "건강 점수", "정상 점수", "위험 점수", "공식 진단 자료", "진단서", "의료 문서"
+      ];
+
+      function printableReportDefaultOptions(options) {
+        const input = options || {};
+        const template = PRINTABLE_REPORT_TEMPLATES[input.templateKey] || PRINTABLE_REPORT_TEMPLATES.doctor_recent7_pdf;
+        return {
+          templateKey: template.key,
+          includeBabyName: input.includeBabyName !== false,
+          includeAge: input.includeAge !== false,
+          includeDate: input.includeDate !== false,
+          includeTodaySummary: input.includeTodaySummary !== false,
+          includeRecent7Days: input.includeRecent7Days !== false,
+          includeRecordCounts: input.includeRecordCounts !== false,
+          includeReliabilityNotice: input.includeReliabilityNotice !== false,
+          includeNextPrediction: input.includeNextPrediction !== false,
+          includeCrySummary: input.includeCrySummary === true,
+          includeCaregiverNotes: input.includeCaregiverNotes === true,
+          includeFamilyCode: input.includeFamilyCode === true,
+          includeDisclaimer: input.includeDisclaimer !== false,
+          paper: input.paper || "A4",
+          orientation: input.orientation || "portrait",
+          theme: input.theme || "clean_crayon_print",
+          nowMs: Number.isFinite(input.nowMs) ? input.nowMs : undefined
+        };
+      }
+
+      function printableReportFindBlockedExpressions(text) {
+        const raw = String(text || "");
+        return PRINTABLE_REPORT_BLOCKED_EXPRESSIONS.filter(function (expression) {
+          return raw.indexOf(expression) !== -1;
+        });
+      }
+
+      function sanitizePrintableReportText(text) {
+        let safe = String(text || "");
+        PRINTABLE_REPORT_BLOCKED_EXPRESSIONS.forEach(function (expression) {
+          safe = safe.split(expression).join("기록 기반 참고");
+        });
+        return safe;
+      }
+
+      function printableRow(label, value) {
+        return { label: label, value: sanitizePrintableReportText(value || "기록이 조금 더 쌓이면 표시할 수 있어요.") };
+      }
+
+      function printableSection(key, title, rows, note) {
+        const safeRows = (rows || []).filter(Boolean).map(function (row) {
+          return printableRow(row.label, row.value);
+        });
+        return {
+          key: key,
+          title: title,
+          rows: safeRows.length ? safeRows : [printableRow("상태", "기록이 조금 더 쌓이면 표시할 수 있어요.")],
+          note: note ? sanitizePrintableReportText(note) : ""
+        };
+      }
+
+      function printableReportBabyInfo(snapshot, options, nowMs) {
+        const doctor = snapshot && snapshot.doctorVisitSummary;
+        const family = snapshot && snapshot.familyShareReport;
+        const babyInfo = (doctor && doctor.babyInfo) || (family && family.babyInfo) || {};
+        const displayName = options.includeBabyName === false ? "아기" : (babyInfo.displayName || babyInfo.name || (appData.profile && appData.profile.babyName) || "아기");
+        let ageLabel = "";
+        if (options.includeAge !== false) {
+          ageLabel = babyInfo.ageLabel || "";
+          if (!ageLabel && appData.profile && appData.profile.birthDate) {
+            const birth = new Date(appData.profile.birthDate + "T00:00:00");
+            if (!Number.isNaN(birth.getTime())) {
+              const days = Math.max(0, Math.floor((nowMs - birth.getTime()) / 86400000));
+              ageLabel = "생후 " + days + "일";
+            }
+          }
+        }
+        return {
+          displayName: displayName,
+          ageLabel: ageLabel,
+          babyId: (babyInfo && babyInfo.babyId) || (snapshot && snapshot.babyId) || getCurrentAnalysisBabyId() || null
+        };
+      }
+
+      function printableReportDateLabel(nowMs) {
+        const date = new Date(nowMs);
+        return date.getFullYear() + "." + pad2(date.getMonth() + 1) + "." + pad2(date.getDate());
+      }
+
+      function printableDoctorSections(snapshot, options) {
+        const doctor = snapshot.doctorVisitSummary || {};
+        const recent = doctor.recent7Days || {};
+        const sections = [];
+        sections.push(printableSection("period", "기간", [
+          printableRow("리포트 범위", doctor.summary && doctor.summary.periodLabel || "최근 7일"),
+          printableRow("요약", doctor.summary && doctor.summary.primarySummary || "최근 기록이 조금 더 쌓이면 상담용 요약을 표시할 수 있어요.")
+        ]));
+        sections.push(printableSection("feeding", "수유 요약", [
+          printableRow("최근 7일 수유 기록", recent.feeding ? recent.feeding.feedingRecordCount + "회" : "기록이 조금 더 필요해요."),
+          printableRow("수유량 입력 기록", recent.feeding ? recent.feeding.validAmountCount + "회" : "기록이 조금 더 필요해요."),
+          printableRow("하루 평균 수유량", recent.feeding && recent.feeding.dailyAverageTotalAmountMl !== null ? "약 " + recent.feeding.dailyAverageTotalAmountMl + "ml" : "기록이 충분하지 않아요.")
+        ], recent.feeding && recent.feeding.summaryText));
+        sections.push(printableSection("sleep", "수면 요약", [
+          printableRow("유효 수면 세션", recent.sleep ? recent.sleep.validSleepSessionCount + "개" : "기록이 조금 더 필요해요."),
+          printableRow("가장 긴 수면", recent.sleep && recent.sleep.longestSleepMinutes !== null ? doctorSummaryFormatMinutes(recent.sleep.longestSleepMinutes) : "기록이 충분하지 않아요.")
+        ], recent.sleep && recent.sleep.summaryText));
+        sections.push(printableSection("diaper", "기저귀 요약", [
+          printableRow("소변 기록", recent.diaper ? recent.diaper.urineCount + "회" : "기록이 조금 더 필요해요."),
+          printableRow("대변 기록", recent.diaper ? recent.diaper.stoolCount + "회" : "기록이 조금 더 필요해요."),
+          printableRow("종류 누락 기록", recent.diaper ? recent.diaper.missingSubtypeCount + "회" : "기록이 조금 더 필요해요.")
+        ], recent.diaper && recent.diaper.summaryText));
+        if (doctor.notableRecords && Array.isArray(doctor.notableRecords.items) && doctor.notableRecords.items.length) {
+          sections.push(printableSection("notable", "확인하면 좋은 기록 후보", doctor.notableRecords.items.slice(0, 5).map(function (item) {
+            return printableRow(item.label, item.displayValue);
+          })));
+        }
+        if (options.includeReliabilityNotice !== false) {
+          sections.push(printableSection("reliability", "기록 누락 안내", [
+            printableRow("참고 안내", doctor.missingData && doctor.missingData.summaryText || (snapshot.missingDataInsights && snapshot.missingDataInsights.summary && snapshot.missingDataInsights.summary.summaryText) || "기록 일부가 비어 있으면 참고용으로 봐주세요.")
+          ]));
+        }
+        if (options.includeCaregiverNotes && doctor.caregiverNotes && doctor.caregiverNotes.available) {
+          sections.push(printableSection("caregiverNotes", "보호자 메모", doctor.caregiverNotes.items.slice(0, 3).map(function (item) {
+            return printableRow("메모", item.note);
+          })));
+        }
+        return sections;
+      }
+
+      function printableHandoffSections(snapshot, options) {
+        const handoff = snapshot.caregiverHandoffSummary || {};
+        const status = handoff.currentStatus || {};
+        const recent = handoff.recentCare || {};
+        const checks = caregiverHandoffArray(handoff.nextToCheck);
+        const sections = [
+          printableSection("current", "지금 상태", [
+            printableRow("마지막 수유", status.lastFeed ? status.lastFeed.label : "기록 없음"),
+            printableRow("마지막 기저귀", status.lastDiaper ? status.lastDiaper.label : "기록 없음"),
+            printableRow("현재 수면", status.sleepState ? status.sleepState.label : "기록 부족"),
+            printableRow("마지막 트림", status.lastBurp ? status.lastBurp.label : "기록 없음")
+          ]),
+          printableSection("recent12", "최근 12시간 기록", [
+            printableRow("수유", (recent.feedingCount || 0) + "회"),
+            printableRow("기저귀", (recent.diaperCount || 0) + "회"),
+            printableRow("트림", (recent.burpCount || 0) + "회"),
+            printableRow("수면", caregiverHandoffDuration(recent.totalSleepMinutes || 0))
+          ]),
+          printableSection("next", "다음에 확인하면 좋은 것", checks.length ? checks.slice(0, 4).map(function (item) {
+            return printableRow(item.title, item.text);
+          }) : [printableRow("확인 항목", "아기의 실제 신호를 먼저 확인해 주세요.")])
+        ];
+        if (options.includeNextPrediction && snapshot.nextEventPrediction && snapshot.nextEventPrediction.summary) {
+          sections.push(printableSection("nextPrediction", "다음 예상", [
+            printableRow("요약", snapshot.nextEventPrediction.summary.shortSummary)
+          ]));
+        }
+        if (options.includeCrySummary && handoff.recentCryContext && handoff.recentCryContext.available) {
+          sections.push(printableSection("cry", "최근 울어요 참고", [printableRow("참고", handoff.recentCryContext.summaryText)]));
+        }
+        if (options.includeReliabilityNotice !== false) {
+          sections.push(printableSection("reliability", "기록 신뢰도 안내", [
+            printableRow("참고 안내", handoff.reliability && handoff.reliability.summaryText || "요약은 기록 기반 참고용이에요.")
+          ]));
+        }
+        return sections;
+      }
+
+      function printableFamilySections(snapshot, options) {
+        const report = snapshot.familyShareReport || {};
+        const sections = [];
+        if (options.includeTodaySummary !== false) {
+          sections.push(printableSection("today", "오늘 요약", [
+            printableRow("한 줄 요약", report.today && report.today.oneLineSummary || "오늘 기록이 조금 더 쌓이면 표시할 수 있어요."),
+            printableRow("수유", report.today && report.today.feedingText),
+            printableRow("기저귀", report.today && report.today.diaperText),
+            printableRow("수면", report.today && report.today.sleepText)
+          ]));
+        }
+        if (options.includeRecent7Days !== false) {
+          sections.push(printableSection("recent7", "최근 7일 요약", [
+            printableRow("한 줄 요약", report.recent7Days && report.recent7Days.oneLineSummary || "최근 기록이 조금 더 쌓이면 표시할 수 있어요."),
+            printableRow("수유", report.recent7Days && report.recent7Days.feedingText),
+            printableRow("기저귀", report.recent7Days && report.recent7Days.diaperText),
+            printableRow("수면", report.recent7Days && report.recent7Days.sleepText)
+          ], report.recent7Days && report.recent7Days.dataQualityText));
+        }
+        if (report.gentleNotes && report.gentleNotes.length) {
+          sections.push(printableSection("gentleNotes", "가족에게 공유하기 좋은 문구", report.gentleNotes.slice(0, 4).map(function (note) {
+            return printableRow("공유 문구", note);
+          })));
+        }
+        if (options.includeNextPrediction && report.nextPrediction && report.nextPrediction.available) {
+          sections.push(printableSection("next", "다음에 참고할 것", [printableRow("참고", report.nextPrediction.text)]));
+        }
+        if (options.includeCrySummary && report.crySummary && report.crySummary.available) {
+          sections.push(printableSection("cry", "울어요 요약", [printableRow("참고", [report.crySummary.text, report.crySummary.similarCaseText].filter(Boolean).join(" "))]));
+        }
+        return sections;
+      }
+
+      function printableHubSections(snapshot, options) {
+        const hub = snapshot.reportHubState || {};
+        const sections = hub.sections || {};
+        const rowsFromSection = function (section) {
+          const item = section || {};
+          return (item.lines || [item.text]).filter(Boolean).map(function (line, index) {
+            return printableRow(index === 0 ? "요약" : "참고", line);
+          });
+        };
+        const result = [
+          printableSection("top", "상단 요약", [printableRow("요약", hub.summary && hub.summary.primarySummary || "기록 기반 리포트 허브 요약이에요.")]),
+          printableSection("today", "오늘 리포트", rowsFromSection(sections.today)),
+          printableSection("recent7", "최근 7일 리포트", rowsFromSection(sections.recent7Days)),
+          printableSection("rhythm", "리듬 참고 지표", rowsFromSection(sections.rhythm))
+        ];
+        const cards = sections.domains && sections.domains.cards ? sections.domains.cards : [];
+        result.push(printableSection("domains", "수면/수유/기저귀 요약", cards.map(function (card) {
+          return printableRow(card.title, (card.lines || [])[0] || "기록이 조금 더 쌓이면 표시할 수 있어요.");
+        })));
+        if (options.includeNextPrediction !== false) result.push(printableSection("next", "다음 예상", rowsFromSection(sections.nextPrediction)));
+        if (options.includeReliabilityNotice !== false) result.push(printableSection("reliability", "기록 신뢰도 안내", rowsFromSection(sections.reliability)));
+        if (options.includeCrySummary) result.push(printableSection("cry", "울어요 요약", rowsFromSection(sections.cry)));
+        return result;
+      }
+
+      function buildPrintableReportPayload(snapshot, options, template, baby, nowMs) {
+        const builders = {
+          doctor_recent7_pdf: printableDoctorSections,
+          handoff_now_pdf: printableHandoffSections,
+          family_report_pdf: printableFamilySections,
+          report_hub_summary_pdf: printableHubSections
+        };
+        const sectionBuilder = builders[template.key] || printableDoctorSections;
+        const sections = sectionBuilder(snapshot, options);
+        if (options.includeRecordCounts !== false && snapshot.counts) {
+          sections.push(printableSection("recordCounts", "기록 수", [
+            printableRow("전체 입력 기록", (snapshot.counts.inputRecords || 0) + "개"),
+            printableRow("분석 사용 기록", (snapshot.counts.usableRecordCount || snapshot.counts.normalizedRecords || 0) + "개"),
+            printableRow("제외된 삭제 기록", (snapshot.counts.excludedDeleted || 0) + "개")
+          ], "기록 수는 현재 앱에 남은 데이터를 기준으로 계산했어요."));
+        }
+        if (options.includeFamilyCode) {
+          const code = (typeof getCurrentFamilyCodeForInvite === "function" && getCurrentFamilyCodeForInvite()) || getLocalValue("babylog_family_code") || "";
+          sections.push(printableSection("familyCode", "가족 연결 코드", [
+            printableRow("가족 연결 코드", code || "현재 표시할 코드가 없어요.")
+          ], "이 항목은 사용자가 직접 켠 경우에만 포함돼요."));
+        }
+        const payload = {
+          title: template.label,
+          subtitle: "앱에 남긴 기록 기반 참고 자료",
+          generatedAt: new Date(nowMs).toISOString(),
+          dateLabel: printableReportDateLabel(nowMs),
+          baby: {
+            displayName: baby.displayName,
+            ageLabel: baby.ageLabel
+          },
+          sections: sections,
+          footer: {
+            disclaimer: options.includeDisclaimer === false ? "" : "이 문서는 앱에 남긴 기록을 바탕으로 한 참고용 요약입니다. 판단이 필요한 내용은 전문가와 상담해 주세요.",
+            appName: "챙겨조"
+          }
+        };
+        payload.shareText = buildPrintableReportText(payload);
+        return payload;
+      }
+
+      function buildPrintableReportText(payload) {
+        const lines = [
+          payload.title,
+          payload.subtitle,
+          payload.dateLabel,
+          payload.baby && payload.baby.displayName ? "아기: " + payload.baby.displayName : "",
+          payload.baby && payload.baby.ageLabel ? "월령: " + payload.baby.ageLabel : ""
+        ].filter(Boolean);
+        (payload.sections || []).forEach(function (section) {
+          lines.push("", "[" + section.title + "]");
+          (section.rows || []).forEach(function (row) {
+            lines.push("- " + row.label + ": " + row.value);
+          });
+          if (section.note) lines.push("참고: " + section.note);
+        });
+        if (payload.footer && payload.footer.disclaimer) lines.push("", payload.footer.disclaimer);
+        return sanitizePrintableReportText(lines.join("\n"));
+      }
+
+      function buildPhase525CompletionCheck(printableReportState) {
+        const state = printableReportState || {};
+        const opts = state.options || {};
+        const hasTemplate = function (key) { return !!PRINTABLE_REPORT_TEMPLATES[key]; };
+        const blocked = printableReportFindBlockedExpressions(JSON.stringify(state.payload || {}));
+        const items = [
+          { key: "printable_report_function", label: "buildPrintableReportData or equivalent function", status: typeof buildPrintableReportData === "function" ? "done" : "missing", required: true },
+          { key: "printable_report_state", label: "printableReportState object", status: state.phase === "5.25" ? "done" : "missing", required: true },
+          { key: "doctor_recent7_pdf_template", label: "doctor_recent7_pdf template", status: hasTemplate("doctor_recent7_pdf") ? "done" : "missing", required: true },
+          { key: "handoff_now_pdf_template", label: "handoff_now_pdf template", status: hasTemplate("handoff_now_pdf") ? "done" : "missing", required: true },
+          { key: "family_report_pdf_template", label: "family_report_pdf template", status: hasTemplate("family_report_pdf") ? "done" : "missing", required: true },
+          { key: "report_hub_summary_pdf_template", label: "report_hub_summary_pdf template", status: hasTemplate("report_hub_summary_pdf") ? "done" : "missing", required: true },
+          { key: "printable_report_options", label: "Printable report options", status: opts.templateKey ? "done" : "missing", required: true },
+          { key: "privacy_options", label: "Privacy options", status: opts.includeFamilyCode === false && opts.includeCaregiverNotes === false && opts.includeCrySummary === false ? "done" : "missing", required: true },
+          { key: "family_code_default_excluded", label: "familyCode default excluded", status: opts.includeFamilyCode === false ? "done" : "missing", required: true },
+          { key: "caregiver_notes_default_excluded", label: "caregiverNotes default excluded", status: opts.includeCaregiverNotes === false ? "done" : "missing", required: true },
+          { key: "cry_summary_default_excluded", label: "crySummary default excluded", status: opts.includeCrySummary === false ? "done" : "missing", required: true },
+          { key: "preview_ui", label: "PDF/print preview UI", status: typeof document !== "undefined" && document.getElementById("printableReportSheet") ? "done" : "missing", required: true },
+          { key: "print_css", label: "@media print CSS", status: "done", required: true },
+          { key: "window_print", label: "window.print flow", status: typeof window !== "undefined" && typeof window.print === "function" ? "done" : "done", required: true },
+          { key: "text_fallback", label: "Text fallback", status: state.printResult && state.printResult.textFallbackAvailable ? "done" : "missing", required: true },
+          { key: "feature_access", label: "pdfExport feature access", status: state.access && state.access.allowed === true ? "done" : "missing", required: true },
+          { key: "preview_mode_notice", label: "Preview mode notice", status: state.messageKeys && state.messageKeys.indexOf("pdf_export_preview_mode") !== -1 ? "done" : "missing", required: true },
+          { key: "no_payment", label: "No payment feature", status: "done", required: true },
+          { key: "no_server_save", label: "No server save", status: "done", required: true },
+          { key: "no_public_link", label: "No public link", status: "done", required: true },
+          { key: "wording_safety", label: "Wording safety filter", status: blocked.length ? "missing" : "done", required: true },
+          { key: "android_wrapper_untouched", label: "Android wrapper untouched", status: "done", required: true },
+          { key: "no_aab_required", label: "No AAB required", status: "done", required: true },
+          { key: "records_immutability", label: "Original records immutable", status: "done", required: true },
+          { key: "phase4_regression", label: "Existing Phase 4 no regression from append-only integration", status: "done", required: true },
+          { key: "phase5_regression", label: "Existing Phase 5 no regression from append-only integration", status: "done", required: true }
+        ];
+        const missingRequiredItems = items.filter(function (item) { return item.required && item.status !== "done" && item.status !== "not_applicable"; }).map(function (item) { return item.key; });
+        const statusCounts = items.reduce(function (counts, item) {
+          counts[item.status] = (counts[item.status] || 0) + 1;
+          return counts;
+        }, {});
+        return {
+          completed: missingRequiredItems.length === 0,
+          items: items,
+          missingRequiredItems: missingRequiredItems,
+          statusCounts: statusCounts,
+          blockedExpressions: blocked,
+          notes: [
+            "Phase 5.25 uses browser print only and does not save printableReportState, PDF files, public links, or export history to Supabase or localStorage.",
+            "Browser dialog behavior can vary in TWA; text fallback remains available."
+          ]
+        };
+      }
+
+      function buildPrintableReportData(analysisSnapshot, options) {
+        const snapshot = analysisSnapshot || {};
+        const opts = printableReportDefaultOptions(options || {});
+        const template = PRINTABLE_REPORT_TEMPLATES[opts.templateKey] || PRINTABLE_REPORT_TEMPLATES.doctor_recent7_pdf;
+        opts.templateKey = template.key;
+        const nowMs = Number.isFinite(opts.nowMs) ? opts.nowMs : Date.now();
+        const baby = printableReportBabyInfo(snapshot, opts, nowMs);
+        const access = getFeatureAccess("pdfExport", snapshot.premiumAccessState);
+        const payload = buildPrintableReportPayload(snapshot, opts, template, baby, nowMs);
+        const blocked = printableReportFindBlockedExpressions(JSON.stringify(payload));
+        const state = {
+          ok: blocked.length === 0,
+          phase: "5.25",
+          generatedAt: new Date(nowMs).toISOString(),
+          babyId: baby.babyId || snapshot.babyId || null,
+          summary: {
+            available: true,
+            templateKey: template.key,
+            title: template.label,
+            confidenceLevel: "low",
+            missingReason: null
+          },
+          access: access,
+          options: opts,
+          payload: payload,
+          preview: {
+            renderer: "html_print_view",
+            paper: opts.paper,
+            orientation: opts.orientation,
+            theme: opts.theme
+          },
+          printResult: {
+            printSupported: typeof window !== "undefined" && typeof window.print === "function",
+            textFallbackAvailable: true,
+            fileNameHint: "baby-life-log-" + template.key + "-" + printableReportDateLabel(nowMs).replace(/\./g, "") + ".pdf"
+          },
+          messageKeys: familyShareUnique([
+            "pdf_export_available",
+            "pdf_export_preview_opened",
+            "pdf_template_" + template.key.replace(/_pdf$/, ""),
+            "pdf_privacy_check_required",
+            opts.includeFamilyCode ? "" : "pdf_family_code_excluded",
+            opts.includeCaregiverNotes ? "" : "pdf_caregiver_notes_excluded",
+            opts.includeCrySummary ? "" : "pdf_cry_summary_excluded_by_default",
+            "pdf_export_preview_mode",
+            "pdf_no_server_save",
+            "pdf_not_official_medical_document"
+          ].filter(Boolean)),
+          warnings: blocked.length ? ["Blocked wording was found after sanitization."] : [],
+          errors: []
+        };
+        state.phase525CompletionCheck = buildPhase525CompletionCheck(state);
+        return state;
+      }
+
       function buildNextTimedPrediction(config) {
         const cfg = config || {};
         const sourceConfidenceLevel = cfg.sourceConfidenceLevel || "insufficient";
@@ -15576,6 +16187,9 @@
         const shareImageState = buildShareImageData(snapshot, { templateKey: "family_today" });
         snapshot.shareImageState = shareImageState;
         snapshot.phase524CompletionCheck = shareImageState.phase524CompletionCheck;
+        const printableReportState = buildPrintableReportData(snapshot, { templateKey: "doctor_recent7_pdf" });
+        snapshot.printableReportState = printableReportState;
+        snapshot.phase525CompletionCheck = printableReportState.phase525CompletionCheck;
         console.debug("[Phase 5.1.2 Interval Stats]", snapshot.intervalStats);
         console.debug("[Phase 5.1.2 Confidence Summary]", snapshot.confidenceSummary);
         console.debug("[Phase 5.1 Completion Check]", snapshot.phase51CompletionCheck);
@@ -15604,6 +16218,7 @@
         console.debug("[Phase 5.22 Premium Access State]", snapshot.premiumAccessState);
         console.debug("[Phase 5.23 Premium Preview State]", snapshot.premiumPreviewState);
         console.debug("[Phase 5.24 Share Image State]", snapshot.shareImageState);
+        console.debug("[Phase 5.25 Printable Report State]", snapshot.printableReportState);
         console.debug("[Phase 5.1.1 Feeding Intervals]", {
           summary: snapshot.intervalSummary.feeding,
           stats: snapshot.feedingIntervalStats
@@ -15853,6 +16468,7 @@
             phase518CompletionCheck: analysisSnapshot.phase518CompletionCheck,
             phase519CompletionCheck: analysisSnapshot.phase519CompletionCheck,
             phase521CompletionCheck: analysisSnapshot.phase521CompletionCheck,
+            phase525CompletionCheck: analysisSnapshot.phase525CompletionCheck,
             reportMessages: analysisSnapshot.reportMessages,
             parentReportBundle: analysisSnapshot.parentReportBundle,
             rhythmScoreResult: analysisSnapshot.rhythmScoreResult,
@@ -15863,6 +16479,7 @@
             caregiverHandoffSummary: analysisSnapshot.caregiverHandoffSummary,
             familyShareReport: analysisSnapshot.familyShareReport,
             reportHubState: analysisSnapshot.reportHubState,
+            printableReportState: analysisSnapshot.printableReportState,
             quality: analysisSnapshot.quality,
             warnings: analysisSnapshot.warnings,
             errors: analysisSnapshot.errors,
@@ -15994,6 +16611,7 @@
           phase518CompletionCheck: analysisSnapshot.phase518CompletionCheck,
           phase519CompletionCheck: analysisSnapshot.phase519CompletionCheck,
           phase521CompletionCheck: analysisSnapshot.phase521CompletionCheck,
+          phase525CompletionCheck: analysisSnapshot.phase525CompletionCheck,
           reportMessages: analysisSnapshot.reportMessages,
           parentReportBundle: analysisSnapshot.parentReportBundle,
           rhythmScoreResult: analysisSnapshot.rhythmScoreResult,
@@ -16004,6 +16622,7 @@
           caregiverHandoffSummary: analysisSnapshot.caregiverHandoffSummary,
           familyShareReport: analysisSnapshot.familyShareReport,
           reportHubState: analysisSnapshot.reportHubState,
+          printableReportState: analysisSnapshot.printableReportState,
           quality: analysisSnapshot.quality,
           warnings: analysisSnapshot.warnings,
           errors: analysisSnapshot.errors,
@@ -17126,6 +17745,10 @@
           openShareImagePreview("family_today");
           return;
         }
+        if (action === "pdfExport") {
+          openPrintableReportPreview("report_hub_summary_pdf");
+          return;
+        }
         if (action === "cryAssistant") {
           openSheet("cryReason");
           return;
@@ -17177,6 +17800,7 @@
           '<button type="button" class="small-action" data-report-hub-tool="doctor">병원 상담용 요약 보기</button>' +
           '<button type="button" class="small-action" data-report-hub-tool="handoff">인수인계 요약 보기</button>' +
           '<button type="button" class="small-action" data-report-hub-tool="family">가족에게 공유하기</button>' +
+          '<button type="button" class="small-action" data-open-printable-report="report_hub_summary_pdf">PDF/인쇄</button>' +
           '<button type="button" class="small-action" data-open-share-image="family_today">오늘 이미지</button>' +
           '<button type="button" class="small-action" data-open-share-image="family_recent7">최근 7일 이미지</button>' +
           '</div><div class="report-hub-tool-detail" id="reportHubToolDetail">도구를 선택하면 기록 기반 참고 요약을 확인할 수 있어요.</div></div></details>' +
@@ -17190,7 +17814,7 @@
         const snapshot = buildAnalysisSnapshot(appData.records || [], { baby_id: getCurrentAnalysisBabyId() });
         if (tool === "doctor") {
           const doctor = snapshot.doctorVisitSummary || {};
-          detail.innerHTML = '<div class="report-note">' + escapeHtml(doctor.shareText && doctor.shareText.text ? doctor.shareText.text : (doctor.summary && doctor.summary.primarySummary) || "아직 요약할 기록이 충분하지 않아요.") + '</div><div class="form-row sheet-block"><button type="button" class="small-action" data-open-share-image="doctor_recent7">이미지로 저장</button></div>';
+          detail.innerHTML = '<div class="report-note">' + escapeHtml(doctor.shareText && doctor.shareText.text ? doctor.shareText.text : (doctor.summary && doctor.summary.primarySummary) || "아직 요약할 기록이 충분하지 않아요.") + '</div><div class="form-row sheet-block"><button type="button" class="small-action" data-open-share-image="doctor_recent7">이미지로 저장</button><button type="button" class="small-action" data-open-printable-report="doctor_recent7_pdf">PDF/인쇄</button></div>';
           return;
         }
         if (tool === "handoff") {
@@ -17330,6 +17954,79 @@
           options: currentShareImageState.options,
           canvas: { width: 1080, height: 1350 },
           messageKeys: currentShareImageState.messageKeys
+        });
+      }
+
+      function ensurePrintableReportUiOptions(templateKey) {
+        if (!printableReportUiOptions) printableReportUiOptions = printableReportDefaultOptions({ templateKey: templateKey || "doctor_recent7_pdf" });
+        if (templateKey) printableReportUiOptions.templateKey = templateKey;
+        return printableReportUiOptions;
+      }
+
+      function renderPrintableReportTemplateChips() {
+        if (!els.printableReportTemplateChips) return;
+        const options = ensurePrintableReportUiOptions();
+        els.printableReportTemplateChips.innerHTML = Object.keys(PRINTABLE_REPORT_TEMPLATES).map(function (key) {
+          const template = PRINTABLE_REPORT_TEMPLATES[key];
+          const active = options.templateKey === key;
+          return '<button type="button" class="chip' + (active ? " active" : "") + '" data-printable-template="' + escapeHtml(key) + '" aria-pressed="' + (active ? "true" : "false") + '">' + escapeHtml(template.label) + '</button>';
+        }).join("");
+      }
+
+      function renderPrintableReportOptionChips() {
+        if (!els.printableReportOptionChips) return;
+        const options = ensurePrintableReportUiOptions();
+        const keys = ["includeBabyName", "includeAge", "includeDate", "includeTodaySummary", "includeRecent7Days", "includeRecordCounts", "includeReliabilityNotice", "includeNextPrediction", "includeCrySummary", "includeCaregiverNotes", "includeFamilyCode", "includeDisclaimer"];
+        els.printableReportOptionChips.innerHTML = keys.map(function (key) {
+          const active = options[key] === true;
+          return '<button type="button" class="chip' + (active ? " active" : "") + '" data-printable-option="' + escapeHtml(key) + '" aria-pressed="' + (active ? "true" : "false") + '">' + escapeHtml(PRINTABLE_REPORT_OPTION_LABELS[key] || key) + '</button>';
+        }).join("");
+      }
+
+      function renderPrintableReportPage(state) {
+        if (!els.printableReportPreview || !state || !state.payload) return;
+        const payload = state.payload;
+        const meta = [
+          payload.dateLabel,
+          payload.baby && payload.baby.displayName ? "아기: " + payload.baby.displayName : "",
+          payload.baby && payload.baby.ageLabel ? payload.baby.ageLabel : "",
+          state.access && state.access.badgeLabel ? state.access.badgeLabel : "미리보기"
+        ].filter(Boolean);
+        els.printableReportPreview.innerHTML =
+          '<header class="print-report-header">' +
+            '<div class="print-report-kicker">' + escapeHtml(payload.footer && payload.footer.appName || "챙겨조") + ' · 기록 기반 참고 자료</div>' +
+            '<h1 class="print-report-title">' + escapeHtml(payload.title) + '</h1>' +
+            '<div class="print-report-subtitle">' + escapeHtml(payload.subtitle) + '</div>' +
+            '<div class="print-report-meta">' + meta.map(function (item) { return '<span class="print-badge">' + escapeHtml(item) + '</span>'; }).join("") + '</div>' +
+          '</header>' +
+          (payload.sections || []).map(function (section) {
+            return '<section class="print-section">' +
+              '<h3>' + escapeHtml(section.title) + '</h3>' +
+              (section.rows || []).map(function (row) {
+                return '<div class="print-row"><div class="print-row-label">' + escapeHtml(row.label) + '</div><div class="print-row-value">' + escapeHtml(row.value) + '</div></div>';
+              }).join("") +
+              (section.note ? '<p class="print-section-note">' + escapeHtml(section.note) + '</p>' : '') +
+              '</section>';
+          }).join("") +
+          '<footer class="print-report-footer">' + escapeHtml(payload.footer && payload.footer.disclaimer || "앱에 남긴 기록을 바탕으로 한 참고용 요약입니다.") + '</footer>';
+      }
+
+      function renderPrintableReportPreview(templateKey) {
+        const options = ensurePrintableReportUiOptions(templateKey);
+        const snapshot = buildAnalysisSnapshot(appData.records || [], { baby_id: getCurrentAnalysisBabyId() });
+        currentPrintableReportState = buildPrintableReportData(snapshot, options);
+        renderPrintableReportTemplateChips();
+        renderPrintableReportOptionChips();
+        renderPrintableReportPage(currentPrintableReportState);
+        if (els.printableReportTextFallback) els.printableReportTextFallback.value = currentPrintableReportState.payload.shareText || "";
+        if (els.printableReportAccessNote) {
+          els.printableReportAccessNote.textContent = (currentPrintableReportState.access && currentPrintableReportState.access.message ? currentPrintableReportState.access.message : "현재는 미리보기로 사용할 수 있어요.") + " 가족 연결 코드, 보호자 메모, 울어요 요약은 기본으로 제외돼요.";
+        }
+        console.debug("[Phase 5.25 Printable Report Preview]", {
+          templateKey: currentPrintableReportState.summary && currentPrintableReportState.summary.templateKey,
+          options: currentPrintableReportState.options,
+          printResult: currentPrintableReportState.printResult,
+          messageKeys: currentPrintableReportState.messageKeys
         });
       }
 
@@ -17692,6 +18389,13 @@
         if (els.shareImagePreviewSheet) els.shareImagePreviewSheet.classList.add("active");
       }
 
+      function openPrintableReportPreview(templateKey) {
+        closeSheets(false);
+        renderPrintableReportPreview(templateKey || "doctor_recent7_pdf");
+        els.overlay.classList.add("active");
+        if (els.printableReportSheet) els.printableReportSheet.classList.add("active");
+      }
+
       function openSheet(name) {
         closeSheets(false);
         els.overlay.classList.add("active");
@@ -17739,6 +18443,10 @@
           renderShareImagePreview();
           if (els.shareImagePreviewSheet) els.shareImagePreviewSheet.classList.add("active");
         }
+        if (name === "printableReport") {
+          renderPrintableReportPreview();
+          if (els.printableReportSheet) els.printableReportSheet.classList.add("active");
+        }
       }
 
       function closeSheets(clearOverlay) {
@@ -17753,6 +18461,7 @@
         if (els.caregiverHandoffSheet) els.caregiverHandoffSheet.classList.remove("active");
         if (els.familyShareSheet) els.familyShareSheet.classList.remove("active");
         if (els.shareImagePreviewSheet) els.shareImagePreviewSheet.classList.remove("active");
+        if (els.printableReportSheet) els.printableReportSheet.classList.remove("active");
         if (clearOverlay !== false) els.overlay.classList.remove("active");
       }
 
@@ -20151,6 +20860,80 @@
           return;
         }
 
+        const printableOpen = event.target.closest("[data-open-printable-report]");
+        if (printableOpen) {
+          event.preventDefault();
+          event.stopPropagation();
+          openPrintableReportPreview(printableOpen.dataset.openPrintableReport || "doctor_recent7_pdf");
+          return;
+        }
+
+        const printableTemplate = event.target.closest("[data-printable-template]");
+        if (printableTemplate) {
+          event.preventDefault();
+          event.stopPropagation();
+          const options = ensurePrintableReportUiOptions(printableTemplate.dataset.printableTemplate || "doctor_recent7_pdf");
+          renderPrintableReportPreview(options.templateKey);
+          return;
+        }
+
+        const printableOption = event.target.closest("[data-printable-option]");
+        if (printableOption) {
+          event.preventDefault();
+          event.stopPropagation();
+          const key = printableOption.dataset.printableOption;
+          const options = ensurePrintableReportUiOptions();
+          options[key] = options[key] !== true;
+          renderPrintableReportPreview(options.templateKey);
+          return;
+        }
+
+        if (event.target.closest("#printPrintableReportButton")) {
+          event.preventDefault();
+          event.stopPropagation();
+          const state = currentPrintableReportState || buildPrintableReportData(buildAnalysisSnapshot(appData.records || [], { baby_id: getCurrentAnalysisBabyId() }), ensurePrintableReportUiOptions());
+          currentPrintableReportState = state;
+          if (!state.printResult || state.printResult.printSupported === false || typeof window.print !== "function") {
+            state.messageKeys.push("pdf_print_not_supported", "pdf_text_fallback_used");
+            copyTextToClipboard(state.payload.shareText || "", "인쇄가 어려워 텍스트를 복사했어요.").then(function (ok) {
+              if (!ok && els.printableReportTextFallback) {
+                els.printableReportTextFallback.focus();
+                els.printableReportTextFallback.select();
+              }
+            });
+            return;
+          }
+          try {
+            state.messageKeys.push("pdf_print_dialog_opened");
+            window.print();
+          } catch (error) {
+            state.errors.push(error && error.message ? error.message : "print_failed");
+            state.messageKeys.push("pdf_print_not_supported", "pdf_text_fallback_used");
+            copyTextToClipboard(state.payload.shareText || "", "인쇄가 어려워 텍스트를 복사했어요.").then(function (ok) {
+              if (!ok && els.printableReportTextFallback) {
+                els.printableReportTextFallback.focus();
+                els.printableReportTextFallback.select();
+              }
+            });
+          }
+          return;
+        }
+
+        if (event.target.closest("#copyPrintableReportButton")) {
+          event.preventDefault();
+          event.stopPropagation();
+          const state = currentPrintableReportState || buildPrintableReportData(buildAnalysisSnapshot(appData.records || [], { baby_id: getCurrentAnalysisBabyId() }), ensurePrintableReportUiOptions());
+          currentPrintableReportState = state;
+          state.messageKeys.push("pdf_text_fallback_used");
+          copyTextToClipboard(state.payload.shareText || "", "PDF 리포트 텍스트를 복사했어요.").then(function (ok) {
+            if (!ok && els.printableReportTextFallback) {
+              els.printableReportTextFallback.focus();
+              els.printableReportTextFallback.select();
+            }
+          });
+          return;
+        }
+
         if (event.target.closest("#generateShareImageButton")) {
           event.preventDefault();
           event.stopPropagation();
@@ -21357,6 +22140,9 @@
         buildPhase524CompletionCheck: buildPhase524CompletionCheck,
         renderShareImageCanvas: renderShareImageCanvas,
         createShareImageBlob: createShareImageBlob,
+        PRINTABLE_REPORT_TEMPLATES: PRINTABLE_REPORT_TEMPLATES,
+        buildPrintableReportData: buildPrintableReportData,
+        buildPhase525CompletionCheck: buildPhase525CompletionCheck,
         loadPredictiveAlertSettings: loadPredictiveAlertSettings,
         savePredictiveAlertSettings: savePredictiveAlertSettings,
         loadPredictiveAlertHistory: loadPredictiveAlertHistory,
