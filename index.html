@@ -3803,7 +3803,11 @@
       let pendingRestoreData = null;
 
       // ─── 유틸 ───────────────────────────────────────────────
-      function pad(value) { return String(value).padStart(2, "0"); }
+      function pad2(value) {
+        return String(value).padStart(2, "0");
+      }
+
+      function pad(value) { return pad2(value); }
       function nowIso() { return new Date().toISOString(); }
 
       function generateId(prefix) {
