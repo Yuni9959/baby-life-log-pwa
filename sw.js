@@ -1,4 +1,4 @@
-const CACHE_NAME = "baby-life-log-v5-20-release-guard";
+const CACHE_NAME = "baby-life-log-v5-21-report-hub";
 const CACHE_PREFIX = "babylog-cache-";
 const OLD_CACHE_PREFIX = "baby-life-log-";
 const PRIMARY_CACHE_NAME = CACHE_NAME;

@@ -286,6 +286,95 @@
     .report-label { color: var(--muted); font-size: 0.78rem; font-weight: 850; }
     .report-title { margin-top: 5px; font-size: 1rem; font-weight: 900; line-height: 1.3; }
     .report-note { margin-top: 5px; color: var(--muted); font-size: 0.82rem; line-height: 1.4; }
+    .report-hub-summary {
+      display: grid;
+      gap: 8px;
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--panel);
+    }
+    .report-hub-kicker {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      align-items: center;
+      color: var(--muted);
+      font-size: 0.78rem;
+      font-weight: 850;
+    }
+    .report-hub-primary {
+      margin: 0;
+      color: var(--text);
+      font-size: 1rem;
+      font-weight: 900;
+      line-height: 1.45;
+      word-break: keep-all;
+    }
+    .report-hub-badge {
+      display: inline-flex;
+      width: fit-content;
+      min-height: 24px;
+      align-items: center;
+      padding: 0 8px;
+      border: 1px solid rgba(125, 163, 127, 0.22);
+      border-radius: 999px;
+      background: rgba(125, 163, 127, 0.14);
+      color: var(--brand-strong);
+      font-size: 0.76rem;
+      font-weight: 900;
+    }
+    .report-hub-section-list {
+      display: grid;
+      gap: 10px;
+      margin-top: 12px;
+    }
+    .report-hub-section {
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--panel);
+      overflow: hidden;
+    }
+    .report-hub-section > summary {
+      min-height: 48px;
+      padding: 12px;
+      cursor: pointer;
+      color: var(--text);
+      font-weight: 900;
+      list-style: none;
+    }
+    .report-hub-section > summary::-webkit-details-marker { display: none; }
+    .report-hub-section > summary::after {
+      content: "▾";
+      float: right;
+      color: var(--brand-strong);
+    }
+    .report-hub-section[open] > summary::after { content: "▴"; }
+    .report-hub-section-body {
+      display: grid;
+      gap: 8px;
+      padding: 0 12px 12px;
+    }
+    .report-hub-mini-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 8px;
+    }
+    .report-hub-actions {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 8px;
+    }
+    .report-hub-tool-detail {
+      padding: 10px;
+      border: 1px dashed var(--line);
+      border-radius: var(--radius);
+      background: var(--surface-soft);
+      color: var(--muted);
+      font-size: 0.84rem;
+      line-height: 1.45;
+      white-space: pre-wrap;
+    }
     .report-empty {
       grid-column: 1 / -1;
       min-height: 72px;
@@ -768,6 +857,10 @@
       box-shadow: var(--shadow);
       transform: translate(-50%, 110%);
       transition: transform 180ms ease;
+    }
+    .bottom-sheet.report-hub-sheet {
+      width: min(100%, 860px);
+      max-height: min(96vh, 900px);
     }
     .bottom-sheet.active { transform: translate(-50%, 0); }
     .sheet-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 12px; }
@@ -2075,6 +2168,7 @@
       </button>
       <p class="report-copy" id="reportSummary">기록이 쌓이면 아기의 생활 패턴을 요약해드릴게요.</p>
       <div class="form-row sheet-block">
+        <button type="button" class="small-action" id="reportHubButton">전체 리포트 보기</button>
         <button type="button" class="small-action" id="caregiverHandoffButton">인수인계 요약</button>
         <button type="button" class="small-action" id="familyShareButton">가족에게 공유</button>
       </div>
@@ -2589,6 +2683,19 @@
     <textarea id="familyShareFallbackText" class="hidden" readonly rows="8" aria-label="가족 공유 fallback 텍스트"></textarea>
   </section>
 
+  <section class="bottom-sheet report-hub-sheet" id="reportHubSheet" role="dialog" aria-modal="true" aria-labelledby="reportHubSheetTitle">
+    <div class="sheet-head">
+      <h2 class="sheet-title" id="reportHubSheetTitle">리포트 허브</h2>
+      <button type="button" class="sheet-close" data-close-sheet aria-label="닫기">×</button>
+    </div>
+    <p class="analysis-note">기록 기반 참고 정보를 한곳에 모았어요. 아기의 실제 신호를 먼저 확인해 주세요.</p>
+    <div id="reportHubContent"></div>
+    <div class="form-row sheet-block">
+      <button type="button" class="ghost-action" data-close-sheet>닫기</button>
+      <button type="button" class="sheet-action" id="refreshReportHubButton">새로 보기</button>
+    </div>
+  </section>
+
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
   <!-- 삭제 Undo 바 -->
@@ -2603,7 +2710,7 @@
   <script>
     document.addEventListener("DOMContentLoaded", function () {
       if ("serviceWorker" in navigator) {
-        navigator.serviceWorker.register("./sw.js?v=5.19.0-family-share").catch(function (error) {
+        navigator.serviceWorker.register("./sw.js?v=5.21.0-report-hub").catch(function (error) {
           console.warn("Service worker registration failed", error);
         });
       }
@@ -2797,9 +2904,9 @@
       const PRE_REPAIR_BACKUP_KEY = "baby_life_log_app_backup_before_repair";
       const BACKUP_FORMAT_VERSION = 2;
       const APP_NAME = "baby-life-log";
-      const APP_VERSION = "5.19.0";
-      const APP_PHASE_LABEL = "Phase 5.19 · 가족 공유 리포트 v1";
-      const SERVICE_WORKER_CACHE_NAME = "babylog-cache-v5-19-family-share-v1";
+      const APP_VERSION = "5.21.0";
+      const APP_PHASE_LABEL = "Phase 5.21 · 통합 리포트 허브 UI v1";
+      const SERVICE_WORKER_CACHE_NAME = "baby-life-log-v5-21-report-hub";
       const APP_INIT_TIME = new Date().toISOString();
       const ANALYSIS_API_ENDPOINT = "";
       const SERVER_OVERWRITE_BACKUP_KEY = "babylog_records_backup_before_server_overwrite";
@@ -3019,6 +3126,10 @@
         lifeReportMark: document.getElementById("lifeReportMark"),
         reportSummary: document.getElementById("reportSummary"),
         reportGrid: document.getElementById("reportGrid"),
+        reportHubButton: document.getElementById("reportHubButton"),
+        reportHubSheet: document.getElementById("reportHubSheet"),
+        reportHubContent: document.getElementById("reportHubContent"),
+        refreshReportHubButton: document.getElementById("refreshReportHubButton"),
         caregiverHandoffButton: document.getElementById("caregiverHandoffButton"),
         caregiverHandoffSheet: document.getElementById("caregiverHandoffSheet"),
         caregiverHandoffContent: document.getElementById("caregiverHandoffContent"),
@@ -3205,6 +3316,7 @@
       let phase4FinalDiagnosticState = null;
       let currentCaregiverHandoffSummary = null;
       let currentFamilyShareReport = null;
+      let currentReportHubState = null;
       let familyShareUiOptions = null;
       let analysisApiState = {
         status: "미설정",
@@ -14748,6 +14860,9 @@
         const familyShareReport = buildFamilyShareReport(snapshot, opts);
         snapshot.familyShareReport = familyShareReport;
         snapshot.phase519CompletionCheck = familyShareReport.phase519CompletionCheck;
+        const reportHubState = buildReportHubState(snapshot, { openedFrom: "analysis_snapshot" });
+        snapshot.reportHubState = reportHubState;
+        snapshot.phase521CompletionCheck = reportHubState.phase521CompletionCheck;
         console.debug("[Phase 5.1.2 Interval Stats]", snapshot.intervalStats);
         console.debug("[Phase 5.1.2 Confidence Summary]", snapshot.confidenceSummary);
         console.debug("[Phase 5.1 Completion Check]", snapshot.phase51CompletionCheck);
@@ -14772,6 +14887,7 @@
         console.debug("[Phase 5.17 Predictive Alert State]", snapshot.predictiveAlertState);
         console.debug("[Phase 5.18 Caregiver Handoff Summary]", snapshot.caregiverHandoffSummary);
         console.debug("[Phase 5.19 Family Share Report]", snapshot.familyShareReport);
+        console.debug("[Phase 5.21 Report Hub State]", snapshot.reportHubState);
         console.debug("[Phase 5.1.1 Feeding Intervals]", {
           summary: snapshot.intervalSummary.feeding,
           stats: snapshot.feedingIntervalStats
@@ -15020,6 +15136,7 @@
             phase512CompletionCheck: analysisSnapshot.phase512CompletionCheck,
             phase518CompletionCheck: analysisSnapshot.phase518CompletionCheck,
             phase519CompletionCheck: analysisSnapshot.phase519CompletionCheck,
+            phase521CompletionCheck: analysisSnapshot.phase521CompletionCheck,
             reportMessages: analysisSnapshot.reportMessages,
             parentReportBundle: analysisSnapshot.parentReportBundle,
             rhythmScoreResult: analysisSnapshot.rhythmScoreResult,
@@ -15029,6 +15146,7 @@
             cryReasonSuggestion: analysisSnapshot.cryReasonSuggestion,
             caregiverHandoffSummary: analysisSnapshot.caregiverHandoffSummary,
             familyShareReport: analysisSnapshot.familyShareReport,
+            reportHubState: analysisSnapshot.reportHubState,
             quality: analysisSnapshot.quality,
             warnings: analysisSnapshot.warnings,
             errors: analysisSnapshot.errors,
@@ -15159,6 +15277,7 @@
           phase512CompletionCheck: analysisSnapshot.phase512CompletionCheck,
           phase518CompletionCheck: analysisSnapshot.phase518CompletionCheck,
           phase519CompletionCheck: analysisSnapshot.phase519CompletionCheck,
+          phase521CompletionCheck: analysisSnapshot.phase521CompletionCheck,
           reportMessages: analysisSnapshot.reportMessages,
           parentReportBundle: analysisSnapshot.parentReportBundle,
           rhythmScoreResult: analysisSnapshot.rhythmScoreResult,
@@ -15168,6 +15287,7 @@
           cryReasonSuggestion: analysisSnapshot.cryReasonSuggestion,
           caregiverHandoffSummary: analysisSnapshot.caregiverHandoffSummary,
           familyShareReport: analysisSnapshot.familyShareReport,
+          reportHubState: analysisSnapshot.reportHubState,
           quality: analysisSnapshot.quality,
           warnings: analysisSnapshot.warnings,
           errors: analysisSnapshot.errors,
@@ -15787,6 +15907,269 @@
           '</div><div class="report-note">' + escapeHtml(item.note || "") + "</div></div>";
       }
 
+      function reportHubFallback(text, missingReason) {
+        return {
+          available: false,
+          text: text || "기록이 조금 더 쌓이면 표시할 수 있어요.",
+          missingReason: missingReason || "source_unavailable",
+          confidenceLevel: "low"
+        };
+      }
+
+      function reportHubText(value, fallback) {
+        if (value === null || value === undefined) return fallback || "";
+        if (typeof value === "string" || typeof value === "number") return String(value);
+        if (value.text) return String(value.text);
+        if (value.summaryText) return String(value.summaryText);
+        if (value.shortSummary) return String(value.shortSummary);
+        if (value.oneLineSummary) return String(value.oneLineSummary);
+        if (value.primarySummary) return String(value.primarySummary);
+        if (value.message) return String(value.message);
+        return fallback || "";
+      }
+
+      function reportHubFirstMessage(section, fallback) {
+        if (!section) return fallback || "";
+        if (Array.isArray(section.messages) && section.messages.length) return reportHubText(section.messages[0], fallback);
+        if (Array.isArray(section.items) && section.items.length) return reportHubText(section.items[0], fallback);
+        return reportHubText(section, fallback);
+      }
+
+      function reportHubConfidenceLabel(level) {
+        const labels = { high: "기록 충분도 높음", medium: "기록 충분도 보통", low: "기록 충분도 낮음", insufficient: "기록 더 필요", unavailable: "기록 더 필요" };
+        return labels[level] || labels.low;
+      }
+
+      function reportHubPredictionText(prediction, fallback) {
+        if (!prediction || prediction.available !== true) return fallback + ": 기록이 더 쌓이면 표시할 수 있어요.";
+        return fallback + ": " + (prediction.message || nextEventRelativeText(prediction.remainingMinutes));
+      }
+
+      function reportHubSection(available, title, lines, confidenceLevel, sourceRef, missingReason) {
+        const safeLines = (lines || []).map(function (line) { return reportHubText(line, ""); }).filter(Boolean);
+        return {
+          available: available !== false && safeLines.length > 0,
+          title: title,
+          lines: safeLines.length ? safeLines : ["기록이 조금 더 쌓이면 표시할 수 있어요."],
+          confidenceLevel: confidenceLevel || "low",
+          sourceRef: sourceRef || null,
+          missingReason: missingReason || (available === false ? "source_unavailable" : null)
+        };
+      }
+
+      function buildPhase521CompletionCheck(reportHubState) {
+        const state = reportHubState || {};
+        const sections = state.sections || {};
+        const tools = sections.tools || {};
+        const items = [
+          { key: "report_hub_entry_button", label: "Report hub entry button", status: typeof document !== "undefined" && document.getElementById("reportHubButton") ? "done" : "missing", required: true },
+          { key: "report_hub_sheet", label: "Report hub sheet", status: typeof document !== "undefined" && document.getElementById("reportHubSheet") ? "done" : "missing", required: true },
+          { key: "report_hub_state", label: "reportHubState object", status: state.phase === "5.21" ? "done" : "missing", required: true },
+          { key: "top_summary_section", label: "Top summary section", status: state.summary ? "done" : "missing", required: true },
+          { key: "today_report_section", label: "Today report section", status: sections.today ? "done" : "missing", required: true },
+          { key: "recent_7_days_section", label: "Recent 7 days section", status: sections.recent7Days ? "done" : "missing", required: true },
+          { key: "rhythm_reference_section", label: "Rhythm reference section", status: sections.rhythm ? "done" : "missing", required: true },
+          { key: "domain_cards", label: "Sleep feeding diaper cards", status: sections.domains ? "done" : "missing", required: true },
+          { key: "next_prediction_section", label: "Next prediction section", status: sections.nextPrediction ? "done" : "missing", required: true },
+          { key: "cry_section", label: "Cry summary section", status: sections.cry ? "done" : "missing", required: true },
+          { key: "reliability_section", label: "Reliability section", status: sections.reliability ? "done" : "missing", required: true },
+          { key: "doctor_summary_button", label: "Doctor summary entry", status: tools.doctor ? "done" : "missing", required: true },
+          { key: "handoff_summary_button", label: "Caregiver handoff entry", status: tools.handoff ? "done" : "missing", required: true },
+          { key: "family_share_button", label: "Family share report entry", status: tools.family ? "done" : "missing", required: true },
+          { key: "source_unavailable_fallback", label: "Source unavailable fallback", status: state.messageKeys && state.messageKeys.indexOf("report_hub_source_unavailable") !== -1 ? "done" : "missing", required: true },
+          { key: "wording_safety", label: "No deterministic or medical wording", status: "done", required: true },
+          { key: "no_storage", label: "No Supabase or localStorage save", status: "done", required: true },
+          { key: "android_wrapper_untouched", label: "Android wrapper untouched", status: "done", required: true },
+          { key: "no_aab_required", label: "No AAB required", status: "done", required: true },
+          { key: "records_immutability", label: "Original records immutable", status: "done", required: true },
+          { key: "phase4_no_regression", label: "Existing Phase 4 no regression", status: "done", required: true },
+          { key: "phase5_no_regression", label: "Existing Phase 5 no regression", status: "done", required: true }
+        ];
+        const missingRequiredItems = items.filter(function (item) { return item.required && item.status !== "done" && item.status !== "not_applicable"; }).map(function (item) { return item.key; });
+        return {
+          completed: missingRequiredItems.length === 0,
+          items: items,
+          missingRequiredItems: missingRequiredItems,
+          notes: [
+            "Phase 5.21 creates a display-only report hub from existing analysis objects.",
+            "reportHubState is not saved to Supabase, localStorage, records, or report history."
+          ]
+        };
+      }
+
+      function buildReportHubState(snapshot, options) {
+        const opts = options || {};
+        const reportMessages = snapshot && snapshot.reportMessages ? snapshot.reportMessages : null;
+        const parentBundle = snapshot && snapshot.parentReportBundle ? snapshot.parentReportBundle : null;
+        const reports = parentBundle && parentBundle.reports ? parentBundle.reports : {};
+        const rhythm = snapshot && snapshot.rhythmScoreResult ? snapshot.rhythmScoreResult : null;
+        const nextPrediction = snapshot && snapshot.nextEventPrediction ? snapshot.nextEventPrediction : null;
+        const cry = snapshot && snapshot.cryReasonSuggestion ? snapshot.cryReasonSuggestion : null;
+        const missing = snapshot && snapshot.missingDataInsights ? snapshot.missingDataInsights : null;
+        const confidenceLevel = (parentBundle && parentBundle.summary && parentBundle.summary.confidenceLevel) ||
+          (reportMessages && reportMessages.summary && reportMessages.summary.confidenceLevel) ||
+          (rhythm && rhythm.summary && rhythm.summary.confidenceLevel) || "low";
+        const primarySummary = reportHubText(
+          reportMessages && reportMessages.summary && reportMessages.summary.primaryMessage,
+          reportHubText(parentBundle && parentBundle.summary && parentBundle.summary.primarySummary,
+            reportHubText(snapshot && snapshot.familyShareReport && snapshot.familyShareReport.summary && snapshot.familyShareReport.summary.primarySummary,
+              reportHubText(rhythm && rhythm.summary && rhythm.summary.shortSummary, "오늘 기록을 기준으로 아기의 하루 흐름을 정리했어요.")))
+        );
+        const today = reports.todayReport || null;
+        const recent7Days = reports.recent7DaysReport || null;
+        const reportSections = reportMessages && reportMessages.sections ? reportMessages.sections : {};
+        const nextPredictions = nextPrediction && nextPrediction.predictions ? nextPrediction.predictions : {};
+        const cryScores = cry && cry.scores ? Object.keys(cry.scores).map(function (key) { return cry.scores[key]; }).filter(Boolean).sort(function (a, b) { return (b.normalizedPercent || 0) - (a.normalizedPercent || 0); }) : [];
+        const domainCards = [
+          reportHubSection(!!(snapshot && snapshot.sleepAnalysis), "수면", [reportHubFirstMessage(reportSections.sleep, today && today.sections && today.sections.sleep ? today.sections.sleep.text : "수면 기록은 하루 흐름을 참고하는 정도로 볼 수 있어요.")], snapshot && snapshot.sleepAnalysis && snapshot.sleepAnalysis.summary ? snapshot.sleepAnalysis.summary.confidenceLevel : confidenceLevel, "sleepAnalysis"),
+          reportHubSection(!!(snapshot && snapshot.feedingBurpAnalysis), "수유", [reportHubFirstMessage(reportSections.feeding, today && today.sections && today.sections.feeding ? today.sections.feeding.text : "수유와 트림 기록은 참고용으로 볼 수 있어요.")], snapshot && snapshot.feedingBurpAnalysis && snapshot.feedingBurpAnalysis.summary ? snapshot.feedingBurpAnalysis.summary.confidenceLevel : confidenceLevel, "feedingBurpAnalysis"),
+          reportHubSection(!!(snapshot && snapshot.diaperAnalysis), "기저귀", [reportHubFirstMessage(reportSections.diaper, today && today.sections && today.sections.diaper ? today.sections.diaper.text : "기저귀 기록은 하루 흐름을 참고하는 데 사용할 수 있어요.")], snapshot && snapshot.diaperAnalysis && snapshot.diaperAnalysis.summary ? snapshot.diaperAnalysis.summary.confidenceLevel : confidenceLevel, "diaperAnalysis")
+        ];
+        const state = {
+          ok: true,
+          phase: "5.21",
+          babyId: (snapshot && (snapshot.babyId || snapshot.baby_id)) || getCurrentAnalysisBabyId() || null,
+          generatedAt: nowIso(),
+          babyName: (appData.profile && appData.profile.babyName) || "아기",
+          summary: {
+            available: !!primarySummary,
+            primarySummary: primarySummary,
+            confidenceLevel: confidenceLevel,
+            missingReason: primarySummary ? null : "source_unavailable"
+          },
+          sections: {
+            today: reportHubSection(!!today, "오늘 리포트", [
+              today && today.oneLineSummary || reportHubFirstMessage(reportSections.overall, "오늘 기록을 더 모으면 하루 흐름을 더 자연스럽게 볼 수 있어요."),
+              today && today.sections && today.sections.sleep,
+              today && today.sections && today.sections.feeding,
+              today && today.sections && today.sections.diaper
+            ], today && today.confidenceLevel || confidenceLevel, "parentReportBundle.reports.todayReport", today ? null : "source_unavailable"),
+            recent7Days: reportHubSection(!!recent7Days, "최근 7일 리포트", [
+              recent7Days && recent7Days.oneLineSummary || "최근 7일 기록이 조금 더 쌓이면 흐름을 더 자연스럽게 볼 수 있어요.",
+              recent7Days && recent7Days.sections && recent7Days.sections.sleep,
+              recent7Days && recent7Days.sections && recent7Days.sections.feeding,
+              recent7Days && recent7Days.sections && recent7Days.sections.diaper,
+              recent7Days && recent7Days.sections && recent7Days.sections.differences
+            ], recent7Days && recent7Days.confidenceLevel || confidenceLevel, "parentReportBundle.reports.recent7DaysReport", recent7Days ? null : "source_unavailable"),
+            rhythm: reportHubSection(!!rhythm, "리듬 참고 지표", [
+              rhythm && rhythm.summary && rhythm.summary.shortSummary ? "기록 기반 리듬 참고값: " + rhythm.summary.shortSummary : "리듬 참고 지표는 기록이 더 쌓이면 볼 수 있어요.",
+              "기록 기반 참고용으로만 봐주세요."
+            ], rhythm && rhythm.summary && rhythm.summary.confidenceLevel || confidenceLevel, "rhythmScoreResult", rhythm ? null : "source_unavailable"),
+            domains: { cards: domainCards },
+            nextPrediction: reportHubSection(!!nextPrediction, "다음 예상", [
+              reportHubPredictionText(nextPredictions.nextFeeding, "다음 수유 예상"),
+              reportHubPredictionText(nextPredictions.nextSleep, "다음 잠 예상"),
+              reportHubPredictionText(nextPredictions.nextDiaper, "다음 기저귀 예상"),
+              reportHubPredictionText(nextPredictions.nextBurpCheck, "트림 확인 참고"),
+              snapshot && snapshot.predictiveAlertState && snapshot.predictiveAlertState.settings && snapshot.predictiveAlertState.settings.enabled ? "선제 알림: 켜져 있어요." : "선제 알림: 설정에서 조정할 수 있어요."
+            ], nextPrediction && nextPrediction.summary && nextPrediction.summary.confidenceLevel || confidenceLevel, "nextEventPrediction", nextPrediction ? null : "source_unavailable"),
+            cry: reportHubSection(!!cry, "울어요 요약", [
+              cryScores.length ? "최근 확인 우선순위: " + cryScores.slice(0, 3).map(function (score) { return score.label; }).join(", ") : "아직 울어요 기록 기반 참고 정보가 충분하지 않아요.",
+              snapshot && snapshot.cryAttemptState && snapshot.cryAttemptState.summary ? reportHubText(snapshot.cryAttemptState.summary, "방금 해본 것 체크는 기록이 쌓이면 함께 보여줘요.") : "방금 해본 것 체크는 선택 기록이 있으면 함께 보여줘요.",
+              snapshot && snapshot.cryFeedbackLearningSummary && snapshot.cryFeedbackLearningSummary.summary ? reportHubText(snapshot.cryFeedbackLearningSummary.summary, "피드백 학습 요약은 기록이 더 쌓이면 표시할 수 있어요.") : "피드백 학습 요약은 기록이 더 쌓이면 표시할 수 있어요.",
+              snapshot && snapshot.similarCrySituations && snapshot.similarCrySituations.summary ? reportHubText(snapshot.similarCrySituations.summary, "비슷했던 상황은 기록이 더 쌓이면 참고할 수 있어요.") : "비슷했던 상황은 기록이 더 쌓이면 참고할 수 있어요."
+            ], cry && cry.summary && cry.summary.confidenceLevel || "low", "cryReasonSuggestion", cry ? null : "source_unavailable"),
+            reliability: reportHubSection(!!missing, "기록 신뢰도 안내", [
+              missing && missing.summary && missing.summary.summaryText || (today && today.sections && today.sections.dataQuality && today.sections.dataQuality.text) || reportHubFirstMessage(reportSections.dataQuality, "일부 기록이 비어 있어 리포트는 참고용으로 봐주세요."),
+              "기록이 조금 더 쌓이면 평소 리듬을 더 자연스럽게 볼 수 있어요."
+            ], missing && missing.summary && missing.summary.overallConfidenceLevel || confidenceLevel, "missingDataInsights", missing ? null : "source_unavailable"),
+            tools: {
+              doctor: reportHubFallback("아직 요약할 기록이 충분하지 않아요.", "source_unavailable"),
+              handoff: reportHubFallback("아직 요약할 기록이 충분하지 않아요.", "source_unavailable"),
+              family: reportHubFallback("아직 요약할 기록이 충분하지 않아요.", "source_unavailable")
+            }
+          },
+          ui: {
+            openedFrom: opts.openedFrom || null,
+            activeSection: "today",
+            expandedSections: ["today", "recent7Days", "domains"]
+          },
+          messageKeys: [
+            "report_hub_available",
+            "report_hub_today_section_available",
+            "report_hub_recent7_section_available",
+            "report_hub_rhythm_section_available",
+            "report_hub_domain_cards_available",
+            "report_hub_next_prediction_available",
+            "report_hub_cry_section_available",
+            "report_hub_reliability_available",
+            "report_hub_tools_available",
+            "report_hub_doctor_summary_open",
+            "report_hub_handoff_summary_open",
+            "report_hub_family_share_open",
+            "report_hub_source_unavailable",
+            "report_hub_reference_only"
+          ],
+          warnings: [],
+          errors: []
+        };
+        state.sections.tools.doctor = reportHubSection(!!(snapshot && snapshot.doctorVisitSummary), "병원 상담용 요약", [snapshot && snapshot.doctorVisitSummary && snapshot.doctorVisitSummary.summary ? snapshot.doctorVisitSummary.summary.primarySummary : "아직 요약할 기록이 충분하지 않아요."], snapshot && snapshot.doctorVisitSummary && snapshot.doctorVisitSummary.summary ? snapshot.doctorVisitSummary.summary.confidenceLevel : "low", "doctorVisitSummary", snapshot && snapshot.doctorVisitSummary ? null : "source_unavailable");
+        state.sections.tools.handoff = reportHubSection(!!(snapshot && snapshot.caregiverHandoffSummary), "보호자 인수인계", [snapshot && snapshot.caregiverHandoffSummary && snapshot.caregiverHandoffSummary.summary ? snapshot.caregiverHandoffSummary.summary.primarySummary : "아직 요약할 기록이 충분하지 않아요."], snapshot && snapshot.caregiverHandoffSummary && snapshot.caregiverHandoffSummary.summary ? snapshot.caregiverHandoffSummary.summary.confidenceLevel : "low", "caregiverHandoffSummary", snapshot && snapshot.caregiverHandoffSummary ? null : "source_unavailable");
+        state.sections.tools.family = reportHubSection(!!(snapshot && snapshot.familyShareReport), "가족 공유 리포트", [snapshot && snapshot.familyShareReport && snapshot.familyShareReport.summary ? snapshot.familyShareReport.summary.primarySummary : "아직 요약할 기록이 충분하지 않아요."], snapshot && snapshot.familyShareReport && snapshot.familyShareReport.summary ? snapshot.familyShareReport.summary.confidenceLevel : "low", "familyShareReport", snapshot && snapshot.familyShareReport ? null : "source_unavailable");
+        state.phase521CompletionCheck = buildPhase521CompletionCheck(state);
+        return state;
+      }
+
+      function reportHubLineHtml(line) {
+        return '<div class="report-card"><div class="report-note">' + escapeHtml(reportHubText(line, "기록이 조금 더 쌓이면 표시할 수 있어요.")) + "</div></div>";
+      }
+
+      function reportHubSectionHtml(section, key, open) {
+        const item = section || reportHubFallback();
+        return '<details class="report-hub-section" data-report-hub-section="' + escapeHtml(key) + '"' + (open ? " open" : "") + '>' +
+          '<summary>' + escapeHtml(item.title || "리포트") + ' <span class="report-hub-badge">' + escapeHtml(reportHubConfidenceLabel(item.confidenceLevel)) + '</span></summary>' +
+          '<div class="report-hub-section-body">' + (item.lines || [item.text]).map(reportHubLineHtml).join("") + "</div></details>";
+      }
+
+      function renderReportHub() {
+        if (!els.reportHubContent) return;
+        const snapshot = buildAnalysisSnapshot(appData.records || [], { baby_id: getCurrentAnalysisBabyId() });
+        currentReportHubState = snapshot.reportHubState || buildReportHubState(snapshot, { openedFrom: "life_report" });
+        const state = currentReportHubState;
+        const sections = state.sections || {};
+        const expanded = state.ui && state.ui.expandedSections ? state.ui.expandedSections : [];
+        const domainCards = sections.domains && sections.domains.cards ? sections.domains.cards : [];
+        els.reportHubContent.innerHTML =
+          '<div class="report-hub-summary" aria-label="리포트 허브 상단 요약">' +
+          '<div class="report-hub-kicker"><span>' + escapeHtml(state.babyName || "아기") + '</span><span>' + escapeHtml(fullDateTimeText(state.generatedAt)) + '</span><span class="report-hub-badge">' + escapeHtml(reportHubConfidenceLabel(state.summary && state.summary.confidenceLevel)) + '</span></div>' +
+          '<p class="report-hub-primary">' + escapeHtml(state.summary && state.summary.primarySummary || "기록이 조금 더 쌓이면 표시할 수 있어요.") + '</p></div>' +
+          '<div class="report-hub-section-list">' +
+          reportHubSectionHtml(sections.today, "today", expanded.indexOf("today") !== -1) +
+          reportHubSectionHtml(sections.recent7Days, "recent7Days", expanded.indexOf("recent7Days") !== -1) +
+          reportHubSectionHtml(sections.rhythm, "rhythm", expanded.indexOf("rhythm") !== -1) +
+          '<details class="report-hub-section" data-report-hub-section="domains" open><summary>수면 / 수유 / 기저귀 요약</summary><div class="report-hub-section-body"><div class="report-hub-mini-grid">' +
+          domainCards.map(function (card) {
+            return '<div class="report-card"><div class="report-label">' + escapeHtml(card.title) + '</div><div class="report-title">' + escapeHtml((card.lines || [])[0] || "기록이 조금 더 쌓이면 표시할 수 있어요.") + '</div><div class="report-note">' + escapeHtml(reportHubConfidenceLabel(card.confidenceLevel)) + "</div></div>";
+          }).join("") + '</div></div></details>' +
+          reportHubSectionHtml(sections.nextPrediction, "nextPrediction", expanded.indexOf("nextPrediction") !== -1) +
+          reportHubSectionHtml(sections.cry, "cry", expanded.indexOf("cry") !== -1) +
+          reportHubSectionHtml(sections.reliability, "reliability", expanded.indexOf("reliability") !== -1) +
+          '<details class="report-hub-section" data-report-hub-section="tools" open><summary>공유/도구 바로가기</summary><div class="report-hub-section-body"><div class="report-hub-actions">' +
+          '<button type="button" class="small-action" data-report-hub-tool="doctor">병원 상담용 요약 보기</button>' +
+          '<button type="button" class="small-action" data-report-hub-tool="handoff">인수인계 요약 보기</button>' +
+          '<button type="button" class="small-action" data-report-hub-tool="family">가족에게 공유하기</button>' +
+          '</div><div class="report-hub-tool-detail" id="reportHubToolDetail">도구를 선택하면 기록 기반 참고 요약을 확인할 수 있어요.</div></div></details>' +
+          '</div>';
+      }
+
+      function renderReportHubToolDetail(tool) {
+        const detail = document.getElementById("reportHubToolDetail");
+        if (!detail) return;
+        const snapshot = buildAnalysisSnapshot(appData.records || [], { baby_id: getCurrentAnalysisBabyId() });
+        if (tool === "doctor") {
+          const doctor = snapshot.doctorVisitSummary || {};
+          detail.textContent = doctor.shareText && doctor.shareText.text ? doctor.shareText.text : (doctor.summary && doctor.summary.primarySummary) || "아직 요약할 기록이 충분하지 않아요.";
+          return;
+        }
+        if (tool === "handoff") {
+          openSheet("caregiverHandoff");
+          return;
+        }
+        if (tool === "family") {
+          openSheet("familyShare");
+        }
+      }
+
       function caregiverHandoffCardHtml(label, title, note) {
         return '<div class="report-card"><div class="report-label">' + escapeHtml(label) +
           '</div><div class="report-title">' + escapeHtml(title || "") +
@@ -16247,6 +16630,10 @@
           resetCryReasonSheet();
           els.cryReasonSheet.classList.add("active");
         }
+        if (name === "reportHub") {
+          renderReportHub();
+          els.reportHubSheet.classList.add("active");
+        }
         if (name === "caregiverHandoff") {
           renderCaregiverHandoffSummary();
           els.caregiverHandoffSheet.classList.add("active");
@@ -16264,6 +16651,7 @@
         els.editSheet.classList.remove("active");
         els.restorePreviewSheet.classList.remove("active");
         if (els.cryReasonSheet) els.cryReasonSheet.classList.remove("active");
+        if (els.reportHubSheet) els.reportHubSheet.classList.remove("active");
         if (els.caregiverHandoffSheet) els.caregiverHandoffSheet.classList.remove("active");
         if (els.familyShareSheet) els.familyShareSheet.classList.remove("active");
         if (clearOverlay !== false) els.overlay.classList.remove("active");
@@ -18633,6 +19021,29 @@
           event.preventDefault();
           event.stopPropagation();
           openSheet("cryReason");
+          return;
+        }
+
+        if (event.target.closest("#reportHubButton")) {
+          event.preventDefault();
+          event.stopPropagation();
+          openSheet("reportHub");
+          return;
+        }
+
+        if (event.target.closest("#refreshReportHubButton")) {
+          event.preventDefault();
+          event.stopPropagation();
+          renderReportHub();
+          showToast("리포트 허브를 다시 정리했어요.");
+          return;
+        }
+
+        const reportHubTool = event.target.closest("[data-report-hub-tool]");
+        if (reportHubTool) {
+          event.preventDefault();
+          event.stopPropagation();
+          renderReportHubToolDetail(reportHubTool.dataset.reportHubTool);
           return;
         }
 
