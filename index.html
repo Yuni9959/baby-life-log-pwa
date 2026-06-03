@@ -2290,7 +2290,7 @@
   <main class="app app-shell">
     <header class="topbar">
       <div>
-        <div class="version-badge" id="versionBadge">v6.0.0-design-foundation</div>
+        <div class="version-badge" id="versionBadge">v5.27</div>
         <h1 id="babyTitle">우리 아기</h1>
         <div class="baby-days" id="babyDays">생년월일을 입력해 주세요</div>
         <div class="today-line" id="todayLine"></div>
@@ -3096,7 +3096,7 @@
   <script>
     document.addEventListener("DOMContentLoaded", function () {
       if ("serviceWorker" in navigator) {
-        navigator.serviceWorker.register("./sw.js?v=5.25.0-pdf-export").catch(function (error) {
+        navigator.serviceWorker.register("./sw.js?v=5.27-release").catch(function (error) {
           console.warn("Service worker registration failed", error);
         });
       }
@@ -3290,9 +3290,9 @@
       const PRE_REPAIR_BACKUP_KEY = "baby_life_log_app_backup_before_repair";
       const BACKUP_FORMAT_VERSION = 2;
       const APP_NAME = "baby-life-log";
-      const APP_VERSION = "5.25.0";
-      const APP_PHASE_LABEL = "Phase 5.25 · PDF 저장/인쇄용 리포트 v1";
-      const SERVICE_WORKER_CACHE_NAME = "baby-life-log-v5-25-pdf-export";
+      const APP_VERSION = "5.27";
+      const APP_PHASE_LABEL = "Phase 5.27 · Phase 5 Release Candidate";
+      const SERVICE_WORKER_CACHE_NAME = "baby-life-log-v5-27-release";
       const APP_INIT_TIME = new Date().toISOString();
       const ANALYSIS_API_ENDPOINT = "";
       const SERVER_OVERWRITE_BACKUP_KEY = "babylog_records_backup_before_server_overwrite";

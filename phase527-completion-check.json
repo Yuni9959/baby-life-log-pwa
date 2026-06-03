@@ -1,0 +1,47 @@
+{
+  "phase527CompletionCheck": {
+    "completed": false,
+    "releaseReady": false,
+    "items": [
+      { "key": "phase5_release_packaging", "label": "Phase 5 release packaging", "status": "done", "required": true },
+      { "key": "pwa_repo_final_files", "label": "Final files reflected in PWA repository", "status": "done", "required": true },
+      { "key": "app_display_version", "label": "App display version set to v5.27", "status": "done", "required": true },
+      { "key": "service_worker_cache_version", "label": "Service worker cache version updated", "status": "done", "required": true },
+      { "key": "assets_to_cache_check", "label": "ASSETS_TO_CACHE path existence check", "status": "done", "required": true },
+      { "key": "release_notes", "label": "Phase 5 release notes created", "status": "done", "required": true },
+      { "key": "rollback_basis", "label": "Rollback basis commit identified", "status": "done", "required": true },
+      { "key": "android_wrapper_guard", "label": "Android wrapper unchanged", "status": "done", "required": true },
+      { "key": "no_new_aab", "label": "No new AAB required", "status": "done", "required": true },
+      { "key": "git_commit", "label": "Git commit completed", "status": "pending", "required": true },
+      { "key": "git_push", "label": "GitHub Pages push completed", "status": "pending", "required": true },
+      { "key": "github_pages_deploy", "label": "GitHub Pages deployment verified", "status": "pending", "required": true },
+      { "key": "twa_reflection", "label": "Play-installed TWA reflection verified", "status": "pending", "required": true },
+      { "key": "core_smoke", "label": "Core record smoke test", "status": "pending", "required": true },
+      { "key": "supabase_sync_smoke", "label": "Supabase sync smoke test", "status": "pending", "required": true },
+      { "key": "phase5_smoke", "label": "Phase 5 feature smoke test", "status": "pending", "required": true },
+      { "key": "safety_text", "label": "Safety text final check", "status": "pending", "required": true },
+      { "key": "critical_issue_zero", "label": "No critical issues", "status": "pending", "required": true }
+    ],
+    "missingRequiredItems": [
+      "git_commit",
+      "git_push",
+      "github_pages_deploy",
+      "twa_reflection",
+      "core_smoke",
+      "supabase_sync_smoke",
+      "phase5_smoke",
+      "safety_text",
+      "critical_issue_zero"
+    ],
+    "criticalIssues": [
+      "External deployment and installed TWA verification are still pending."
+    ],
+    "warnings": [
+      "Do not set releaseReady to true until GitHub Pages and Play-installed TWA checks have direct evidence."
+    ],
+    "notes": [
+      "Local release guards passed before commit.",
+      "Initial completion state remains pending for external deployment, installed TWA, and manual smoke verification."
+    ]
+  }
+}

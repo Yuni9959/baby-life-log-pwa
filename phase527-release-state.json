@@ -1,0 +1,79 @@
+{
+  "phase527ReleaseState": {
+    "ok": false,
+    "phase": "5.27",
+    "generatedAt": "2026-06-03T16:45:50.0159545+09:00",
+    "summary": {
+      "releaseReady": false,
+      "deployedToGitHubPages": false,
+      "verifiedInTwa": false,
+      "criticalIssueCount": 1,
+      "warningCount": 2,
+      "rollbackReady": true
+    },
+    "version": {
+      "appDisplayVersion": "v5.27",
+      "cacheName": "baby-life-log-v5-27-release",
+      "releaseNotesFile": "RELEASE_NOTES_PHASE_5.md"
+    },
+    "checks": {
+      "pwaRepo": {
+        "path": "C:\\Users\\tmddb\\baby-life-log-pwa",
+        "activeFilesUpdated": true,
+        "deliverablesHashMatchedBeforeEdit": true
+      },
+      "androidWrapperGuard": {
+        "changedProtectedPaths": [],
+        "newAabRequired": false,
+        "playConsoleUploadRequired": false
+      },
+      "serviceWorker": {
+        "file": "sw.js",
+        "cacheNameUpdated": true,
+        "assetsToCacheChecked": true,
+        "missingAssets": 0,
+        "syntaxChecked": true
+      },
+      "githubPages": {
+        "pushed": false,
+        "deployVerified": false,
+        "actualUrlVerified": false,
+        "versionVisible": false
+      },
+      "twaInstalledApp": {
+        "verified": false,
+        "versionVisible": false,
+        "requiresPhysicalOrInstalledAppCheck": true
+      },
+      "coreRegression": {
+        "manualSmokeTestRequired": true,
+        "status": "pending"
+      },
+      "phase5Regression": {
+        "manualSmokeTestRequired": true,
+        "status": "pending"
+      },
+      "safetyText": {
+        "staticForbiddenPhraseScanRun": false,
+        "status": "manual_review_required"
+      },
+      "rollback": {
+        "preReleaseCommit": "228b486",
+        "postReleaseCommit": null,
+        "rollbackBasisCommit": "228b486",
+        "method": "git revert <release-commit>"
+      }
+    },
+    "criticalIssues": [
+      "GitHub Pages and Play-installed TWA verification are not complete until commit, push, deployment, and installed-app checks finish."
+    ],
+    "warnings": [
+      "Manual browser smoke tests are required for core records and Phase 5 report workflows.",
+      "Play-installed TWA reflection requires access to the installed Android app."
+    ],
+    "notes": [
+      "Local release guards passed before commit: check-pwa-release-guard.ps1 and check-phase527-release.ps1.",
+      "This object must be updated after commit, push, and deployment verification."
+    ]
+  }
+}
