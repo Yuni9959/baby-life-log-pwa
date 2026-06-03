@@ -1,4 +1,4 @@
-const CACHE_NAME = "babylog-cache-v5-19-family-share-v1";
+const CACHE_NAME = "baby-life-log-v5-20-release-guard";
 const CACHE_PREFIX = "babylog-cache-";
 const OLD_CACHE_PREFIX = "baby-life-log-";
 const PRIMARY_CACHE_NAME = CACHE_NAME;
@@ -8,27 +8,15 @@ const ASSETS_TO_CACHE = [
   "./sw.js",
   "./cloud-config.js",
   "./cloud-supabase.js",
-  "./docs/phase4-final-checklist.md",
-  "./docs/phase5-handoff.md",
-  "./docs/thin-client-security.md",
-  "./phase4_3_cloud_backup_notes.md",
   "./phase4_3_sql_migration.sql",
-  "./phase4_1_google_login_setup_notes.md",
-  "./phase4_2_kakao_login_notes.md",
   "./supabase_phase4_0_auth_identity_foundation.sql",
   "./supabase_phase3_8_family_identity.sql",
-  "./PHASE3_8_MULTI_DEVICE_TEST_REPORT.md",
   "./supabase_phase3_7_1_type_sync_fix.sql",
-  "./PHASE3_7_1_BROWSER_VERIFICATION_REPORT.md",
   "./supabase_phase3_7_sync_stabilization.sql",
   "./supabase_phase3_6_connection_diagnostics.sql",
-  "./PHASE3_6_SUPABASE_CONNECTION_CHECKLIST.md",
   "./supabase_phase3_5_family_baby_hardening.sql",
   "./supabase_phase3_3_family_baby_sync.sql",
-  "./supabase_phase3_1_records.sql",
-  "./PHASE3_1_SUPABASE_SETUP.md",
-  "./icon-192.svg",
-  "./icon-512.svg"
+  "./supabase_phase3_1_records.sql"
 ];
 
 self.addEventListener("install", function (event) {
