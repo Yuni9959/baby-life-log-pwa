@@ -1,4 +1,4 @@
-const CACHE_NAME = "babylog-cache-v5-18-caregiver-handoff-v1";
+const CACHE_NAME = "babylog-cache-v5-19-family-share-v1";
 const CACHE_PREFIX = "babylog-cache-";
 const OLD_CACHE_PREFIX = "baby-life-log-";
 const PRIMARY_CACHE_NAME = CACHE_NAME;

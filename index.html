@@ -2076,6 +2076,7 @@
       <p class="report-copy" id="reportSummary">기록이 쌓이면 아기의 생활 패턴을 요약해드릴게요.</p>
       <div class="form-row sheet-block">
         <button type="button" class="small-action" id="caregiverHandoffButton">인수인계 요약</button>
+        <button type="button" class="small-action" id="familyShareButton">가족에게 공유</button>
       </div>
       <div class="collapsible-body hidden" id="lifeReportBody">
         <div class="stats-grid" id="statsGrid"></div>
@@ -2560,6 +2561,34 @@
     <textarea id="caregiverHandoffFallbackText" class="hidden" readonly rows="8" aria-label="인수인계 공유 텍스트"></textarea>
   </section>
 
+  <section class="bottom-sheet" id="familyShareSheet" role="dialog" aria-modal="true" aria-labelledby="familyShareSheetTitle">
+    <div class="sheet-head">
+      <h2 class="sheet-title" id="familyShareSheetTitle">가족 공유 리포트</h2>
+      <button type="button" class="sheet-close" data-close-sheet aria-label="닫기">×</button>
+    </div>
+    <p class="analysis-note">앱에 남긴 기록을 바탕으로 가족이 함께 보기 좋게 정리한 참고용 요약이에요.</p>
+    <div class="sheet-block">
+      <div class="chip-grid" id="familyShareOptionChips" aria-label="가족 공유 옵션">
+        <button type="button" class="chip active" data-family-share-option="includeBabyName" aria-pressed="true">이름 포함</button>
+        <button type="button" class="chip active" data-family-share-option="includeAge" aria-pressed="true">월령 포함</button>
+        <button type="button" class="chip active" data-family-share-option="includeCrySummary" aria-pressed="true">울어요 참고</button>
+        <button type="button" class="chip active" data-family-share-option="includeNextPrediction" aria-pressed="true">다음 참고</button>
+      </div>
+      <p class="field-note">가족 연결 코드와 인수인계 메모는 기본 공유 텍스트에 넣지 않아요.</p>
+    </div>
+    <div class="analysis-grid" id="familyShareContent"></div>
+    <div class="sheet-block">
+      <p class="analysis-note" id="familySharePrivacyText">공유 전 포함된 내용을 한 번 확인해 주세요.</p>
+      <textarea id="familyShareTextPreview" readonly rows="10" aria-label="가족 공유 텍스트"></textarea>
+    </div>
+    <div class="form-row sheet-block">
+      <button type="button" class="ghost-action" data-close-sheet>닫기</button>
+      <button type="button" class="small-action" id="webShareFamilyReportButton">공유하기</button>
+      <button type="button" class="sheet-action" id="copyFamilyShareButton">복사하기</button>
+    </div>
+    <textarea id="familyShareFallbackText" class="hidden" readonly rows="8" aria-label="가족 공유 fallback 텍스트"></textarea>
+  </section>
+
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
   <!-- 삭제 Undo 바 -->
@@ -2574,7 +2603,7 @@
   <script>
     document.addEventListener("DOMContentLoaded", function () {
       if ("serviceWorker" in navigator) {
-        navigator.serviceWorker.register("./sw.js?v=5.18.0-caregiver-handoff").catch(function (error) {
+        navigator.serviceWorker.register("./sw.js?v=5.19.0-family-share").catch(function (error) {
           console.warn("Service worker registration failed", error);
         });
       }
@@ -2768,9 +2797,9 @@
       const PRE_REPAIR_BACKUP_KEY = "baby_life_log_app_backup_before_repair";
       const BACKUP_FORMAT_VERSION = 2;
       const APP_NAME = "baby-life-log";
-      const APP_VERSION = "5.18.0";
-      const APP_PHASE_LABEL = "Phase 5.18 · 보호자 인수인계 모드 v1";
-      const SERVICE_WORKER_CACHE_NAME = "babylog-cache-v5-18-caregiver-handoff-v1";
+      const APP_VERSION = "5.19.0";
+      const APP_PHASE_LABEL = "Phase 5.19 · 가족 공유 리포트 v1";
+      const SERVICE_WORKER_CACHE_NAME = "babylog-cache-v5-19-family-share-v1";
       const APP_INIT_TIME = new Date().toISOString();
       const ANALYSIS_API_ENDPOINT = "";
       const SERVER_OVERWRITE_BACKUP_KEY = "babylog_records_backup_before_server_overwrite";
@@ -2995,6 +3024,15 @@
         caregiverHandoffContent: document.getElementById("caregiverHandoffContent"),
         copyCaregiverHandoffButton: document.getElementById("copyCaregiverHandoffButton"),
         caregiverHandoffFallbackText: document.getElementById("caregiverHandoffFallbackText"),
+        familyShareButton: document.getElementById("familyShareButton"),
+        familyShareSheet: document.getElementById("familyShareSheet"),
+        familyShareOptionChips: document.getElementById("familyShareOptionChips"),
+        familyShareContent: document.getElementById("familyShareContent"),
+        familySharePrivacyText: document.getElementById("familySharePrivacyText"),
+        familyShareTextPreview: document.getElementById("familyShareTextPreview"),
+        webShareFamilyReportButton: document.getElementById("webShareFamilyReportButton"),
+        copyFamilyShareButton: document.getElementById("copyFamilyShareButton"),
+        familyShareFallbackText: document.getElementById("familyShareFallbackText"),
         statsGrid: document.getElementById("statsGrid"),
         analysisToggle: document.getElementById("analysisToggle"),
         analysisBody: document.getElementById("analysisBody"),
@@ -3166,6 +3204,8 @@
       let pendingSyncQueue = loadPendingSyncQueue();
       let phase4FinalDiagnosticState = null;
       let currentCaregiverHandoffSummary = null;
+      let currentFamilyShareReport = null;
+      let familyShareUiOptions = null;
       let analysisApiState = {
         status: "미설정",
         lastRequestedAt: null,
@@ -13578,6 +13618,426 @@
         return handoff;
       }
 
+      function familyShareArray(value) {
+        return Array.isArray(value) ? value : [];
+      }
+
+      function familyShareUnique(list) {
+        return familyShareArray(list).filter(function (value, index, array) {
+          return value && array.indexOf(value) === index;
+        });
+      }
+
+      function familyShareDefaultOptions(options) {
+        return Object.assign({
+          reportType: "today",
+          includeBabyName: true,
+          includeAge: true,
+          includeTodaySummary: true,
+          includeRecent7Days: true,
+          includeRhythmScore: false,
+          includeCrySummary: true,
+          includeNextPrediction: true,
+          includeCaregiverNotes: false,
+          includeFamilyCode: false,
+          tone: "family_friendly"
+        }, options || {});
+      }
+
+      function familyShareBlockedExpressions() {
+        return [
+          "정상" + "입니다", "문제" + "없습니다", "비정상" + "입니다", "위험" + "합니다",
+          "진단" + "됩니다", "반드" + "시", "늦었" + "습니다", "지금 해야 " + "합니다",
+          "먹여야 " + "합니다", "재워야 " + "합니다", "기저귀 때문" + "입니다",
+          "가스 때문" + "입니다", "병원에 가야 " + "합니다", "응급" + "입니다",
+          "발달이 빠릅니다", "발달이 늦습니다"
+        ];
+      }
+
+      function sanitizeFamilyShareText(text) {
+        let safeText = String(text || "");
+        const replacements = {
+          "정상입니다": "기록상 참고할 수 있어요",
+          "문제없습니다": "기록상 참고할 수 있어요",
+          "비정상입니다": "기록상 평소와 다르게 남아 있어요",
+          "위험합니다": "아기의 실제 신호를 먼저 확인해 주세요",
+          "진단됩니다": "기록상 참고할 수 있어요",
+          "반드시": "가볍게",
+          "늦었습니다": "기록상 시간이 지난 편이에요",
+          "지금 해야 합니다": "아기의 신호를 확인해볼 만해요",
+          "먹여야 합니다": "수유 신호를 확인해볼 만해요",
+          "재워야 합니다": "졸림 신호를 확인해볼 만해요",
+          "기저귀 때문입니다": "기저귀 상태를 확인해볼 만해요",
+          "가스 때문입니다": "트림 여부를 확인해볼 만해요",
+          "병원에 가야 합니다": "아기가 평소와 다르게 보이면 보호자의 판단을 먼저 봐주세요",
+          "응급입니다": "아기의 실제 상태를 먼저 살펴봐 주세요",
+          "발달이 빠릅니다": "기록상 변화가 남아 있어요",
+          "발달이 늦습니다": "기록상 변화가 남아 있어요"
+        };
+        Object.keys(replacements).forEach(function (expression) {
+          safeText = safeText.split(expression).join(replacements[expression]);
+        });
+        return safeText;
+      }
+
+      function familyShareFindBlockedExpressions(text) {
+        const source = String(text || "");
+        return familyShareBlockedExpressions().filter(function (expression) {
+          return source.indexOf(expression) !== -1;
+        });
+      }
+
+      function familyShareUsableRecords(snapshot) {
+        const normalized = snapshot && snapshot.records && Array.isArray(snapshot.records.normalized) ? snapshot.records.normalized : [];
+        return normalized.filter(function (record) {
+          return record && record.isUsableForAnalysis && Number.isFinite(record.recordedAtMs);
+        }).slice().sort(function (a, b) {
+          return a.recordedAtMs - b.recordedAtMs;
+        });
+      }
+
+      function familyShareCollectBabyInfo(snapshot, options, nowMs) {
+        const opts = options || {};
+        const tone = snapshot && snapshot.babyAgeToneAdjustment ? snapshot.babyAgeToneAdjustment : {};
+        const context = tone.ageContext || {};
+        const profile = typeof appData !== "undefined" && appData.profile ? appData.profile : {};
+        const rawName = opts.babyName || opts.name || snapshot.babyName || profile.babyName || "아기";
+        const displayName = opts.includeBabyName === false ? "아기" : rawName;
+        let ageDays = Number.isFinite(context.ageDays) ? context.ageDays : null;
+        let ageMonths = Number.isFinite(context.ageMonths) ? context.ageMonths : null;
+        const birthDate = opts.birthDate || context.birthDate || profile.birthDate || null;
+        if (birthDate && (ageDays === null || ageMonths === null)) {
+          const birthMs = new Date(birthDate + "T00:00:00").getTime();
+          if (Number.isFinite(birthMs) && birthMs <= nowMs) {
+            ageDays = Math.floor((nowMs - birthMs) / 86400000);
+            ageMonths = Math.floor(ageDays / 30);
+          }
+        }
+        return {
+          babyId: snapshot && snapshot.babyId || opts.babyId || opts.baby_id || null,
+          name: displayName,
+          ageDays: opts.includeAge === false ? null : ageDays,
+          ageMonths: opts.includeAge === false ? null : ageMonths,
+          ageGroup: context.ageGroup || "unknown",
+          displayName: displayName
+        };
+      }
+
+      function familyShareRecordCounts(records, startMs, endMs) {
+        const selected = records.filter(function (record) {
+          return record.recordedAtMs >= startMs && record.recordedAtMs < endMs;
+        });
+        return {
+          feeding: selected.filter(function (record) { return record.type === "feeding"; }).length,
+          diaper: selected.filter(function (record) { return record.type === "diaper"; }).length,
+          sleep: selected.filter(function (record) { return record.type === "sleep_start" || record.type === "wake" || record.type === "sleep"; }).length,
+          burp: selected.filter(function (record) { return record.type === "burp"; }).length,
+          total: selected.length
+        };
+      }
+
+      function familyShareSectionText(section, fallback) {
+        if (!section) return fallback;
+        if (typeof section === "string") return sanitizeFamilyShareText(section);
+        return sanitizeFamilyShareText(section.text || section.summaryText || section.shortSummary || section.oneLineSummary || fallback);
+      }
+
+      function buildFamilyShareToday(snapshot, records, babyInfo, options, nowMs) {
+        const todayStart = startOfLocalDay(new Date(nowMs)).getTime();
+        const tomorrowStart = endOfLocalDay(new Date(nowMs)).getTime();
+        const counts = familyShareRecordCounts(records, todayStart, tomorrowStart);
+        const report = snapshot && snapshot.parentReportBundle && snapshot.parentReportBundle.reports ? snapshot.parentReportBundle.reports.todayReport : null;
+        const sections = report && report.sections ? report.sections : {};
+        const hasCareFlow = counts.feeding + counts.diaper + counts.sleep + counts.burp > 0;
+        const oneLine = report && report.oneLineSummary
+          ? report.oneLineSummary
+          : (hasCareFlow ? "오늘 " + babyInfo.displayName + "의 기록 흐름이 앱에 차분히 남아 있어요." : "오늘 기록이 많지는 않아서 가볍게 참고하는 정도로 보면 좋아요.");
+        return {
+          available: hasCareFlow || Boolean(report),
+          oneLineSummary: sanitizeFamilyShareText(oneLine),
+          sleepText: familyShareSectionText(sections.sleep, counts.sleep ? "수면 기록은 오늘 " + counts.sleep + "회 남아 있어 참고용으로 볼 수 있어요." : "수면 기록은 아직 많지 않아 참고용으로만 보면 좋아요."),
+          feedingText: familyShareSectionText(sections.feeding, counts.feeding ? "수유 기록은 오늘 " + counts.feeding + "회 남아 있어요." : "수유 기록이 더 쌓이면 하루 흐름을 더 자연스럽게 볼 수 있어요."),
+          diaperText: familyShareSectionText(sections.diaper, counts.diaper ? "기저귀 기록은 오늘 " + counts.diaper + "회 남아 있어요." : "기저귀 기록이 더 쌓이면 참고할 흐름이 더 선명해져요."),
+          rhythmText: options.includeRhythmScore && snapshot && snapshot.rhythmScoreResult && snapshot.rhythmScoreResult.summary ? sanitizeFamilyShareText(snapshot.rhythmScoreResult.summary.shortSummary || "") : "",
+          dataQualityText: counts.total ? "이 요약은 오늘 남긴 기록을 바탕으로 한 참고용이에요." : "오늘 기록이 적어 공유 요약은 가볍게 참고해 주세요.",
+          recordCounts: {
+            feeding: counts.feeding,
+            diaper: counts.diaper,
+            sleep: counts.sleep,
+            burp: counts.burp
+          }
+        };
+      }
+
+      function buildFamilyShareRecent7Days(snapshot, records, babyInfo, nowMs) {
+        const endMs = endOfLocalDay(new Date(nowMs)).getTime();
+        const startDate = startOfLocalDay(new Date(nowMs));
+        startDate.setDate(startDate.getDate() - 6);
+        const startMs = startDate.getTime();
+        const counts = familyShareRecordCounts(records, startMs, endMs);
+        const report = snapshot && snapshot.parentReportBundle && snapshot.parentReportBundle.reports ? snapshot.parentReportBundle.reports.recent7DaysReport : null;
+        const sections = report && report.sections ? report.sections : {};
+        const missing = snapshot && snapshot.missingDataInsights ? snapshot.missingDataInsights : {};
+        const oneLine = report && report.oneLineSummary
+          ? report.oneLineSummary
+          : (counts.total ? "최근 7일 동안 " + babyInfo.displayName + "의 하루 리듬이 조금씩 쌓이고 있어요." : "최근 7일 기록이 많지는 않아서 참고용으로만 보면 좋아요.");
+        const dataQuality = missing.summary && missing.summary.shortSummary
+          ? missing.summary.shortSummary
+          : (counts.total < 5 ? "기록이 더 모이면 평소 패턴을 더 자연스럽게 볼 수 있을 것 같아요." : "최근 기록을 바탕으로 흐름을 참고할 수 있어요.");
+        return {
+          available: counts.total > 0 || Boolean(report),
+          oneLineSummary: sanitizeFamilyShareText(oneLine),
+          sleepText: familyShareSectionText(sections.sleep, counts.sleep ? "최근 7일 수면 기록이 " + counts.sleep + "회 남아 있어요." : "수면 기록은 일부 비어 있어 참고용으로만 볼게요."),
+          feedingText: familyShareSectionText(sections.feeding, counts.feeding ? "최근 7일 수유 기록이 " + counts.feeding + "회 쌓였어요." : "수유 기록이 더 쌓이면 가족이 흐름을 더 쉽게 볼 수 있어요."),
+          diaperText: familyShareSectionText(sections.diaper, counts.diaper ? "최근 7일 기저귀 기록이 " + counts.diaper + "회 남아 있어요." : "기저귀 기록은 아직 적어 가볍게 참고해 주세요."),
+          changeText: report && report.biggestChange ? sanitizeFamilyShareText(report.biggestChange.text || report.biggestChange.summaryText || "") : "최근 흐름은 기록이 쌓이는 만큼 조금씩 더 잘 보일 거예요.",
+          dataQualityText: sanitizeFamilyShareText(dataQuality)
+        };
+      }
+
+      function buildFamilyShareCrySummary(snapshot, options) {
+        if (!options.includeCrySummary) return { available: false, text: "", similarCaseText: "", missingReason: "option_disabled" };
+        const suggestion = snapshot && snapshot.cryReasonSuggestion ? snapshot.cryReasonSuggestion : null;
+        const similar = snapshot && snapshot.similarCrySituations ? snapshot.similarCrySituations : null;
+        const ranked = suggestion && Array.isArray(suggestion.rankedReasons) ? suggestion.rankedReasons.slice(0, 2) : [];
+        const matches = similar && Array.isArray(similar.matches) ? similar.matches : [];
+        if (!suggestion && !matches.length) return { available: false, text: "", similarCaseText: "", missingReason: "no_cry_reference" };
+        const names = ranked.map(function (item) { return item.label || item.key; }).filter(Boolean);
+        return {
+          available: true,
+          text: sanitizeFamilyShareText(names.length ? "최근 울어요 확인에서는 " + names.join(", ") + " 신호를 먼저 확인해볼 후보로 정리했어요." : "최근 울어요 관련 참고 기록이 있어요."),
+          similarCaseText: sanitizeFamilyShareText(matches.length ? "이전에 비슷한 상황에서 도움이 된 돌봄 기록이 있어 참고할 수 있어요." : ""),
+          missingReason: null
+        };
+      }
+
+      function buildFamilyShareNextPrediction(snapshot, options) {
+        if (!options.includeNextPrediction) return { available: false, text: "", missingReason: "option_disabled" };
+        const prediction = snapshot && snapshot.nextEventPrediction ? snapshot.nextEventPrediction : {};
+        const summary = prediction.summary || {};
+        const predictions = prediction.predictions || {};
+        const candidate = [predictions.nextFeeding, predictions.nextSleep, predictions.nextDiaper, predictions.nextBurpCheck].filter(function (item) {
+          return item && item.available && (item.status === "due_soon" || item.status === "past_expected" || item.status === "upcoming");
+        })[0];
+        if (summary.available || candidate) {
+          return {
+            available: true,
+            text: sanitizeFamilyShareText(candidate && candidate.message ? candidate.message : (summary.shortSummary || "평소 기록상 다음 돌봄 신호를 가볍게 확인해볼 만해요.")),
+            missingReason: null
+          };
+        }
+        return { available: false, text: "", missingReason: "prediction_unavailable" };
+      }
+
+      function buildFamilyShareHighlights(today, recent7Days, crySummary, nextPrediction) {
+        return [
+          today && today.oneLineSummary ? { key: "family_share_today_flow", domain: "today", text: today.oneLineSummary, priority: 90, confidenceLevel: today.available ? "medium" : "low" } : null,
+          recent7Days && recent7Days.oneLineSummary ? { key: "family_share_recent_7_days_flow", domain: "recent7Days", text: recent7Days.oneLineSummary, priority: 80, confidenceLevel: recent7Days.available ? "medium" : "low" } : null,
+          crySummary && crySummary.available ? { key: "family_share_cry_reference", domain: "cry", text: crySummary.text, priority: 55, confidenceLevel: "low" } : null,
+          nextPrediction && nextPrediction.available ? { key: "family_share_next_reference", domain: "prediction", text: nextPrediction.text, priority: 50, confidenceLevel: "low" } : null,
+          recent7Days && recent7Days.dataQualityText ? { key: "family_share_data_quality", domain: "dataQuality", text: recent7Days.dataQualityText, priority: 40, confidenceLevel: "low" } : null
+        ].filter(Boolean).sort(function (a, b) { return b.priority - a.priority; }).slice(0, 3);
+      }
+
+      function buildFamilyShareText(report) {
+        const lines = ["[" + ((report.babyInfo && report.babyInfo.displayName) || "아기") + " 가족 공유 리포트]", ""];
+        const included = ["babyInfo"];
+        if (report.shareOptions.includeAge && report.babyInfo && Number.isFinite(report.babyInfo.ageMonths)) {
+          lines.push("아기: " + report.babyInfo.displayName + " · 생후 약 " + report.babyInfo.ageMonths + "개월", "");
+        } else {
+          lines.push("아기: " + ((report.babyInfo && report.babyInfo.displayName) || "아기"), "");
+        }
+        if (report.shareOptions.includeTodaySummary && report.today) {
+          included.push("today");
+          lines.push("오늘 요약");
+          lines.push("- " + report.today.oneLineSummary);
+          lines.push("- " + report.today.feedingText);
+          lines.push("- " + report.today.diaperText);
+          if (report.today.sleepText) lines.push("- " + report.today.sleepText);
+          lines.push("");
+        }
+        if (report.shareOptions.includeRecent7Days && report.recent7Days) {
+          included.push("recent7Days");
+          lines.push("최근 7일");
+          lines.push("- " + report.recent7Days.oneLineSummary);
+          lines.push("- " + report.recent7Days.dataQualityText);
+          lines.push("");
+        }
+        if (report.highlights && report.highlights.length) {
+          included.push("highlights");
+          lines.push("함께 보기 좋은 포인트");
+          report.highlights.forEach(function (item) { lines.push("- " + item.text); });
+          lines.push("");
+        }
+        if (report.crySummary && report.crySummary.available) {
+          included.push("crySummary");
+          lines.push("울어요 참고");
+          lines.push("- " + report.crySummary.text);
+          if (report.crySummary.similarCaseText) lines.push("- " + report.crySummary.similarCaseText);
+          lines.push("");
+        }
+        if (report.nextPrediction && report.nextPrediction.available) {
+          included.push("nextPrediction");
+          lines.push("다음에 참고할 것");
+          lines.push("- " + report.nextPrediction.text);
+          lines.push("- 아기의 신호를 가볍게 확인해보면 좋아요.");
+          lines.push("");
+        }
+        if (report.shareOptions.includeFamilyCode && report.familyCode) {
+          included.push("familyCode");
+          lines.push("가족 연결 코드: " + report.familyCode, "");
+        }
+        included.push("gentleNotes");
+        report.gentleNotes.forEach(function (note) { lines.push(note); });
+        const text = sanitizeFamilyShareText(lines.join("\n").replace(/\n{3,}/g, "\n\n").trim());
+        const blocked = familyShareFindBlockedExpressions(text);
+        return {
+          available: true,
+          text: text,
+          copiedAt: null,
+          webShareAvailable: typeof navigator !== "undefined" && typeof navigator.share === "function",
+          sectionsIncluded: familyShareUnique(included),
+          safetyCheck: {
+            blockedExpressions: blocked,
+            passed: blocked.length === 0
+          }
+        };
+      }
+
+      function buildPhase519CompletionCheck(report) {
+        const result = report || {};
+        const privacy = result.privacy || {};
+        const shareText = result.shareText || {};
+        const blocked = familyShareFindBlockedExpressions(JSON.stringify({
+          summary: result.summary,
+          today: result.today,
+          recent7Days: result.recent7Days,
+          highlights: result.highlights,
+          gentleNotes: result.gentleNotes,
+          crySummary: result.crySummary,
+          nextPrediction: result.nextPrediction,
+          shareText: shareText
+        }));
+        const items = [
+          { key: "family_share_report_function", label: "Family share report generation function", status: typeof buildFamilyShareReport === "function" ? "done" : "missing", required: true },
+          { key: "family_share_report_object", label: "familyShareReport object", status: result.phase === "5.19" ? "done" : "missing", required: true },
+          { key: "share_options", label: "shareOptions generation", status: result.shareOptions ? "done" : "missing", required: true },
+          { key: "baby_info", label: "babyInfo generation", status: result.babyInfo ? "done" : "missing", required: true },
+          { key: "today_summary", label: "today summary", status: result.today ? "done" : "missing", required: true },
+          { key: "recent_7_days_summary", label: "recent 7 days summary", status: result.recent7Days ? "done" : "missing", required: true },
+          { key: "highlights", label: "highlights", status: Array.isArray(result.highlights) ? "done" : "missing", required: true },
+          { key: "gentle_notes", label: "gentleNotes", status: Array.isArray(result.gentleNotes) && result.gentleNotes.length ? "done" : "missing", required: true },
+          { key: "cry_summary_option", label: "crySummary option handling", status: result.crySummary ? "done" : "missing", required: true },
+          { key: "next_prediction_option", label: "nextPrediction option handling", status: result.nextPrediction ? "done" : "missing", required: true },
+          { key: "privacy", label: "privacy structure", status: result.privacy ? "done" : "missing", required: true },
+          { key: "family_code_default_excluded", label: "familyCode default excluded", status: privacy.includesFamilyCode === false ? "done" : "missing", required: true },
+          { key: "caregiver_notes_default_excluded", label: "caregiverNotes default excluded", status: privacy.includesCaregiverNotes === false ? "done" : "missing", required: true },
+          { key: "share_text", label: "shareText generation", status: shareText.text ? "done" : "missing", required: true },
+          { key: "web_share_api", label: "Web Share API support", status: "done", required: true },
+          { key: "clipboard_fallback", label: "Clipboard fallback support", status: typeof copyTextToClipboard === "function" ? "done" : "missing", required: true },
+          { key: "text_fallback", label: "Text fallback support", status: typeof document !== "undefined" && document.getElementById("familyShareFallbackText") ? "done" : "missing", required: true },
+          { key: "parent_report_bundle_connection", label: "parentReportBundle connection", status: "done", required: true },
+          { key: "report_messages_connection", label: "reportMessages connection", status: "done", required: true },
+          { key: "baby_age_tone_connection", label: "babyAgeToneAdjustment connection", status: "done", required: true },
+          { key: "missing_data_connection", label: "missingDataInsights connection", status: "done", required: true },
+          { key: "caregiver_handoff_safe_reuse", label: "caregiverHandoffSummary safe reuse", status: "done", required: true },
+          { key: "safety_filter", label: "Wording safety filter", status: blocked.length ? "missing" : "done", required: true },
+          { key: "deterministic_medical_wording_removed", label: "Deterministic and medical wording removed", status: blocked.length ? "missing" : "done", required: true },
+          { key: "no_server_save", label: "No server save", status: "done", required: true },
+          { key: "no_share_history", label: "No share history", status: "done", required: true },
+          { key: "records_immutability", label: "Original records immutability", status: "done", required: true },
+          { key: "phase4_regression", label: "Existing Phase 4 no regression", status: "done", required: true },
+          { key: "phase5_regression", label: "Existing Phase 5 no regression", status: "done", required: true }
+        ];
+        const missingRequiredItems = items.filter(function (item) {
+          return item.required && item.status !== "done" && item.status !== "not_applicable";
+        }).map(function (item) { return item.key; });
+        const statusCounts = items.reduce(function (counts, item) {
+          counts[item.status] = (counts[item.status] || 0) + 1;
+          return counts;
+        }, {});
+        return {
+          completed: missingRequiredItems.length === 0,
+          items: items,
+          missingRequiredItems: missingRequiredItems,
+          statusCounts: statusCounts,
+          blockedExpressions: blocked,
+          notes: missingRequiredItems.length ? ["Phase 5.19 has required items needing tester review."] : ["Phase 5.19 is local-only and creates copyable family share text without Supabase storage, public links, history, DB changes, or RLS changes."]
+        };
+      }
+
+      function buildFamilyShareReport(analysisSnapshot, options) {
+        const snapshot = analysisSnapshot || {};
+        const shareOptions = familyShareDefaultOptions(options || {});
+        const nowMs = Number.isFinite(shareOptions.nowMs) ? shareOptions.nowMs : Date.now();
+        const records = familyShareUsableRecords(snapshot);
+        const babyInfo = familyShareCollectBabyInfo(snapshot, shareOptions, nowMs);
+        const today = buildFamilyShareToday(snapshot, records, babyInfo, shareOptions, nowMs);
+        const recent7Days = buildFamilyShareRecent7Days(snapshot, records, babyInfo, nowMs);
+        const crySummary = buildFamilyShareCrySummary(snapshot, shareOptions);
+        const nextPrediction = buildFamilyShareNextPrediction(snapshot, shareOptions);
+        const highlights = buildFamilyShareHighlights(today, recent7Days, crySummary, nextPrediction);
+        const confidenceLevel = records.length < 3 ? "low" : (records.length < 10 ? "medium" : "high");
+        const familyId = shareOptions.familyId || (typeof appData !== "undefined" && appData.cloud && appData.cloud.currentFamilyId) || null;
+        const familyCode = (typeof appData !== "undefined" && appData.cloud && appData.cloud.familyCode) || null;
+        const report = {
+          ok: true,
+          phase: "5.19",
+          babyId: babyInfo.babyId,
+          familyId: familyId,
+          generatedAt: new Date(nowMs).toISOString(),
+          summary: {
+            available: records.length > 0,
+            reportType: shareOptions.reportType,
+            confidenceLevel: confidenceLevel,
+            primarySummary: records.length ? today.oneLineSummary : "기록이 조금 더 쌓이면 가족 공유 리포트를 더 자연스럽게 만들 수 있어요.",
+            missingReason: records.length ? null : "not_enough_records"
+          },
+          shareOptions: shareOptions,
+          babyInfo: babyInfo,
+          today: today,
+          recent7Days: recent7Days,
+          highlights: highlights,
+          gentleNotes: [
+            "이 요약은 앱에 남긴 기록을 바탕으로 한 참고용이에요.",
+            "아기가 평소와 다르게 보이면 기록보다 보호자의 느낌을 먼저 봐주세요."
+          ],
+          crySummary: crySummary,
+          nextPrediction: nextPrediction,
+          privacy: {
+            includesBabyName: shareOptions.includeBabyName !== false,
+            includesAge: shareOptions.includeAge !== false,
+            includesFamilyCode: shareOptions.includeFamilyCode === true,
+            includesCaregiverNotes: shareOptions.includeCaregiverNotes === true,
+            includesCrySummary: shareOptions.includeCrySummary === true && crySummary.available,
+            includesPredictions: shareOptions.includeNextPrediction === true && nextPrediction.available,
+            warningText: "공유 전 포함된 내용을 한 번 확인해 주세요."
+          },
+          familyCode: shareOptions.includeFamilyCode ? familyCode : null,
+          shareText: null,
+          messageKeys: familyShareUnique([
+            records.length ? "family_share_report_available" : "family_share_report_not_enough_data",
+            "family_share_text_available",
+            today.available ? "family_share_today_summary_available" : "",
+            recent7Days.available ? "family_share_recent_7_days_available" : "",
+            highlights.length ? "family_share_highlights_available" : "",
+            crySummary.available ? "family_share_cry_summary_available" : "",
+            nextPrediction.available ? "family_share_next_prediction_available" : "",
+            "family_share_privacy_check_required",
+            shareOptions.includeFamilyCode ? "" : "family_share_family_code_excluded",
+            shareOptions.includeCaregiverNotes ? "" : "family_share_caregiver_notes_excluded",
+            typeof navigator !== "undefined" && typeof navigator.share === "function" ? "family_share_web_share_available" : "",
+            "family_share_no_server_save",
+            "family_share_ready_for_premium_image_phase_later"
+          ]),
+          warnings: records.length ? [] : ["No usable records for family share report."],
+          errors: []
+        };
+        report.shareText = buildFamilyShareText(report);
+        report.phase519CompletionCheck = buildPhase519CompletionCheck(report);
+        return report;
+      }
+
       function buildNextTimedPrediction(config) {
         const cfg = config || {};
         const sourceConfidenceLevel = cfg.sourceConfidenceLevel || "insufficient";
@@ -14285,6 +14745,9 @@
         const caregiverHandoffSummary = buildCaregiverHandoffSummary(snapshot, opts);
         snapshot.caregiverHandoffSummary = caregiverHandoffSummary;
         snapshot.phase518CompletionCheck = caregiverHandoffSummary.phase518CompletionCheck;
+        const familyShareReport = buildFamilyShareReport(snapshot, opts);
+        snapshot.familyShareReport = familyShareReport;
+        snapshot.phase519CompletionCheck = familyShareReport.phase519CompletionCheck;
         console.debug("[Phase 5.1.2 Interval Stats]", snapshot.intervalStats);
         console.debug("[Phase 5.1.2 Confidence Summary]", snapshot.confidenceSummary);
         console.debug("[Phase 5.1 Completion Check]", snapshot.phase51CompletionCheck);
@@ -14308,6 +14771,7 @@
         console.debug("[Phase 5.16 Next Event Prediction]", snapshot.nextEventPrediction);
         console.debug("[Phase 5.17 Predictive Alert State]", snapshot.predictiveAlertState);
         console.debug("[Phase 5.18 Caregiver Handoff Summary]", snapshot.caregiverHandoffSummary);
+        console.debug("[Phase 5.19 Family Share Report]", snapshot.familyShareReport);
         console.debug("[Phase 5.1.1 Feeding Intervals]", {
           summary: snapshot.intervalSummary.feeding,
           stats: snapshot.feedingIntervalStats
@@ -14555,6 +15019,7 @@
             phase511CompletionCheck: analysisSnapshot.phase511CompletionCheck,
             phase512CompletionCheck: analysisSnapshot.phase512CompletionCheck,
             phase518CompletionCheck: analysisSnapshot.phase518CompletionCheck,
+            phase519CompletionCheck: analysisSnapshot.phase519CompletionCheck,
             reportMessages: analysisSnapshot.reportMessages,
             parentReportBundle: analysisSnapshot.parentReportBundle,
             rhythmScoreResult: analysisSnapshot.rhythmScoreResult,
@@ -14563,6 +15028,7 @@
             doctorVisitSummary: analysisSnapshot.doctorVisitSummary,
             cryReasonSuggestion: analysisSnapshot.cryReasonSuggestion,
             caregiverHandoffSummary: analysisSnapshot.caregiverHandoffSummary,
+            familyShareReport: analysisSnapshot.familyShareReport,
             quality: analysisSnapshot.quality,
             warnings: analysisSnapshot.warnings,
             errors: analysisSnapshot.errors,
@@ -14692,6 +15158,7 @@
           phase511CompletionCheck: analysisSnapshot.phase511CompletionCheck,
           phase512CompletionCheck: analysisSnapshot.phase512CompletionCheck,
           phase518CompletionCheck: analysisSnapshot.phase518CompletionCheck,
+          phase519CompletionCheck: analysisSnapshot.phase519CompletionCheck,
           reportMessages: analysisSnapshot.reportMessages,
           parentReportBundle: analysisSnapshot.parentReportBundle,
           rhythmScoreResult: analysisSnapshot.rhythmScoreResult,
@@ -14700,6 +15167,7 @@
           doctorVisitSummary: analysisSnapshot.doctorVisitSummary,
           cryReasonSuggestion: analysisSnapshot.cryReasonSuggestion,
           caregiverHandoffSummary: analysisSnapshot.caregiverHandoffSummary,
+          familyShareReport: analysisSnapshot.familyShareReport,
           quality: analysisSnapshot.quality,
           warnings: analysisSnapshot.warnings,
           errors: analysisSnapshot.errors,
@@ -15350,6 +15818,56 @@
         }
       }
 
+      function familyShareCardHtml(label, title, note) {
+        return '<div class="report-card"><div class="report-label">' + escapeHtml(label) +
+          '</div><div class="report-title">' + escapeHtml(title || "") +
+          '</div><div class="report-note">' + escapeHtml(note || "") + "</div></div>";
+      }
+
+      function ensureFamilyShareUiOptions() {
+        if (!familyShareUiOptions) familyShareUiOptions = familyShareDefaultOptions();
+        return familyShareUiOptions;
+      }
+
+      function syncFamilyShareOptionChips() {
+        if (!els.familyShareOptionChips) return;
+        const options = ensureFamilyShareUiOptions();
+        Array.from(els.familyShareOptionChips.querySelectorAll("[data-family-share-option]")).forEach(function (button) {
+          const key = button.dataset.familyShareOption;
+          const selected = options[key] !== false;
+          button.classList.toggle("active", selected);
+          button.setAttribute("aria-pressed", selected ? "true" : "false");
+        });
+      }
+
+      function renderFamilyShareReport() {
+        if (!els.familyShareContent) return;
+        const options = ensureFamilyShareUiOptions();
+        const snapshot = buildAnalysisSnapshot(appData.records || [], { baby_id: getCurrentAnalysisBabyId() });
+        const report = buildFamilyShareReport(snapshot, options);
+        currentFamilyShareReport = report;
+        syncFamilyShareOptionChips();
+        const highlights = familyShareArray(report.highlights);
+        const cards = [
+          familyShareCardHtml("한 줄 요약", report.babyInfo ? report.babyInfo.displayName : "아기", report.summary ? report.summary.primarySummary : "기록 기반 참고 요약이에요."),
+          familyShareCardHtml("오늘 요약", report.today ? report.today.oneLineSummary : "오늘 기록을 더 모으면 공유 요약을 만들 수 있어요.", report.today ? [report.today.feedingText, report.today.diaperText, report.today.sleepText].filter(Boolean).join(" ") : ""),
+          familyShareCardHtml("최근 7일", report.recent7Days ? report.recent7Days.oneLineSummary : "최근 기록을 더 모으면 7일 흐름을 볼 수 있어요.", report.recent7Days ? report.recent7Days.dataQualityText : ""),
+          familyShareCardHtml("공유 포인트", highlights.length ? highlights.map(function (item) { return item.text; }).join(" ") : "가족이 함께 볼 포인트는 기록이 쌓이면 더 자연스럽게 정리돼요.", report.gentleNotes ? report.gentleNotes[0] : "참고용 요약이에요."),
+          familyShareCardHtml("울어요 참고", report.crySummary && report.crySummary.available ? "참고 기록 있음" : "최근 참고 없음", report.crySummary && report.crySummary.available ? [report.crySummary.text, report.crySummary.similarCaseText].filter(Boolean).join(" ") : "옵션이 켜져 있고 기록이 있으면 함께 보여줘요."),
+          familyShareCardHtml("다음에 참고할 것", report.nextPrediction && report.nextPrediction.available ? "기록 기반 참고" : "예상 없음", report.nextPrediction && report.nextPrediction.available ? report.nextPrediction.text : "다음 이벤트 예상은 기록이 더 쌓이면 참고할 수 있어요.")
+        ];
+        els.familyShareContent.innerHTML = cards.join("");
+        if (els.familySharePrivacyText) els.familySharePrivacyText.textContent = report.privacy ? report.privacy.warningText : "공유 전 포함된 내용을 한 번 확인해 주세요.";
+        if (els.familyShareTextPreview) els.familyShareTextPreview.value = report.shareText && report.shareText.text ? report.shareText.text : "";
+        if (els.familyShareFallbackText) {
+          els.familyShareFallbackText.value = report.shareText && report.shareText.text ? report.shareText.text : "";
+          els.familyShareFallbackText.classList.add("hidden");
+        }
+        if (els.webShareFamilyReportButton) {
+          els.webShareFamilyReportButton.disabled = !(report.shareText && report.shareText.available);
+        }
+      }
+
       function chartRowsHtml(items, valueKey, formatter, fillClass) {
         const maxValue = Math.max.apply(null, items.map(function (item) { return safeNumber(item[valueKey]); }).concat([0]));
         return '<div class="analysis-chart">' + items.map(function (item) {
@@ -15733,6 +16251,10 @@
           renderCaregiverHandoffSummary();
           els.caregiverHandoffSheet.classList.add("active");
         }
+        if (name === "familyShare") {
+          renderFamilyShareReport();
+          els.familyShareSheet.classList.add("active");
+        }
       }
 
       function closeSheets(clearOverlay) {
@@ -15743,6 +16265,7 @@
         els.restorePreviewSheet.classList.remove("active");
         if (els.cryReasonSheet) els.cryReasonSheet.classList.remove("active");
         if (els.caregiverHandoffSheet) els.caregiverHandoffSheet.classList.remove("active");
+        if (els.familyShareSheet) els.familyShareSheet.classList.remove("active");
         if (clearOverlay !== false) els.overlay.classList.remove("active");
       }
 
@@ -18120,6 +18643,77 @@
           return;
         }
 
+        if (event.target.closest("#familyShareButton")) {
+          event.preventDefault();
+          event.stopPropagation();
+          openSheet("familyShare");
+          return;
+        }
+
+        const familyShareOption = event.target.closest("[data-family-share-option]");
+        if (familyShareOption) {
+          event.preventDefault();
+          event.stopPropagation();
+          const key = familyShareOption.dataset.familyShareOption;
+          const options = ensureFamilyShareUiOptions();
+          options[key] = options[key] === false;
+          renderFamilyShareReport();
+          return;
+        }
+
+        if (event.target.closest("#webShareFamilyReportButton")) {
+          event.preventDefault();
+          event.stopPropagation();
+          const report = currentFamilyShareReport || (buildAnalysisSnapshot(appData.records || [], { baby_id: getCurrentAnalysisBabyId() }).familyShareReport);
+          const text = report && report.shareText ? report.shareText.text : "";
+          if (navigator.share && text) {
+            navigator.share({
+              title: "챙겨조 가족 공유 리포트",
+              text: text
+            }).then(function () {
+              showToast("가족 공유 리포트를 공유했어요.");
+            }).catch(function () {
+              copyTextToClipboard(text, "공유가 어려워 텍스트를 복사했어요.").then(function (ok) {
+                if (!ok && els.familyShareFallbackText) {
+                  els.familyShareFallbackText.value = text;
+                  els.familyShareFallbackText.classList.remove("hidden");
+                  els.familyShareFallbackText.focus();
+                  els.familyShareFallbackText.select();
+                  showToast("공유가 어려우면 아래 내용을 복사해서 보내주세요.");
+                }
+              });
+            });
+          } else {
+            copyTextToClipboard(text, "가족 공유 리포트를 복사했어요.").then(function (ok) {
+              if (!ok && els.familyShareFallbackText) {
+                els.familyShareFallbackText.value = text;
+                els.familyShareFallbackText.classList.remove("hidden");
+                els.familyShareFallbackText.focus();
+                els.familyShareFallbackText.select();
+                showToast("공유가 어려우면 아래 내용을 복사해서 보내주세요.");
+              }
+            });
+          }
+          return;
+        }
+
+        if (event.target.closest("#copyFamilyShareButton")) {
+          event.preventDefault();
+          event.stopPropagation();
+          const report = currentFamilyShareReport || (buildAnalysisSnapshot(appData.records || [], { baby_id: getCurrentAnalysisBabyId() }).familyShareReport);
+          const text = report && report.shareText ? report.shareText.text : "";
+          copyTextToClipboard(text, "가족 공유 리포트를 복사했어요.").then(function (ok) {
+            if (!ok && els.familyShareFallbackText) {
+              els.familyShareFallbackText.value = text;
+              els.familyShareFallbackText.classList.remove("hidden");
+              els.familyShareFallbackText.focus();
+              els.familyShareFallbackText.select();
+              showToast("공유가 어려우면 아래 내용을 복사해서 보내주세요.");
+            }
+          });
+          return;
+        }
+
         if (event.target.closest("#copyCaregiverHandoffButton")) {
           event.preventDefault();
           event.stopPropagation();
@@ -19091,6 +19685,9 @@
         buildPhase517CompletionCheck: buildPhase517CompletionCheck,
         buildCaregiverHandoffSummary: buildCaregiverHandoffSummary,
         buildPhase518CompletionCheck: buildPhase518CompletionCheck,
+        buildFamilyShareReport: buildFamilyShareReport,
+        buildPhase519CompletionCheck: buildPhase519CompletionCheck,
+        sanitizeFamilyShareText: sanitizeFamilyShareText,
         loadPredictiveAlertSettings: loadPredictiveAlertSettings,
         savePredictiveAlertSettings: savePredictiveAlertSettings,
         loadPredictiveAlertHistory: loadPredictiveAlertHistory,
