@@ -1493,6 +1493,25 @@
       padding: 18px;
     }
     .onboarding-overlay[hidden] { display: none !important; }
+    .illus-layer,
+    .illus-layer *,
+    .decorative-layer,
+    .decorative-layer *,
+    .bg-illustration,
+    .bg-illustration *,
+    .illustration-slot,
+    .illustration-slot * {
+      pointer-events: none !important;
+    }
+    .app-content,
+    .quick-record,
+    .quick-record *,
+    .record-action,
+    .record-action *,
+    .action-card,
+    button {
+      pointer-events: auto;
+    }
     .onboarding-panel {
       width: min(100%, 390px);
       max-height: min(92vh, 760px);
@@ -2606,7 +2625,7 @@
   <main class="app app-shell">
     <header class="topbar">
       <div>
-        <div class="version-badge" id="versionBadge">v6.0.4-onboarding</div>
+        <div class="version-badge" id="versionBadge">v6.0.5-mobile-save-fix</div>
         <h1 id="babyTitle">우리 아기</h1>
         <div class="baby-days" id="babyDays">생년월일을 입력해 주세요</div>
         <div class="today-line" id="todayLine"></div>
@@ -3461,7 +3480,7 @@
   <script>
     document.addEventListener("DOMContentLoaded", function () {
       if ("serviceWorker" in navigator) {
-        navigator.serviceWorker.register("./sw.js?v=6.0.4-onboarding").catch(function (error) {
+        navigator.serviceWorker.register("./sw.js?v=6.0.5-mobile-save-fix").catch(function (error) {
           console.warn("Service worker registration failed", error);
         });
       }
@@ -3656,9 +3675,9 @@
       const PRE_REPAIR_BACKUP_KEY = "baby_life_log_app_backup_before_repair";
       const BACKUP_FORMAT_VERSION = 2;
       const APP_NAME = "baby-life-log";
-      const APP_VERSION = "6.0.4-onboarding";
+      const APP_VERSION = "6.0.5-mobile-save-fix";
       const APP_PHASE_LABEL = "";
-      const SERVICE_WORKER_CACHE_NAME = "baby-life-log-v6.0.4-onboarding";
+      const SERVICE_WORKER_CACHE_NAME = "baby-life-log-v6.0.5-mobile-save-fix";
       const ONBOARDING_STORAGE_KEY = "touchbebe_onboarding_v1_dismissed";
       const ONBOARDING_CARDS = [
         {
@@ -4215,6 +4234,201 @@
         lastSummary: null,
         lastError: null
       };
+      var DEBUG_LOGS = [];
+      var DEBUG_STATE = {
+        version: "v6.0.5-mobile-save-fix",
+        swInfo: null,
+        localStorageTest: "",
+        lastButtonEvent: "",
+        lastAddRecord: "",
+        lastLocalSave: "",
+        lastRender: "",
+        lastCloudSave: "",
+        lastError: ""
+      };
+      var debugPanelEl = null;
+      var debugPanelCollapsed = false;
+      var debugSwRefreshInFlight = false;
+      var debugSwRefreshAt = 0;
+
+      function isDebugMode() {
+        try {
+          return location.search.indexOf("debug=1") >= 0 || localStorage.getItem("touchbebe_debug") === "true";
+        } catch (err) {
+          return location.search.indexOf("debug=1") >= 0;
+        }
+      }
+
+      function testLocalStorage() {
+        try {
+          const key = "__touchbebe_storage_test__";
+          const value = String(Date.now());
+          localStorage.setItem(key, value);
+          const read = localStorage.getItem(key);
+          localStorage.removeItem(key);
+          return read === value ? "ok" : "mismatch";
+        } catch (err) {
+          return "failed: " + (err && err.message ? err.message : String(err));
+        }
+      }
+
+      function getDisplayModeDebugInfo() {
+        if (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches) return "standalone";
+        if (window.matchMedia && window.matchMedia("(display-mode: fullscreen)").matches) return "fullscreen";
+        if (window.matchMedia && window.matchMedia("(display-mode: minimal-ui)").matches) return "minimal-ui";
+        if (navigator.standalone) return "ios-standalone";
+        return "browser";
+      }
+
+      async function collectServiceWorkerDebugInfo() {
+        const info = {
+          supported: !!navigator.serviceWorker,
+          controller: navigator.serviceWorker && navigator.serviceWorker.controller ? navigator.serviceWorker.controller.scriptURL : "none",
+          registrationScope: "none",
+          caches: []
+        };
+        try {
+          if (navigator.serviceWorker && navigator.serviceWorker.getRegistration) {
+            const registration = await navigator.serviceWorker.getRegistration();
+            if (registration) {
+              info.registrationScope = registration.scope || "unknown";
+              info.active = registration.active ? registration.active.scriptURL : "none";
+              info.waiting = registration.waiting ? registration.waiting.scriptURL : "none";
+              info.installing = registration.installing ? registration.installing.scriptURL : "none";
+            }
+          }
+        } catch (err) {
+          info.registrationError = err && err.message ? err.message : String(err);
+        }
+        try {
+          if (window.caches && caches.keys) info.caches = await caches.keys();
+        } catch (err) {
+          info.cacheError = err && err.message ? err.message : String(err);
+        }
+        return info;
+      }
+
+      function escapeDebugText(value) {
+        return String(value === undefined || value === null ? "" : value)
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/"/g, "&quot;");
+      }
+
+      function formatDebugData(data) {
+        if (data === undefined || data === null || data === "") return "";
+        try {
+          return JSON.stringify(data);
+        } catch (err) {
+          return String(data);
+        }
+      }
+
+      function getLastRecordDebugTime() {
+        const records = appData && Array.isArray(appData.records) ? appData.records : [];
+        if (!records.length) return "none";
+        return records.reduce(function (latest, record) {
+          const value = record && (record.createdAt || record.recorded_at || record.updatedAt);
+          if (!value) return latest;
+          return !latest || new Date(value) > new Date(latest) ? value : latest;
+        }, "");
+      }
+
+      function ensureDebugPanel() {
+        if (!isDebugMode()) return null;
+        if (debugPanelEl) return debugPanelEl;
+        debugPanelEl = document.createElement("section");
+        debugPanelEl.id = "touchbebeDebugPanel";
+        debugPanelEl.style.cssText = "position:fixed;left:8px;right:8px;bottom:8px;z-index:12000;max-height:46vh;overflow:auto;background:rgba(23,23,23,.94);color:#fff;border:1px solid rgba(255,255,255,.22);border-radius:8px;padding:8px;font:12px/1.35 ui-monospace,SFMono-Regular,Consolas,monospace;box-shadow:0 12px 36px rgba(0,0,0,.35);";
+        document.body.appendChild(debugPanelEl);
+        debugPanelEl.addEventListener("click", function (event) {
+          const toggle = event.target.closest("[data-debug-toggle]");
+          if (!toggle) return;
+          debugPanelCollapsed = !debugPanelCollapsed;
+          renderDebugPanel();
+        });
+        return debugPanelEl;
+      }
+
+      function renderDebugPanel() {
+        if (!isDebugMode()) return;
+        const panel = ensureDebugPanel();
+        if (!panel) return;
+        DEBUG_STATE.localStorageTest = testLocalStorage();
+        const nowForSwDebug = Date.now();
+        if (!debugSwRefreshInFlight && (!DEBUG_STATE.swInfo || nowForSwDebug - debugSwRefreshAt > 5000)) {
+          debugSwRefreshInFlight = true;
+          debugSwRefreshAt = nowForSwDebug;
+          collectServiceWorkerDebugInfo().then(function (info) {
+            DEBUG_STATE.swInfo = info;
+            debugSwRefreshInFlight = false;
+            renderDebugPanel();
+          }).catch(function (err) {
+            DEBUG_STATE.swInfo = { error: err && err.message ? err.message : String(err) };
+            debugSwRefreshInFlight = false;
+          });
+        }
+        const records = appData && Array.isArray(appData.records) ? appData.records : [];
+        const swInfo = DEBUG_STATE.swInfo || {};
+        const rows = [
+          ["version", DEBUG_STATE.version],
+          ["location", location.href],
+          ["userAgent", navigator.userAgent],
+          ["displayMode", getDisplayModeDebugInfo()],
+          ["sw.controller", swInfo.controller || "loading"],
+          ["sw.scope", swInfo.registrationScope || "loading"],
+          ["cache.names", swInfo.caches ? swInfo.caches.join(", ") : "loading"],
+          ["localStorage", DEBUG_STATE.localStorageTest],
+          ["records.count", records.length],
+          ["last.record", getLastRecordDebugTime() || "none"],
+          ["last.button", DEBUG_STATE.lastButtonEvent],
+          ["last.addRecord", DEBUG_STATE.lastAddRecord],
+          ["last.localSave", DEBUG_STATE.lastLocalSave],
+          ["last.render", DEBUG_STATE.lastRender],
+          ["last.cloudSave", DEBUG_STATE.lastCloudSave],
+          ["last.error", DEBUG_STATE.lastError]
+        ];
+        const logs = DEBUG_LOGS.slice(-12).reverse().map(function (entry) {
+          return "<div>" + escapeDebugText(entry.time + " " + entry.label + " " + formatDebugData(entry.data)) + "</div>";
+        }).join("");
+        panel.innerHTML = "<div style=\"display:flex;align-items:center;gap:8px;justify-content:space-between;\"><strong>touchbebe debug</strong><button type=\"button\" data-debug-toggle=\"true\" style=\"border:1px solid rgba(255,255,255,.35);background:transparent;color:#fff;border-radius:6px;padding:3px 7px;font:inherit;\">" + (debugPanelCollapsed ? "open" : "close") + "</button></div>" +
+          (debugPanelCollapsed ? "" : "<dl style=\"display:grid;grid-template-columns:98px 1fr;gap:3px 8px;margin:8px 0 6px;\">" + rows.map(function (row) {
+            return "<dt style=\"color:#a7f3d0;\">" + escapeDebugText(row[0]) + "</dt><dd style=\"margin:0;word-break:break-all;\">" + escapeDebugText(row[1]) + "</dd>";
+          }).join("") + "</dl><div style=\"border-top:1px solid rgba(255,255,255,.18);padding-top:6px;\">" + logs + "</div>");
+      }
+
+      function debugLog(label, data) {
+        try {
+          const entry = {
+            time: new Date().toISOString(),
+            label: label,
+            data: data || null
+          };
+          DEBUG_LOGS.push(entry);
+          if (DEBUG_LOGS.length > 80) DEBUG_LOGS.shift();
+          console.log("[touchbebe-debug]", label, data || "");
+          renderDebugPanel();
+        } catch (err) {
+          console.warn("[touchbebe-debug] log failed", err);
+        }
+      }
+
+      window.addEventListener("error", function (event) {
+        DEBUG_STATE.lastError = event.message || "unknown error";
+        debugLog("window.error", {
+          message: event.message,
+          filename: event.filename,
+          lineno: event.lineno,
+          colno: event.colno
+        });
+      });
+
+      window.addEventListener("unhandledrejection", function (event) {
+        const reason = event.reason;
+        DEBUG_STATE.lastError = reason && reason.message ? reason.message : String(reason);
+        debugLog("unhandledrejection", { reason: DEBUG_STATE.lastError });
+      });
 
       // 필터 상태
       let currentTypeFilter = "all";
@@ -4804,11 +5018,17 @@
 
       function saveAppData() {
         try {
+          debugLog("localSave:start", { key: STORAGE_KEY, count: appData && Array.isArray(appData.records) ? appData.records.length : -1 });
           appData = normalizeV2Data(appData);
           localStorage.setItem(STORAGE_KEY, JSON.stringify(appData));
+          DEBUG_STATE.lastLocalSave = "ok " + new Date().toLocaleTimeString();
+          debugLog("localSave:ok", { key: STORAGE_KEY, count: appData.records.length, readBackCount: (JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}").records || []).length });
           return true;
         } catch (error) {
           console.error("Failed to save app data", error);
+          DEBUG_STATE.lastLocalSave = "failed: " + (error && error.message ? error.message : String(error));
+          DEBUG_STATE.lastError = DEBUG_STATE.lastLocalSave;
+          debugLog("localSave:failed", { message: error && error.message ? error.message : String(error) });
           showToast("저장 공간이 부족하거나 사용할 수 없습니다.");
           return false;
         }
@@ -4920,12 +5140,21 @@
       }
 
       function enqueuePendingSync(action, record, options) {
-        if (!record || isDiagnosticTestRecord(record) || !shouldAttemptCloudSave()) return null;
+        debugLog("cloudSave:queueStart", { action: action, recordId: record && record.id, enabled: shouldAttemptCloudSave() });
+        if (!record || isDiagnosticTestRecord(record) || !shouldAttemptCloudSave()) {
+          DEBUG_STATE.lastCloudSave = "skipped: local_only_or_disabled";
+          debugLog("cloudSave:queueSkipped", { action: action, recordId: record && record.id });
+          return null;
+        }
         const opts = options || {};
         const context = getCurrentCloudContext();
         const now = nowIso();
         const normalizedRecord = normalizeRecord(record, record.type);
-        if (!normalizedRecord) return null;
+        if (!normalizedRecord) {
+          DEBUG_STATE.lastCloudSave = "skipped: invalid_record";
+          debugLog("cloudSave:queueSkipped", { action: action, reason: "invalid_record" });
+          return null;
+        }
         const localRecordId = getPendingRecordKey(normalizedRecord, opts);
         const serverRecordId = opts.serverRecordId || getRecordServerId(normalizedRecord);
         const familyId = opts.familyId || context.currentFamilyId || normalizedRecord.cloud.familyId || null;
@@ -4939,6 +5168,8 @@
         if (action === "soft_delete" && existingCreate && !serverRecordId) {
           pendingSyncQueue = queue.filter(function (item) { return !sameRecord(item); });
           savePendingSyncQueue(pendingSyncQueue);
+          DEBUG_STATE.lastCloudSave = "skipped: deleted unsynced create";
+          debugLog("cloudSave:queueSkipped", { action: action, recordId: localRecordId, reason: "soft_delete_before_create" });
           return null;
         }
 
@@ -4951,6 +5182,8 @@
           existingCreate.babyId = babyId;
           existingCreate.serverRecordId = serverRecordId || existingCreate.serverRecordId;
           savePendingSyncQueue(queue);
+          DEBUG_STATE.lastCloudSave = "queued update " + new Date().toLocaleTimeString();
+          debugLog("cloudSave:queued", { pendingId: existingCreate.pendingId, action: existingCreate.action, recordId: localRecordId });
           return existingCreate;
         }
 
@@ -4965,6 +5198,8 @@
           existing.babyId = babyId;
           existing.serverRecordId = serverRecordId || existing.serverRecordId;
           savePendingSyncQueue(queue);
+          DEBUG_STATE.lastCloudSave = "queued update " + new Date().toLocaleTimeString();
+          debugLog("cloudSave:queued", { pendingId: existing.pendingId, action: existing.action, recordId: localRecordId });
           return existing;
         }
 
@@ -4985,6 +5220,8 @@
         });
         queue.push(item);
         savePendingSyncQueue(queue);
+        DEBUG_STATE.lastCloudSave = "queued " + new Date().toLocaleTimeString();
+        debugLog("cloudSave:queued", { pendingId: item && item.pendingId, action: action, recordId: localRecordId, queueCount: queue.length });
         return item;
       }
 
@@ -5050,12 +5287,15 @@
         const opts = options || {};
         const reason = opts.reason || "manual";
         const includeFailed = opts.includeFailed === true || reason === "manual";
+        debugLog("cloudSave:retryStart", { reason: reason, includeFailed: includeFailed, queueCount: getPendingSyncQueue().length });
         if (!getPendingSyncQueue().length) {
           if (reason === "manual") {
             showToast("동기화 대기 중인 기록이 없습니다.");
             if (els.cloudActionMessage) els.cloudActionMessage.textContent = "동기화 대기 중인 기록이 없습니다.";
           }
           renderCloudStatus();
+          DEBUG_STATE.lastCloudSave = "retry skipped: empty";
+          debugLog("cloudSave:retrySkipped", { reason: reason, skipped: "empty_queue" });
           return { ok: true, attempted: 0, succeeded: 0, failed: 0, skipped: 0 };
         }
         if (!canRetryPendingSync(opts)) {
@@ -5063,6 +5303,8 @@
             showToast("오프라인 상태입니다. 온라인이 되면 자동으로 다시 시도합니다.");
             if (els.cloudActionMessage) els.cloudActionMessage.textContent = "오프라인 상태입니다. 온라인이 되면 자동으로 다시 시도합니다.";
           }
+          DEBUG_STATE.lastCloudSave = "retry skipped: " + (getFamilySyncState().skippedReason || "pending_retry_unavailable");
+          debugLog("cloudSave:retrySkipped", { reason: reason, skipped: getFamilySyncState().skippedReason || "pending_retry_unavailable" });
           return { ok: false, skipped: true, error: getFamilySyncState().skippedReason || "pending_retry_unavailable" };
         }
 
@@ -5182,6 +5424,8 @@
           if (opts.fetchAfter !== false && !opts.fromFamilySync) {
             await syncFamilyRecordsFromServer({ reason: "after-pending-" + reason, retryPendingFirst: false, ignoreVisibility: reason === "manual" });
           }
+          DEBUG_STATE.lastCloudSave = summary.ok ? "retry ok " + new Date().toLocaleTimeString() : "retry partial_failed " + new Date().toLocaleTimeString();
+          debugLog("cloudSave:retryResult", summary);
           return summary;
         } catch (error) {
           updateFamilySyncState({
@@ -5191,6 +5435,9 @@
             lastPendingRetryError: error.message || "pending_retry_failed"
           }, true);
           renderCloudStatus();
+          DEBUG_STATE.lastCloudSave = "retry failed: " + (error.message || "pending_retry_failed");
+          DEBUG_STATE.lastError = DEBUG_STATE.lastCloudSave;
+          debugLog("cloudSave:retryFailed", { reason: reason, error: error.message || "pending_retry_failed", attempted: summary.attempted, succeeded: summary.succeeded, failed: summary.failed });
           return { ok: false, error: error.message || "pending_retry_failed", attempted: summary.attempted, succeeded: summary.succeeded, failed: summary.failed };
         }
       }
@@ -5214,28 +5461,69 @@
       function findRecord(id) { return appData.records.find(function (r) { return r.id === id; }); }
 
       function createRecord(type, subtype, amount, memo) {
-        const record = normalizeRecord({
-          id: generateId("local"),
-          type: type,
-          subtype: subtype || "",
-          amount: amount,
-          memo: memo || "",
-          createdAt: nowIso(),
-          updatedAt: nowIso()
-        }, type);
-        record.cloud = shouldAttemptCloudSave()
-          ? { status: "pending", syncedAt: null, error: "", familyId: null, babyId: null, lastAttemptAt: null, retryCount: 0, operation: "create" }
-          : { status: "local_only", syncedAt: null, error: "", familyId: null, babyId: null, lastAttemptAt: null, retryCount: 0 };
-        appData.records.push(record);
-        enqueuePendingSync("create", record);
-        if (type === "feeding") appData.settings.lastFeedingAmount = record.amount || appData.settings.lastFeedingAmount;
-        if (type === "diaper") appData.settings.lastDiaperType = record.subtype || appData.settings.lastDiaperType;
-        if (saveAppData()) {
-          renderApp();
+        debugLog("addRecord:start", { type: type, subtype: subtype || "", amount: amount, memoLength: memo ? String(memo).length : 0 });
+        try {
+          const beforeCount = appData && Array.isArray(appData.records) ? appData.records.length : -1;
+          debugLog("addRecord:beforeCount", { count: beforeCount });
+          const record = normalizeRecord({
+            id: generateId("local"),
+            type: type,
+            subtype: subtype || "",
+            amount: amount,
+            memo: memo || "",
+            createdAt: nowIso(),
+            updatedAt: nowIso()
+          }, type);
+          debugLog("addRecord:built", { id: record && record.id, type: record && record.type, subtype: record && record.subtype, amount: record && record.amount });
+          record.cloud = shouldAttemptCloudSave()
+            ? { status: "pending", syncedAt: null, error: "", familyId: null, babyId: null, lastAttemptAt: null, retryCount: 0, operation: "create" }
+            : { status: "local_only", syncedAt: null, error: "", familyId: null, babyId: null, lastAttemptAt: null, retryCount: 0 };
+          appData.records.push(record);
+          debugLog("addRecord:pushed", { before: beforeCount, after: appData.records.length, recordId: record.id });
+          if (type === "feeding") appData.settings.lastFeedingAmount = record.amount || appData.settings.lastFeedingAmount;
+          if (type === "diaper") appData.settings.lastDiaperType = record.subtype || appData.settings.lastDiaperType;
+
+          const savedLocal = saveAppData();
+          if (!savedLocal) showToast("기록은 만들었지만 기기 저장에 실패했어요.");
+
+          try {
+            debugLog("render:start", { reason: "after-create", recordId: record.id });
+            renderApp();
+            DEBUG_STATE.lastRender = "ok " + new Date().toLocaleTimeString();
+            debugLog("render:ok", { reason: "after-create", count: appData.records.length });
+          } catch (renderError) {
+            DEBUG_STATE.lastRender = "failed: " + (renderError && renderError.message ? renderError.message : String(renderError));
+            DEBUG_STATE.lastError = DEBUG_STATE.lastRender;
+            debugLog("render:failed", { message: renderError && renderError.message ? renderError.message : String(renderError) });
+          }
+
+          try {
+            enqueuePendingSync("create", record);
+          } catch (cloudError) {
+            DEBUG_STATE.lastCloudSave = "queue failed: " + (cloudError && cloudError.message ? cloudError.message : String(cloudError));
+            DEBUG_STATE.lastError = DEBUG_STATE.lastCloudSave;
+            debugLog("cloudSave:queueFailed", { message: cloudError && cloudError.message ? cloudError.message : String(cloudError), recordId: record.id });
+          }
+
           showToast(typeLabels[type] + " 기록 완료");
           setTimeout(function () {
-            retryPendingSyncQueue({ reason: "after-create", fetchAfter: true });
+            retryPendingSyncQueue({ reason: "after-create", fetchAfter: true }).then(function (result) {
+              DEBUG_STATE.lastCloudSave = result && result.ok ? "retry ok " + new Date().toLocaleTimeString() : "retry pending/failed " + ((result && result.error) || "");
+              debugLog("cloudSave:retryResult", result);
+            }).catch(function (cloudRetryError) {
+              DEBUG_STATE.lastCloudSave = "retry failed: " + (cloudRetryError && cloudRetryError.message ? cloudRetryError.message : String(cloudRetryError));
+              DEBUG_STATE.lastError = DEBUG_STATE.lastCloudSave;
+              debugLog("cloudSave:retryFailed", { message: cloudRetryError && cloudRetryError.message ? cloudRetryError.message : String(cloudRetryError), recordId: record.id });
+            });
           }, 0);
+          DEBUG_STATE.lastAddRecord = "ok " + type + " " + new Date().toLocaleTimeString();
+          return record;
+        } catch (error) {
+          DEBUG_STATE.lastAddRecord = "failed: " + (error && error.message ? error.message : String(error));
+          DEBUG_STATE.lastError = DEBUG_STATE.lastAddRecord;
+          debugLog("addRecord:failed", { message: error && error.message ? error.message : String(error), stack: error && error.stack ? error.stack : "" });
+          showToast("기록 저장 중 문제가 생겼어요. debug 화면을 확인해 주세요.");
+          return null;
         }
       }
 
@@ -22139,6 +22427,19 @@
 
       // ─── 이벤트 ───────────────────────────────────────────────
       document.addEventListener("click", function (event) {
+        const target = event.target.closest("[data-action], [data-record-type], .quick-action-card, .record-button, .record-action");
+        if (!target) return;
+        DEBUG_STATE.lastButtonEvent = "button:click " + new Date().toLocaleTimeString() + " " + (target.getAttribute("data-action") || target.getAttribute("data-record-type") || target.id || target.className || target.tagName);
+        debugLog("button:click", {
+          tag: target.tagName,
+          id: target.id || "",
+          className: target.className || "",
+          action: target.getAttribute("data-action"),
+          type: target.getAttribute("data-record-type")
+        });
+      }, true);
+
+      document.addEventListener("click", function (event) {
         if (suppressNextClick) {
           event.preventDefault();
           event.stopPropagation();
@@ -23524,6 +23825,8 @@
       detectInviteFromUrl();
       saveAppData();
       renderApp();
+      debugLog("app:init", { version: DEBUG_STATE.version, recordsCount: appData.records.length, localStorageTest: testLocalStorage() });
+      renderDebugPanel();
       refreshMobileServiceWorkerDiagnostics();
       if (window.location && window.location.search && new URLSearchParams(window.location.search).get("debugReport") === "1") {
         recordMobileDiagnosticError("manual_debug_report", new Error("manual_debug_report"), { manual: true });

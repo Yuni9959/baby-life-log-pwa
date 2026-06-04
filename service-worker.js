@@ -1,11 +1,10 @@
-const APP_VERSION = "6.0.4-onboarding";
-const CACHE_NAME = "baby-life-log-v6.0.4-onboarding";
+const APP_VERSION = "6.0.5-mobile-save-fix";
+const CACHE_NAME = "baby-life-log-v6.0.5-mobile-save-fix";
 const APP_SHELL = [
   "./manifest.json",
   `./service-worker.js?v=${APP_VERSION}`,
   `./cloud-config.js?v=${APP_VERSION}`,
   `./cloud-supabase.js?v=${APP_VERSION}`,
-  `./phase5-analysis.js?v=${APP_VERSION}`,
   "./phase4_3_cloud_backup_notes.md",
   "./phase4_3_sql_migration.sql",
   "./phase4_1_google_login_setup_notes.md",
@@ -85,7 +84,6 @@ self.addEventListener("fetch", function (event) {
   if (
     requestUrl.pathname.endsWith("/cloud-config.js") ||
     requestUrl.pathname.endsWith("/cloud-supabase.js") ||
-    requestUrl.pathname.endsWith("/phase5-analysis.js") ||
     requestUrl.pathname.endsWith("/service-worker.js")
   ) {
     event.respondWith(
