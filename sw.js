@@ -1,9 +1,8 @@
-const CACHE_NAME = "baby-life-log-v5-27-release";
+const CACHE_NAME = "baby-life-log-v6-0-0-release";
 const CACHE_PREFIX = "babylog-cache-";
 const OLD_CACHE_PREFIX = "baby-life-log-";
 const PRIMARY_CACHE_NAME = CACHE_NAME;
 const ASSETS_TO_CACHE = [
-  "./index.html",
   "./manifest.json",
   "./sw.js",
   "./cloud-config.js",
@@ -22,7 +21,11 @@ const ASSETS_TO_CACHE = [
 self.addEventListener("install", function (event) {
   event.waitUntil(
     caches.open(CACHE_NAME).then(function (cache) {
-      return cache.addAll(ASSETS_TO_CACHE);
+      return Promise.allSettled(
+        ASSETS_TO_CACHE.map(function (asset) {
+          return cache.add(asset);
+        })
+      );
     })
   );
   self.skipWaiting();
@@ -48,12 +51,44 @@ self.addEventListener("activate", function (event) {
   self.clients.claim();
 });
 
+self.addEventListener("message", function (event) {
+  if (!event.data || event.data.type !== "GET_VERSION") return;
+  const target = event.ports && event.ports[0] ? event.ports[0] : event.source;
+  if (target && typeof target.postMessage === "function") {
+    target.postMessage({
+      type: "VERSION_INFO",
+      appVersion: "6.0.0",
+      cacheName: CACHE_NAME
+    });
+  }
+});
+
 self.addEventListener("fetch", function (event) {
   if (event.request.method !== "GET") {
     return;
   }
 
   const requestUrl = new URL(event.request.url);
+  const isNavigation =
+    event.request.mode === "navigate" ||
+    requestUrl.pathname.endsWith("/") ||
+    requestUrl.pathname.endsWith("/index.html");
+
+  if (requestUrl.origin === self.location.origin && isNavigation) {
+    event.respondWith(
+      fetch(event.request, { cache: "no-store" }).then(function (response) {
+        const responseClone = response.clone();
+        caches.open(CACHE_NAME).then(function (cache) {
+          cache.put("./index.html", responseClone).catch(function () {});
+        });
+        return response;
+      }).catch(function () {
+        return caches.match("./index.html");
+      })
+    );
+    return;
+  }
+
   if (
     requestUrl.origin === self.location.origin &&
     (
@@ -82,10 +117,16 @@ self.addEventListener("fetch", function (event) {
         return cachedResponse;
       }
 
-      return fetch(event.request).catch(function (error) {
-        if (event.request.mode === "navigate") {
-          return caches.match("./index.html");
+      return fetch(event.request).then(function (response) {
+        if (!response || response.status !== 200 || requestUrl.origin !== self.location.origin) {
+          return response;
         }
+        const responseClone = response.clone();
+        caches.open(CACHE_NAME).then(function (cache) {
+          cache.put(event.request, responseClone).catch(function () {});
+        });
+        return response;
+      }).catch(function (error) {
         throw error;
       });
     })

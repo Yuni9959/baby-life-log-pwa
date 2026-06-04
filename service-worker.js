@@ -1,8 +1,6 @@
-const APP_VERSION = "5.0.0";
-const CACHE_NAME = `babylog-cache-${APP_VERSION}`;
+const APP_VERSION = "6.0.0";
+const CACHE_NAME = "baby-life-log-v6-0-0-release";
 const APP_SHELL = [
-  "./",
-  "./index.html",
   "./manifest.json",
   `./service-worker.js?v=${APP_VERSION}`,
   `./cloud-config.js?v=${APP_VERSION}`,
@@ -108,7 +106,12 @@ self.addEventListener("fetch", function (event) {
     return;
   }
 
-  if (request.mode === "navigate") {
+  const isNavigation =
+    request.mode === "navigate" ||
+    requestUrl.pathname.endsWith("/") ||
+    requestUrl.pathname.endsWith("/index.html");
+
+  if (isNavigation) {
     event.respondWith(
       fetch(request, { cache: "no-store" })
         .then(function (response) {

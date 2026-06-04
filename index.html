@@ -2290,7 +2290,7 @@
   <main class="app app-shell">
     <header class="topbar">
       <div>
-        <div class="version-badge" id="versionBadge">v5.27</div>
+        <div class="version-badge" id="versionBadge">v6.0.0</div>
         <h1 id="babyTitle">우리 아기</h1>
         <div class="baby-days" id="babyDays">생년월일을 입력해 주세요</div>
         <div class="today-line" id="todayLine"></div>
@@ -3099,7 +3099,7 @@
   <script>
     document.addEventListener("DOMContentLoaded", function () {
       if ("serviceWorker" in navigator) {
-        navigator.serviceWorker.register("./sw.js?v=5.27-release").catch(function (error) {
+        navigator.serviceWorker.register("./sw.js?v=6.0.0-release").catch(function (error) {
           console.warn("Service worker registration failed", error);
         });
       }
@@ -19729,10 +19729,14 @@
           app: {
             appVersion: APP_VERSION,
             cacheName: SERVICE_WORKER_CACHE_NAME,
+            cacheVersion: "v" + APP_VERSION,
             configVersion: (window.BABY_APP_CLOUD_CONFIG && window.BABY_APP_CLOUD_CONFIG.appVersion) || "-",
             babyCloudVersion: (window.BabyCloud && window.BabyCloud.appVersion) || (getFullConnectionDiagnostic() && getFullConnectionDiagnostic().babyCloudAppVersion) || "-",
             serviceWorkerSupported: serviceWorkerSupported,
             serviceWorkerController: serviceWorkerSupported ? !!navigator.serviceWorker.controller : false,
+            serviceWorkerControllerUrl: serviceWorkerSupported && navigator.serviceWorker.controller ? navigator.serviceWorker.controller.scriptURL : "-",
+            serviceWorkerRegistrations: mobileDiagnosticRuntimeInfo.serviceWorkerRegistrations,
+            cacheKeys: mobileDiagnosticRuntimeInfo.cacheKeys,
             currentUrl: window.location.href,
             displayMode: displayMode,
             online: navigator.onLine,
@@ -19822,10 +19826,13 @@
           els.phase4AppDiagnosticGrid.innerHTML = dataItemsHtml([
             { label: "APP_VERSION", value: diagnostic.app.appVersion },
             { label: "CACHE_NAME", value: diagnostic.app.cacheName },
+            { label: "CACHE_VERSION", value: diagnostic.app.cacheVersion },
             { label: "cloud-config 버전", value: diagnostic.app.configVersion },
             { label: "BabyCloud 버전", value: diagnostic.app.babyCloudVersion },
             { label: "service worker 지원", value: diagnostic.app.serviceWorkerSupported ? "지원" : "미지원" },
             { label: "controller", value: diagnostic.app.serviceWorkerController ? "있음" : "없음" },
+            { label: "controller URL", value: diagnostic.app.serviceWorkerControllerUrl },
+            { label: "cache keys", value: Array.isArray(diagnostic.app.cacheKeys) ? diagnostic.app.cacheKeys.join(", ") : "-" },
             { label: "현재 URL", value: diagnostic.app.currentUrl },
             { label: "display mode", value: diagnostic.app.displayMode },
             { label: "online", value: String(diagnostic.app.online) },
