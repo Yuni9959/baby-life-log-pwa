@@ -1,5 +1,5 @@
-const APP_VERSION = "6.0.5-mobile-save-fix";
-const CACHE_NAME = "baby-life-log-v6.0.5-mobile-save-fix";
+const APP_VERSION = "6.0.6-analysis-thin-client";
+const CACHE_NAME = "baby-life-log-v6.0.6-analysis-thin-client";
 const APP_SHELL = [
   "./manifest.json",
   `./service-worker.js?v=${APP_VERSION}`,

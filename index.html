@@ -2625,7 +2625,7 @@
   <main class="app app-shell">
     <header class="topbar">
       <div>
-        <div class="version-badge" id="versionBadge">v6.0.5-mobile-save-fix</div>
+        <div class="version-badge" id="versionBadge">v6.0.6-analysis-thin-client</div>
         <h1 id="babyTitle">우리 아기</h1>
         <div class="baby-days" id="babyDays">생년월일을 입력해 주세요</div>
         <div class="today-line" id="todayLine"></div>
@@ -3675,9 +3675,12 @@
       const PRE_REPAIR_BACKUP_KEY = "baby_life_log_app_backup_before_repair";
       const BACKUP_FORMAT_VERSION = 2;
       const APP_NAME = "baby-life-log";
-      const APP_VERSION = "6.0.5-mobile-save-fix";
+      const APP_VERSION = "6.0.6-analysis-thin-client";
       const APP_PHASE_LABEL = "";
-      const SERVICE_WORKER_CACHE_NAME = "baby-life-log-v6.0.5-mobile-save-fix";
+      const SERVICE_WORKER_CACHE_NAME = "baby-life-log-v6.0.6-analysis-thin-client";
+      const MIN_ANALYSIS_RECORDS = 10;
+      const ANALYSIS_SERVER_RECONNECT_MESSAGE = "서버 연결 후 분석을 확인할 수 있어요. 서버 재연결을 눌러 주세요.";
+      const ANALYSIS_GATE_DETAIL_MESSAGE = "기록이 조금 더 쌓이면 최근 흐름을 더 안정적으로 보여드릴게요.";
       const ONBOARDING_STORAGE_KEY = "touchbebe_onboarding_v1_dismissed";
       const ONBOARDING_CARDS = [
         {
@@ -4236,7 +4239,7 @@
       };
       var DEBUG_LOGS = [];
       var DEBUG_STATE = {
-        version: "v6.0.5-mobile-save-fix",
+        version: "v6.0.6-analysis-thin-client",
         swInfo: null,
         localStorageTest: "",
         lastButtonEvent: "",
@@ -4250,6 +4253,45 @@
       var debugPanelCollapsed = false;
       var debugSwRefreshInFlight = false;
       var debugSwRefreshAt = 0;
+
+      function normalizeAnalysisCount(value) {
+        const n = Number(value);
+        if (!Number.isFinite(n) || n < 0) return 0;
+        return Math.floor(n);
+      }
+
+      function getAnalysisMissingCount(count, minCount) {
+        const min = typeof minCount === "number" ? minCount : MIN_ANALYSIS_RECORDS;
+        const n = normalizeAnalysisCount(count);
+        return Math.max(0, min - n);
+      }
+
+      function getAnalysisGateMessage(count, minCount) {
+        const missing = getAnalysisMissingCount(count, minCount);
+        if (missing <= 0) return "";
+        return "분석을 위해 " + missing + "개의 기록이 더 필요해요!";
+      }
+
+      function isAnalysisReady(count, minCount) {
+        return getAnalysisMissingCount(count, minCount) <= 0;
+      }
+
+      function normalizeServerAnalysisResult(result) {
+        const source = result || {};
+        const min = normalizeAnalysisCount(source.min_required_records) || MIN_ANALYSIS_RECORDS;
+        const usable = normalizeAnalysisCount(source.usable_record_count);
+        const missing = typeof source.missing_record_count === "number"
+          ? normalizeAnalysisCount(source.missing_record_count)
+          : getAnalysisMissingCount(usable, min);
+        return {
+          analysisReady: !!source.analysis_ready && missing <= 0,
+          usableRecordCount: usable,
+          minRequiredRecords: min,
+          missingRecordCount: missing,
+          gateMessage: getAnalysisGateMessage(usable, min),
+          raw: result || null
+        };
+      }
 
       function isDebugMode() {
         try {
@@ -4510,7 +4552,7 @@
           let commonAnalysisEngineSummary = null;
           try {
             if (!opts.skipAnalysisSummary && typeof buildAnalysisSnapshot === "function") {
-              const snapshot = buildAnalysisSnapshot(records, { baby_id: currentBabyId });
+              const snapshot = buildGuardedAnalysisSnapshot(records, { baby_id: currentBabyId });
               analysisSnapshotSummary = {
                 ok: true,
                 babyId: snapshot && snapshot.babyId,
@@ -6690,6 +6732,162 @@
       function getAnalysisScopedRecords(records) {
         const scope = getScopedAnalysisContext(records || [], getCurrentAnalysisBabyId());
         return scope.isScoped ? scope.scopedRecords : [];
+      }
+
+      function getAnalysisUsableRecordCount(records, days) {
+        const scopedRecords = getAnalysisScopedRecords(records || []).filter(isActiveRecord);
+        if (!days) return scopedRecords.length;
+        const dayList = getLastNDays(days);
+        const rangeStart = dayList[0].date;
+        const rangeEnd = endOfLocalDay(dayList[dayList.length - 1].date);
+        return scopedRecords.filter(function (record) {
+          const date = validRecordDate(record);
+          return date && date >= rangeStart && date < rangeEnd;
+        }).length;
+      }
+
+      function getLocalAnalysisGate(records, days, minCount) {
+        const min = typeof minCount === "number" ? minCount : MIN_ANALYSIS_RECORDS;
+        const usable = getAnalysisUsableRecordCount(records || [], days);
+        return {
+          analysisReady: isAnalysisReady(usable, min),
+          usableRecordCount: usable,
+          minRequiredRecords: min,
+          missingRecordCount: getAnalysisMissingCount(usable, min),
+          gateMessage: getAnalysisGateMessage(usable, min)
+        };
+      }
+
+      function getAnalysisGateForBaby(records, babyId, days, minCount) {
+        const min = typeof minCount === "number" ? minCount : MIN_ANALYSIS_RECORDS;
+        const scopedRecords = (Array.isArray(records) ? records : []).filter(function (record) {
+          return isRecordInAnalysisScope(record, babyId);
+        });
+        let usable = scopedRecords.length;
+        if (days) {
+          const dayList = getLastNDays(days);
+          const rangeStart = dayList[0].date;
+          const rangeEnd = endOfLocalDay(dayList[dayList.length - 1].date);
+          usable = scopedRecords.filter(function (record) {
+            const date = validRecordDate(record);
+            return date && date >= rangeStart && date < rangeEnd;
+          }).length;
+        }
+        return {
+          analysisReady: isAnalysisReady(usable, min),
+          usableRecordCount: usable,
+          minRequiredRecords: min,
+          missingRecordCount: getAnalysisMissingCount(usable, min),
+          gateMessage: getAnalysisGateMessage(usable, min)
+        };
+      }
+
+      function getServerAnalysisBlockMessage() {
+        const endpoint = typeof getAnalysisApiEndpoint === "function" ? getAnalysisApiEndpoint() : "";
+        const online = typeof navigator === "undefined" ? true : navigator.onLine !== false;
+        if (!online) return ANALYSIS_SERVER_RECONNECT_MESSAGE;
+        const status = typeof getCloudSafeStatus === "function" ? getCloudSafeStatus() : {};
+        if (status && status.enabled && (status.status === "offline" || status.status === "error" || status.status === "save_failed")) {
+          return ANALYSIS_SERVER_RECONNECT_MESSAGE;
+        }
+        if (endpoint) {
+          const context = window.BabyCloud && typeof window.BabyCloud.getCloudContext === "function" ? window.BabyCloud.getCloudContext() : {};
+          const familyId = (context && context.currentFamilyId) || (appData.cloud && appData.cloud.currentFamilyId) || getLocalValue("babylog_family_id");
+          const babyId = (context && context.currentBabyId) || (appData.cloud && appData.cloud.currentBabyId) || getLocalValue("babylog_baby_id");
+          if (!familyId || !babyId || analysisApiState.status === "호출 실패") return ANALYSIS_SERVER_RECONNECT_MESSAGE;
+        }
+        return "";
+      }
+
+      function buildAnalysisGateSnapshot(records, options) {
+        const opts = options || {};
+        const sourceRecords = Array.isArray(records) ? records : [];
+        const babyId = opts.hasOwnProperty("baby_id") ? opts.baby_id
+          : opts.hasOwnProperty("babyId") ? opts.babyId
+            : getCurrentAnalysisBabyId();
+        const normalizedBabyId = normalizeAnalysisBabyId(babyId);
+        const normalized = sourceRecords.map(function (record, index) {
+          return normalizeRecordForAnalysis(record, index, { babyId: normalizedBabyId });
+        });
+        const activeSorted = normalized.filter(function (record) {
+          return record && record.isUsableForAnalysis;
+        }).slice().sort(function (a, b) {
+          return (a.recordedAtMs || 0) - (b.recordedAtMs || 0);
+        });
+        const gate = getAnalysisGateForBaby(sourceRecords, normalizedBabyId, null, opts.minCount);
+        const serverBlockMessage = getServerAnalysisBlockMessage();
+        const message = serverBlockMessage || gate.gateMessage || getAnalysisGateMessage(activeSorted.length, gate.minRequiredRecords);
+        return {
+          ok: false,
+          phase: "6.0.6",
+          generatedAt: nowIso(),
+          babyId: normalizedBabyId || null,
+          analysis_ready: false,
+          analysisReady: false,
+          analysisBlocked: true,
+          analysisGate: {
+            analysisReady: false,
+            usableRecordCount: gate.usableRecordCount,
+            minRequiredRecords: gate.minRequiredRecords,
+            missingRecordCount: gate.missingRecordCount,
+            gateMessage: message,
+            serverBlocked: !!serverBlockMessage
+          },
+          counts: {
+            inputRecords: sourceRecords.length,
+            activeRecords: activeSorted.length,
+            normalizedRecords: normalized.length,
+            usableRecordCount: gate.usableRecordCount,
+            excludedDeleted: normalized.filter(function (record) { return record.qualityFlags && record.qualityFlags.indexOf("deleted_record") !== -1; }).length
+          },
+          records: {
+            activeSorted: activeSorted,
+            normalized: normalized
+          },
+          warnings: [message],
+          errors: []
+        };
+      }
+
+      function buildGuardedAnalysisSnapshot(records, options) {
+        const opts = options || {};
+        const babyId = opts.hasOwnProperty("baby_id") ? opts.baby_id
+          : opts.hasOwnProperty("babyId") ? opts.babyId
+            : getCurrentAnalysisBabyId();
+        const gate = getAnalysisGateForBaby(records || [], normalizeAnalysisBabyId(babyId), null, opts.minCount);
+        const serverBlockMessage = getServerAnalysisBlockMessage();
+        if (serverBlockMessage || !gate.analysisReady) {
+          return buildAnalysisGateSnapshot(records || [], opts);
+        }
+        return buildAnalysisSnapshot(records || [], opts);
+      }
+
+      function isAnalysisGateSnapshot(snapshot) {
+        return !!(snapshot && snapshot.analysisGate && snapshot.analysisGate.analysisReady === false);
+      }
+
+      function analysisGateText(snapshot) {
+        return (snapshot && snapshot.analysisGate && snapshot.analysisGate.gateMessage) || getAnalysisGateMessage(0);
+      }
+
+      function canUseCachedAnalysisOutput() {
+        const serverBlockMessage = getServerAnalysisBlockMessage();
+        const gate = getLocalAnalysisGate(appData && appData.records ? appData.records : [], null);
+        return !serverBlockMessage && gate.analysisReady;
+      }
+
+      function analysisGateCardHtml(title, message, detail) {
+        return analysisCardHtml(
+          title,
+          "",
+          analysisEmptyHtml(message) + (detail ? '<p class="analysis-note">' + escapeHtml(detail) + '</p>' : "")
+        );
+      }
+
+      function analysisGateCardsHtml(titles, message, detail) {
+        return titles.map(function (title) {
+          return analysisGateCardHtml(title, message, detail);
+        }).join("");
       }
 
       function diagnosticRecordId(record) {
@@ -13140,13 +13338,18 @@
         const diagnosticUsableRecordCount = Number(diagnostics.usableRecordCount);
         const diagnosticUsedInputCount = Number(diagnostics.usedInputCount);
         const inWindowCount = Number(diagnostics.inWindowCount);
-        if ((Number.isFinite(usableRecordCount) && usableRecordCount >= 10) ||
-          (Number.isFinite(countUsableRecordCount) && countUsableRecordCount >= 10) ||
-          (Number.isFinite(diagnosticUsableRecordCount) && diagnosticUsableRecordCount >= 10) ||
-          (Number.isFinite(usedInputCount) && usedInputCount >= 5) ||
-          (Number.isFinite(diagnosticUsedInputCount) && diagnosticUsedInputCount >= 5) ||
-          (Number.isFinite(inWindowCount) && inWindowCount >= 5)) {
+        if ((Number.isFinite(usableRecordCount) && isAnalysisReady(usableRecordCount)) ||
+          (Number.isFinite(countUsableRecordCount) && isAnalysisReady(countUsableRecordCount)) ||
+          (Number.isFinite(diagnosticUsableRecordCount) && isAnalysisReady(diagnosticUsableRecordCount)) ||
+          (Number.isFinite(usedInputCount) && isAnalysisReady(usedInputCount)) ||
+          (Number.isFinite(diagnosticUsedInputCount) && isAnalysisReady(diagnosticUsedInputCount)) ||
+          (Number.isFinite(inWindowCount) && isAnalysisReady(inWindowCount))) {
           return true;
+        }
+        if ([usableRecordCount, countUsableRecordCount, diagnosticUsableRecordCount, usedInputCount, diagnosticUsedInputCount, inWindowCount].some(function (count) {
+          return Number.isFinite(count);
+        })) {
+          return false;
         }
         if (hasCryMeaningfulEvidence(source)) return true;
         const evidence = Array.isArray(source.evidence) ? source.evidence : [];
@@ -15226,9 +15429,51 @@
         };
       }
 
+      function buildAnalysisBlockedCaregiverHandoffSummary(analysisSnapshot, options) {
+        const opts = options || {};
+        const snapshot = analysisSnapshot || {};
+        const nowMs = Number.isFinite(opts.nowMs) ? opts.nowMs : Date.now();
+        const records = caregiverHandoffUsableRecords(snapshot);
+        const babyInfo = buildCaregiverHandoffBabyInfo(snapshot, opts, nowMs);
+        const currentStatus = buildCaregiverHandoffCurrentStatus(snapshot, records, nowMs);
+        const recentCare = buildCaregiverHandoffRecentCare(records, nowMs, CAREGIVER_HANDOFF_CONFIG);
+        const message = analysisGateText(snapshot);
+        const handoff = {
+          ok: false,
+          phase: "6.0.6",
+          babyId: babyInfo.babyId,
+          generatedAt: new Date(nowMs).toISOString(),
+          analysisBlocked: true,
+          analysisGate: snapshot.analysisGate || null,
+          summary: {
+            available: false,
+            periodHours: recentCare.periodHours,
+            confidenceLevel: "insufficient",
+            primarySummary: message,
+            missingReason: "not_enough_records"
+          },
+          babyInfo: babyInfo,
+          currentStatus: currentStatus,
+          recentCare: recentCare,
+          nextToCheck: [],
+          recentCryContext: { available: false, summaryText: message },
+          reliability: { confidenceLevel: "insufficient", summaryText: message },
+          shareText: {
+            available: true,
+            text: [babyInfo.displayName || "아기", message, "마지막 수유/기저귀/수면 같은 현재 상태는 앱의 최근 기록에서 확인해 주세요."].filter(Boolean).join("\n")
+          },
+          messageKeys: ["analysis_min_records_blocked", "caregiver_handoff_raw_status_only"],
+          warnings: [message],
+          errors: []
+        };
+        handoff.phase518CompletionCheck = buildPhase518CompletionCheck(handoff);
+        return handoff;
+      }
+
       function buildCaregiverHandoffSummary(analysisSnapshot, options) {
         const opts = options || {};
         const snapshot = analysisSnapshot || {};
+        if (isAnalysisGateSnapshot(snapshot)) return buildAnalysisBlockedCaregiverHandoffSummary(snapshot, opts);
         const nowMs = Number.isFinite(opts.nowMs) ? opts.nowMs : Date.now();
         const cfg = Object.assign({}, CAREGIVER_HANDOFF_CONFIG, opts.config || {});
         const records = caregiverHandoffUsableRecords(snapshot);
@@ -15624,9 +15869,68 @@
         };
       }
 
+      function buildAnalysisBlockedFamilyShareReport(analysisSnapshot, options) {
+        const snapshot = analysisSnapshot || {};
+        const shareOptions = familyShareDefaultOptions(options || {});
+        const nowMs = Number.isFinite(shareOptions.nowMs) ? shareOptions.nowMs : Date.now();
+        const records = familyShareUsableRecords(snapshot);
+        const babyInfo = familyShareCollectBabyInfo(snapshot, shareOptions, nowMs);
+        const today = buildFamilyShareToday(snapshot, records, babyInfo, shareOptions, nowMs);
+        const message = analysisGateText(snapshot);
+        const report = {
+          ok: false,
+          phase: "6.0.6",
+          babyId: babyInfo.babyId,
+          familyId: shareOptions.familyId || (typeof appData !== "undefined" && appData.cloud && appData.cloud.currentFamilyId) || null,
+          generatedAt: new Date(nowMs).toISOString(),
+          analysisBlocked: true,
+          analysisGate: snapshot.analysisGate || null,
+          summary: {
+            available: false,
+            reportType: shareOptions.reportType,
+            confidenceLevel: "insufficient",
+            primarySummary: message,
+            missingReason: "not_enough_records"
+          },
+          shareOptions: shareOptions,
+          babyInfo: babyInfo,
+          today: today,
+          recent7Days: {
+            available: false,
+            oneLineSummary: message,
+            dataQualityText: message
+          },
+          highlights: [],
+          gentleNotes: [message, "오늘 기록 요약은 계속 볼 수 있어요."],
+          crySummary: { available: false, text: message, similarCaseText: "" },
+          nextPrediction: { available: false, text: message },
+          privacy: {
+            includesBabyName: shareOptions.includeBabyName !== false,
+            includesAge: shareOptions.includeAge !== false,
+            includesFamilyCode: false,
+            includesCaregiverNotes: false,
+            includesCrySummary: false,
+            includesPredictions: false,
+            warningText: "공유 전 포함된 내용을 한 번 확인해 주세요."
+          },
+          familyCode: null,
+          shareText: null,
+          messageKeys: ["analysis_min_records_blocked", "family_share_raw_today_only"],
+          warnings: [message],
+          errors: []
+        };
+        report.shareText = {
+          available: true,
+          text: sanitizeFamilyShareText([babyInfo.displayName || "아기", message, today && today.oneLineSummary ? today.oneLineSummary : ""].filter(Boolean).join("\n"))
+        };
+        report.phase519CompletionCheck = buildPhase519CompletionCheck(report);
+        return report;
+      }
+
       function buildFamilyShareReport(analysisSnapshot, options) {
         const snapshot = analysisSnapshot || {};
         const shareOptions = familyShareDefaultOptions(options || {});
+        if (isAnalysisGateSnapshot(snapshot)) return buildAnalysisBlockedFamilyShareReport(snapshot, shareOptions);
         const nowMs = Number.isFinite(shareOptions.nowMs) ? shareOptions.nowMs : Date.now();
         const records = familyShareUsableRecords(snapshot);
         const babyInfo = familyShareCollectBabyInfo(snapshot, shareOptions, nowMs);
@@ -15940,9 +16244,74 @@
         };
       }
 
+      function buildAnalysisBlockedShareImageData(analysisSnapshot, options) {
+        const snapshot = analysisSnapshot || {};
+        const opts = shareImageDefaultOptions(options || {});
+        const template = SHARE_IMAGE_TEMPLATES[opts.templateKey] || SHARE_IMAGE_TEMPLATES.family_today;
+        opts.templateKey = template.key;
+        const nowMs = Number.isFinite(opts.nowMs) ? opts.nowMs : Date.now();
+        const baby = shareImageBabyInfo(snapshot, opts, nowMs);
+        const message = analysisGateText(snapshot);
+        const payload = {
+          title: (baby.displayName || "아기") + "의 기록",
+          subtitle: "기록 기반 공유 이미지",
+          generatedAt: new Date(nowMs).toISOString(),
+          dateLabel: opts.includeDate === false ? "" : shareImageDateLabel(nowMs),
+          baby: baby,
+          summary: { primaryText: message, confidenceText: "분석 대기" },
+          cards: [
+            shareImageCard("analysis_gate", "분석 안내", "✓", message, "오늘 기록 요약은 계속 볼 수 있어요.", "quality"),
+            shareImageCard("record_count", "기록 수", "○", "분석 사용 기록 " + ((snapshot.counts && snapshot.counts.usableRecordCount) || 0) + "개", "최소 " + MIN_ANALYSIS_RECORDS + "개 필요", "quality")
+          ],
+          footer: {
+            disclaimer: opts.includeDisclaimer === false ? "" : "기록이 조금 더 쌓이면 최근 흐름을 더 안정적으로 보여드릴게요.",
+            appName: "챙겨조",
+            tagline: "기록 기반 육아 리포트"
+          }
+        };
+        payload.shareText = sanitizeShareImageText([payload.title, message, payload.footer.disclaimer].filter(Boolean).join("\n"));
+        const state = {
+          ok: true,
+          phase: "6.0.6",
+          generatedAt: new Date(nowMs).toISOString(),
+          babyId: baby.babyId || snapshot.babyId || null,
+          analysisBlocked: true,
+          analysisGate: snapshot.analysisGate || null,
+          summary: {
+            available: false,
+            templateKey: template.key,
+            title: template.label,
+            confidenceLevel: "insufficient",
+            missingReason: "not_enough_records"
+          },
+          access: getFeatureAccess("premiumShareImage", snapshot.premiumAccessState),
+          options: opts,
+          payload: payload,
+          preview: {
+            width: template.defaultWidth,
+            height: template.defaultHeight,
+            renderer: "canvas",
+            theme: opts.theme
+          },
+          exportResult: {
+            pngSupported: typeof HTMLCanvasElement !== "undefined",
+            webShareFilesSupported: false,
+            downloadAvailable: true,
+            textFallbackAvailable: true,
+            fileName: "baby-life-log-analysis-pending-" + shareImageDateLabel(nowMs).replace(/\./g, "") + ".png"
+          },
+          messageKeys: ["analysis_min_records_blocked", "share_image_gate_message"],
+          warnings: [message],
+          errors: []
+        };
+        state.phase524CompletionCheck = buildPhase524CompletionCheck(state);
+        return state;
+      }
+
       function buildShareImageData(analysisSnapshot, options) {
         const snapshot = analysisSnapshot || {};
         const opts = shareImageDefaultOptions(options || {});
+        if (isAnalysisGateSnapshot(snapshot)) return buildAnalysisBlockedShareImageData(snapshot, opts);
         const template = SHARE_IMAGE_TEMPLATES[opts.templateKey] || SHARE_IMAGE_TEMPLATES.family_today;
         opts.templateKey = template.key;
         const nowMs = Number.isFinite(opts.nowMs) ? opts.nowMs : Date.now();
@@ -16492,9 +16861,84 @@
         };
       }
 
+      function buildAnalysisBlockedPrintableReportData(analysisSnapshot, options) {
+        const snapshot = analysisSnapshot || {};
+        const opts = printableReportDefaultOptions(options || {});
+        const template = PRINTABLE_REPORT_TEMPLATES[opts.templateKey] || PRINTABLE_REPORT_TEMPLATES.doctor_recent7_pdf;
+        opts.templateKey = template.key;
+        const nowMs = Number.isFinite(opts.nowMs) ? opts.nowMs : Date.now();
+        const baby = printableReportBabyInfo(snapshot, opts, nowMs);
+        const message = analysisGateText(snapshot);
+        const sections = [
+          printableSection("analysisGate", "분석 안내", [
+            printableRow("상태", message),
+            printableRow("분석 사용 기록", ((snapshot.counts && snapshot.counts.usableRecordCount) || 0) + "개"),
+            printableRow("최소 필요 기록", MIN_ANALYSIS_RECORDS + "개")
+          ], "오늘 기록 요약은 계속 볼 수 있고, 평균/추세/확률/예측 문구는 기록이 더 쌓인 뒤 표시합니다.")
+        ];
+        if (opts.includeRecordCounts !== false && snapshot.counts) {
+          sections.push(printableSection("recordCounts", "기록 수", [
+            printableRow("전체 입력 기록", (snapshot.counts.inputRecords || 0) + "개"),
+            printableRow("분석 사용 기록", (snapshot.counts.usableRecordCount || 0) + "개"),
+            printableRow("제외된 삭제 기록", (snapshot.counts.excludedDeleted || 0) + "개")
+          ], "기록 수는 현재 앱에 남은 데이터를 기준으로 계산했어요."));
+        }
+        const payload = {
+          title: template.label,
+          subtitle: "분석 대기 안내",
+          generatedAt: new Date(nowMs).toISOString(),
+          dateLabel: printableReportDateLabel(nowMs),
+          baby: {
+            displayName: baby.displayName,
+            ageLabel: baby.ageLabel
+          },
+          sections: sections,
+          footer: {
+            disclaimer: opts.includeDisclaimer === false ? "" : "기록이 조금 더 쌓이면 최근 흐름을 더 안정적으로 보여드릴게요.",
+            appName: "챙겨조"
+          }
+        };
+        payload.shareText = buildPrintableReportText(payload);
+        const state = {
+          ok: true,
+          phase: "6.0.6",
+          generatedAt: new Date(nowMs).toISOString(),
+          babyId: baby.babyId || snapshot.babyId || null,
+          analysisBlocked: true,
+          analysisGate: snapshot.analysisGate || null,
+          summary: {
+            available: false,
+            templateKey: template.key,
+            title: template.label,
+            confidenceLevel: "insufficient",
+            missingReason: "not_enough_records"
+          },
+          access: getFeatureAccess("pdfExport", snapshot.premiumAccessState),
+          options: opts,
+          payload: payload,
+          preview: {
+            renderer: "html_print_view",
+            paper: opts.paper,
+            orientation: opts.orientation,
+            theme: opts.theme
+          },
+          printResult: {
+            printSupported: typeof window !== "undefined" && typeof window.print === "function",
+            textFallbackAvailable: true,
+            fileNameHint: "baby-life-log-analysis-pending-" + printableReportDateLabel(nowMs).replace(/\./g, "") + ".pdf"
+          },
+          messageKeys: ["analysis_min_records_blocked", "pdf_gate_message"],
+          warnings: [message],
+          errors: []
+        };
+        state.phase525CompletionCheck = buildPhase525CompletionCheck(state);
+        return state;
+      }
+
       function buildPrintableReportData(analysisSnapshot, options) {
         const snapshot = analysisSnapshot || {};
         const opts = printableReportDefaultOptions(options || {});
+        if (isAnalysisGateSnapshot(snapshot)) return buildAnalysisBlockedPrintableReportData(snapshot, opts);
         const template = PRINTABLE_REPORT_TEMPLATES[opts.templateKey] || PRINTABLE_REPORT_TEMPLATES.doctor_recent7_pdf;
         opts.templateKey = template.key;
         const nowMs = Number.isFinite(opts.nowMs) ? opts.nowMs : Date.now();
@@ -17541,7 +17985,7 @@
         const requestedBabyId = opts.hasOwnProperty("baby_id") ? opts.baby_id : getCurrentAnalysisBabyId();
         const scopeContext = getScopedAnalysisContext(records || [], requestedBabyId);
         const babyId = scopeContext.effectiveBabyId || "analysis_unavailable";
-        const analysisSnapshot = buildAnalysisSnapshot(records || [], { baby_id: scopeContext.effectiveBabyId || requestedBabyId });
+        const analysisSnapshot = buildGuardedAnalysisSnapshot(records || [], { baby_id: scopeContext.effectiveBabyId || requestedBabyId });
         const dayList = getLastNDays(days);
         const windowStart = dayList[0].date;
         const windowEnd = endOfLocalDay(dayList[dayList.length - 1].date);
@@ -18263,6 +18707,25 @@
           "기저귀 " + todayReport.diapers.length + "회",
           "수면 " + durationText(todayReport.sleepMinutes)
         ];
+        els.reportSummary.textContent = summaryParts.join(" · ");
+        const serverBlockMessage = getServerAnalysisBlockMessage();
+        const gate = getLocalAnalysisGate(records, null);
+        if (serverBlockMessage) {
+          els.reportGrid.innerHTML = reportCardHtml({
+            label: "분석 안내",
+            title: "서버 연결 필요",
+            note: serverBlockMessage
+          });
+          return;
+        }
+        if (!gate.analysisReady) {
+          els.reportGrid.innerHTML = reportCardHtml({
+            label: "분석 안내",
+            title: gate.gateMessage,
+            note: "오늘 기록 요약은 계속 볼 수 있고, 패턴 분석은 기록이 조금 더 쌓이면 보여드릴게요."
+          });
+          return;
+        }
         els.reportSummary.textContent = summaryParts.join(" · ") + "를 기준으로 아기의 하루 흐름을 정리했어요.";
         const feedingInsight = feedingPatternInsight(records);
         const diaperInsight = diaperPatternInsight(records);
@@ -18276,7 +18739,7 @@
           { label: "수면 요약", title: sleepInsight.title, note: sleepInsight.note },
           { label: "최근 기록 기반 분석", title: "최근 흐름", note: recentInsight }
         ];
-        const predictionSnapshot = buildAnalysisSnapshot(appData.records, { baby_id: getCurrentAnalysisBabyId() });
+        const predictionSnapshot = buildGuardedAnalysisSnapshot(appData.records, { baby_id: getCurrentAnalysisBabyId() });
         const nextPrediction = predictionSnapshot.nextEventPrediction || {};
         dispatchPredictiveAlerts(predictionSnapshot.predictiveAlertState);
         const nextPredictions = nextPrediction.predictions || {};
@@ -18444,8 +18907,63 @@
         };
       }
 
+      function buildAnalysisBlockedReportHubState(snapshot, options) {
+        const opts = options || {};
+        const message = analysisGateText(snapshot);
+        const confidenceLevel = "insufficient";
+        const state = {
+          ok: false,
+          phase: "6.0.6",
+          babyId: (snapshot && (snapshot.babyId || snapshot.baby_id)) || getCurrentAnalysisBabyId() || null,
+          generatedAt: nowIso(),
+          babyName: (appData.profile && appData.profile.babyName) || "아기",
+          analysisBlocked: true,
+          analysisGate: snapshot && snapshot.analysisGate ? snapshot.analysisGate : null,
+          summary: {
+            available: false,
+            primarySummary: message,
+            confidenceLevel: confidenceLevel,
+            missingReason: "not_enough_records"
+          },
+          sections: {
+            today: reportHubSection(true, "오늘 리포트", [
+              "오늘 기록 요약은 계속 볼 수 있어요.",
+              "분석 문구는 기록이 조금 더 쌓이면 표시합니다."
+            ], confidenceLevel, "analysisGate"),
+            recent7Days: reportHubSection(false, "최근 7일 리포트", [message], confidenceLevel, "analysisGate", "not_enough_records"),
+            rhythm: reportHubSection(false, "리듬 참고 지표", [message], confidenceLevel, "analysisGate", "not_enough_records"),
+            domains: {
+              cards: [
+                reportHubSection(false, "수면", [message], confidenceLevel, "analysisGate", "not_enough_records"),
+                reportHubSection(false, "수유", [message], confidenceLevel, "analysisGate", "not_enough_records"),
+                reportHubSection(false, "기저귀", [message], confidenceLevel, "analysisGate", "not_enough_records")
+              ]
+            },
+            nextPrediction: reportHubSection(false, "다음 예상", [message], confidenceLevel, "analysisGate", "not_enough_records"),
+            cry: reportHubSection(false, "울어요 요약", [message], confidenceLevel, "analysisGate", "not_enough_records"),
+            reliability: reportHubSection(false, "기록 신뢰도 안내", [message], confidenceLevel, "analysisGate", "not_enough_records"),
+            tools: {
+              doctor: reportHubSection(false, "병원 상담용 요약", [message], confidenceLevel, "analysisGate", "not_enough_records"),
+              handoff: reportHubSection(false, "보호자 인수인계", [message], confidenceLevel, "analysisGate", "not_enough_records"),
+              family: reportHubSection(false, "가족 공유 리포트", [message], confidenceLevel, "analysisGate", "not_enough_records")
+            }
+          },
+          ui: {
+            openedFrom: opts.openedFrom || null,
+            activeSection: "today",
+            expandedSections: ["today", "recent7Days", "domains"]
+          },
+          messageKeys: ["analysis_min_records_blocked", "report_hub_gate_message"],
+          warnings: [message],
+          errors: []
+        };
+        state.phase521CompletionCheck = buildPhase521CompletionCheck(state);
+        return state;
+      }
+
       function buildReportHubState(snapshot, options) {
         const opts = options || {};
+        if (isAnalysisGateSnapshot(snapshot)) return buildAnalysisBlockedReportHubState(snapshot, opts);
         const reportMessages = snapshot && snapshot.reportMessages ? snapshot.reportMessages : null;
         const parentBundle = snapshot && snapshot.parentReportBundle ? snapshot.parentReportBundle : null;
         const reports = parentBundle && parentBundle.reports ? parentBundle.reports : {};
@@ -18798,7 +19316,7 @@
 
       function renderPremiumPreview(openedFrom) {
         if (!els.premiumPreviewContent) return;
-        const snapshot = buildAnalysisSnapshot(appData.records || [], { baby_id: getCurrentAnalysisBabyId() });
+        const snapshot = buildGuardedAnalysisSnapshot(appData.records || [], { baby_id: getCurrentAnalysisBabyId() });
         const state = snapshot.premiumPreviewState || buildPremiumPreviewState(snapshot, { openedFrom: openedFrom || "premium_preview" });
         state.ui.openedFrom = openedFrom || state.ui.openedFrom;
         const activeGroup = state.ui.activeGroup || "premiumCandidate";
@@ -18888,7 +19406,7 @@
       function renderReportHub() {
         if (!els.reportHubContent) return;
         try {
-          const snapshot = buildAnalysisSnapshot(appData.records || [], { baby_id: getCurrentAnalysisBabyId() });
+          const snapshot = buildGuardedAnalysisSnapshot(appData.records || [], { baby_id: getCurrentAnalysisBabyId() });
           currentReportHubState = snapshot.reportHubState || buildReportHubState(snapshot, { openedFrom: "life_report" });
           const state = currentReportHubState;
           const sections = state.sections || {};
@@ -18929,7 +19447,7 @@
         const detail = document.getElementById("reportHubToolDetail");
         if (!detail) return;
         try {
-          const snapshot = buildAnalysisSnapshot(appData.records || [], { baby_id: getCurrentAnalysisBabyId() });
+          const snapshot = buildGuardedAnalysisSnapshot(appData.records || [], { baby_id: getCurrentAnalysisBabyId() });
           if (tool === "doctor") {
             const doctor = snapshot.doctorVisitSummary || {};
             detail.innerHTML = '<div class="report-note">' + escapeHtml(doctor.shareText && doctor.shareText.text ? doctor.shareText.text : (doctor.summary && doctor.summary.primarySummary) || "아직 요약할 기록이 충분하지 않아요.") + '</div><div class="form-row sheet-block"><button type="button" class="small-action" data-open-share-image="doctor_recent7">이미지로 저장</button><button type="button" class="small-action" data-open-printable-report="doctor_recent7_pdf">PDF/인쇄</button></div>';
@@ -18957,7 +19475,7 @@
       function renderCaregiverHandoffSummary() {
         if (!els.caregiverHandoffContent) return;
         try {
-          const snapshot = buildAnalysisSnapshot(appData.records || [], { baby_id: getCurrentAnalysisBabyId() });
+          const snapshot = buildGuardedAnalysisSnapshot(appData.records || [], { baby_id: getCurrentAnalysisBabyId() });
           const handoff = snapshot.caregiverHandoffSummary || buildCaregiverHandoffSummary(snapshot, {});
           currentCaregiverHandoffSummary = handoff;
           const recent = handoff.recentCare || {};
@@ -19010,7 +19528,7 @@
         if (!els.familyShareContent) return;
         try {
           const options = ensureFamilyShareUiOptions();
-          const snapshot = buildAnalysisSnapshot(appData.records || [], { baby_id: getCurrentAnalysisBabyId() });
+          const snapshot = buildGuardedAnalysisSnapshot(appData.records || [], { baby_id: getCurrentAnalysisBabyId() });
           const report = buildFamilyShareReport(snapshot, options);
           currentFamilyShareReport = report;
           syncFamilyShareOptionChips();
@@ -19069,7 +19587,7 @@
       function renderShareImagePreview(templateKey) {
         try {
           const options = ensureShareImageUiOptions(templateKey);
-          const snapshot = buildAnalysisSnapshot(appData.records || [], { baby_id: getCurrentAnalysisBabyId() });
+          const snapshot = buildGuardedAnalysisSnapshot(appData.records || [], { baby_id: getCurrentAnalysisBabyId() });
           currentShareImageState = buildShareImageData(snapshot, options);
           currentShareImageBlob = null;
           if (currentShareImageObjectUrl) {
@@ -19156,7 +19674,7 @@
       function renderPrintableReportPreview(templateKey) {
         try {
           const options = ensurePrintableReportUiOptions(templateKey);
-          const snapshot = buildAnalysisSnapshot(appData.records || [], { baby_id: getCurrentAnalysisBabyId() });
+          const snapshot = buildGuardedAnalysisSnapshot(appData.records || [], { baby_id: getCurrentAnalysisBabyId() });
           currentPrintableReportState = buildPrintableReportData(snapshot, options);
           renderPrintableReportTemplateChips();
           renderPrintableReportOptionChips();
@@ -19209,6 +19727,18 @@
           return;
         }
         try {
+          const serverBlockMessage = getServerAnalysisBlockMessage();
+          const days = appData.settings.analysisRangeDays || 7;
+          const gate = getLocalAnalysisGate(appData.records, days);
+          const analysisTitles = ["기록 검토 요약", "수유량 추이", "수유 횟수", "수면 분석", "기저귀 분석"];
+          if (serverBlockMessage) {
+            els.analysisDashboard.innerHTML = analysisGateCardsHtml(analysisTitles, serverBlockMessage, "");
+            return;
+          }
+          if (!gate.analysisReady) {
+            els.analysisDashboard.innerHTML = analysisGateCardsHtml(analysisTitles, gate.gateMessage, ANALYSIS_GATE_DETAIL_MESSAGE);
+            return;
+          }
           const summary = calculateAnalysisSummary(appData.records);
           const review = calculateObservationReview(appData.records, summary);
           const hasFeedings = summary.feedingCounts.some(function (day) { return day.total > 0; });
@@ -20017,15 +20547,51 @@
         if (els.cryResultSummary) els.cryResultSummary.textContent = "기록을 바탕으로 먼저 확인해볼 순서를 정리했어요.";
       }
 
+      function renderCryAnalysisBlocked(message, checkedItems, hasSafetyConcern) {
+        const safeCheckedItems = Array.isArray(checkedItems) ? checkedItems : [];
+        if (els.crySafetyView) els.crySafetyView.classList.add("hidden");
+        if (els.cryResultView) els.cryResultView.classList.remove("hidden");
+        if (els.cryResultSafetyGuidance) {
+          els.cryResultSafetyGuidance.textContent = CRY_SAFETY_MESSAGE;
+          els.cryResultSafetyGuidance.classList.toggle("hidden", !hasSafetyConcern);
+        }
+        if (els.cryResultSummary) {
+          els.cryResultSummary.textContent = message;
+        }
+        if (els.cryResultList) {
+          els.cryResultList.innerHTML = '<li class="cry-result-card"><div class="cry-result-head"><span>기록 기반 참고 정보</span></div><p class="cry-result-note">' + escapeHtml(message) + '</p><p class="cry-result-action">기록이 쌓일수록 우는 원인을 더 안정적으로 추정할 수 있어요.</p></li>';
+        }
+        renderCryAttemptChips({ summary: { nextSuggestionText: "", guidanceText: "지금은 수유, 기저귀, 트림/가스, 잠/안정 신호를 차례로 가볍게 확인해 보세요." } });
+        renderSimilarCrySituations({ matches: [], summary: { shortSummary: message } });
+        renderCryFeedbackChips();
+        lastCryReasonResult = {
+          ok: false,
+          blocked: true,
+          blockedReason: message,
+          safetyCheck: {
+            completed: true,
+            checkedItems: safeCheckedItems,
+            hasSafetyConcern: !!hasSafetyConcern,
+            safetyMessage: hasSafetyConcern ? CRY_SAFETY_MESSAGE : ""
+          }
+        };
+      }
+
       function renderCryReasonResult() {
         try {
         const checkedItems = getCryCheckedItems();
         const hasSafetyConcern = checkedItems.length > 0;
+        const serverBlockMessage = getServerAnalysisBlockMessage();
+        const gate = getLocalAnalysisGate(appData.records, null);
+        if (serverBlockMessage || !gate.analysisReady) {
+          renderCryAnalysisBlocked(serverBlockMessage || gate.gateMessage, checkedItems, hasSafetyConcern);
+          return;
+        }
         const summary = calculateAnalysisSummary(appData.records);
         const review = calculateObservationReview(appData.records, summary);
         const base = review && review.engine && review.engine.cryReasonSuggestion
           ? review.engine.cryReasonSuggestion
-          : buildCryReasonSuggestion(buildAnalysisSnapshot(appData.records || [], { baby_id: getCurrentAnalysisBabyId() }), {});
+          : buildCryReasonSuggestion(buildGuardedAnalysisSnapshot(appData.records || [], { baby_id: getCurrentAnalysisBabyId() }), {});
         const result = Object.assign({}, base, {
           safetyCheck: Object.assign({}, base.safetyCheck || {}, {
             completed: true,
@@ -22514,7 +23080,7 @@
         if (event.target.closest("#printPrintableReportButton")) {
           event.preventDefault();
           event.stopPropagation();
-          const state = currentPrintableReportState || buildPrintableReportData(buildAnalysisSnapshot(appData.records || [], { baby_id: getCurrentAnalysisBabyId() }), ensurePrintableReportUiOptions());
+          const state = (canUseCachedAnalysisOutput() ? currentPrintableReportState : null) || buildPrintableReportData(buildGuardedAnalysisSnapshot(appData.records || [], { baby_id: getCurrentAnalysisBabyId() }), ensurePrintableReportUiOptions());
           currentPrintableReportState = state;
           if (!state.printResult || state.printResult.printSupported === false || typeof window.print !== "function") {
             state.messageKeys.push("pdf_print_not_supported", "pdf_text_fallback_used");
@@ -22545,7 +23111,7 @@
         if (event.target.closest("#copyPrintableReportButton")) {
           event.preventDefault();
           event.stopPropagation();
-          const state = currentPrintableReportState || buildPrintableReportData(buildAnalysisSnapshot(appData.records || [], { baby_id: getCurrentAnalysisBabyId() }), ensurePrintableReportUiOptions());
+          const state = (canUseCachedAnalysisOutput() ? currentPrintableReportState : null) || buildPrintableReportData(buildGuardedAnalysisSnapshot(appData.records || [], { baby_id: getCurrentAnalysisBabyId() }), ensurePrintableReportUiOptions());
           currentPrintableReportState = state;
           state.messageKeys.push("pdf_text_fallback_used");
           copyTextToClipboard(state.payload.shareText || "", "PDF 리포트 텍스트를 복사했어요.").then(function (ok) {
@@ -22560,7 +23126,7 @@
         if (event.target.closest("#generateShareImageButton")) {
           event.preventDefault();
           event.stopPropagation();
-          const state = currentShareImageState || buildShareImageData(buildAnalysisSnapshot(appData.records || [], { baby_id: getCurrentAnalysisBabyId() }), ensureShareImageUiOptions());
+          const state = (canUseCachedAnalysisOutput() ? currentShareImageState : null) || buildShareImageData(buildGuardedAnalysisSnapshot(appData.records || [], { baby_id: getCurrentAnalysisBabyId() }), ensureShareImageUiOptions());
           createShareImageBlob(state).then(function (blob) {
             currentShareImageBlob = blob;
             state.exportResult.generatedAt = nowIso();
@@ -22591,7 +23157,7 @@
         if (event.target.closest("#downloadShareImageButton")) {
           event.preventDefault();
           event.stopPropagation();
-          const state = currentShareImageState || buildShareImageData(buildAnalysisSnapshot(appData.records || [], { baby_id: getCurrentAnalysisBabyId() }), ensureShareImageUiOptions());
+          const state = (canUseCachedAnalysisOutput() ? currentShareImageState : null) || buildShareImageData(buildGuardedAnalysisSnapshot(appData.records || [], { baby_id: getCurrentAnalysisBabyId() }), ensureShareImageUiOptions());
           (currentShareImageBlob ? Promise.resolve(currentShareImageBlob) : createShareImageBlob(state)).then(function (blob) {
             currentShareImageBlob = blob;
             if (currentShareImageObjectUrl) URL.revokeObjectURL(currentShareImageObjectUrl);
@@ -22620,7 +23186,7 @@
         if (event.target.closest("#shareImageButton")) {
           event.preventDefault();
           event.stopPropagation();
-          const state = currentShareImageState || buildShareImageData(buildAnalysisSnapshot(appData.records || [], { baby_id: getCurrentAnalysisBabyId() }), ensureShareImageUiOptions());
+          const state = (canUseCachedAnalysisOutput() ? currentShareImageState : null) || buildShareImageData(buildGuardedAnalysisSnapshot(appData.records || [], { baby_id: getCurrentAnalysisBabyId() }), ensureShareImageUiOptions());
           (currentShareImageBlob ? Promise.resolve(currentShareImageBlob) : createShareImageBlob(state)).then(function (blob) {
             currentShareImageBlob = blob;
             const fileName = state.exportResult.fileName || "baby-life-log-share-image.png";
@@ -22741,7 +23307,7 @@
         if (event.target.closest("#webShareFamilyReportButton")) {
           event.preventDefault();
           event.stopPropagation();
-          const report = currentFamilyShareReport || (buildAnalysisSnapshot(appData.records || [], { baby_id: getCurrentAnalysisBabyId() }).familyShareReport);
+          const report = (canUseCachedAnalysisOutput() ? currentFamilyShareReport : null) || buildFamilyShareReport(buildGuardedAnalysisSnapshot(appData.records || [], { baby_id: getCurrentAnalysisBabyId() }), ensureFamilyShareUiOptions());
           const text = report && report.shareText ? report.shareText.text : "";
           if (navigator.share && text) {
             navigator.share({
@@ -22777,7 +23343,7 @@
         if (event.target.closest("#copyFamilyShareButton")) {
           event.preventDefault();
           event.stopPropagation();
-          const report = currentFamilyShareReport || (buildAnalysisSnapshot(appData.records || [], { baby_id: getCurrentAnalysisBabyId() }).familyShareReport);
+          const report = (canUseCachedAnalysisOutput() ? currentFamilyShareReport : null) || buildFamilyShareReport(buildGuardedAnalysisSnapshot(appData.records || [], { baby_id: getCurrentAnalysisBabyId() }), ensureFamilyShareUiOptions());
           const text = report && report.shareText ? report.shareText.text : "";
           copyTextToClipboard(text, "가족 공유 리포트를 복사했어요.").then(function (ok) {
             if (!ok && els.familyShareFallbackText) {
@@ -22794,7 +23360,7 @@
         if (event.target.closest("#copyCaregiverHandoffButton")) {
           event.preventDefault();
           event.stopPropagation();
-          const handoff = currentCaregiverHandoffSummary || (buildAnalysisSnapshot(appData.records || [], { baby_id: getCurrentAnalysisBabyId() }).caregiverHandoffSummary);
+          const handoff = (canUseCachedAnalysisOutput() ? currentCaregiverHandoffSummary : null) || buildCaregiverHandoffSummary(buildGuardedAnalysisSnapshot(appData.records || [], { baby_id: getCurrentAnalysisBabyId() }), {});
           const text = handoff && handoff.shareText ? handoff.shareText.text : "";
           copyTextToClipboard(text, "인수인계 요약을 복사했어요.").then(function (ok) {
             if (!ok && els.caregiverHandoffFallbackText) {
