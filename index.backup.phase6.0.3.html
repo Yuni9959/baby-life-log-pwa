@@ -607,154 +607,6 @@
       line-height: 1.45;
     }
 
-    .analysis-screen[hidden] {
-      display: none;
-    }
-    .analysis-screen {
-      position: fixed;
-      inset: 0;
-      z-index: 90;
-      min-height: 100vh;
-      overflow-y: auto;
-      background: var(--app-bg, #FAF6EF);
-      color: var(--text-main, #2D2923);
-      padding-bottom: calc(24px + env(safe-area-inset-bottom));
-      -webkit-overflow-scrolling: touch;
-    }
-    .analysis-screen-inner {
-      width: min(100%, 520px);
-      min-height: 100vh;
-      margin: 0 auto;
-      background: #FAF6EF;
-    }
-    .analysis-topbar {
-      position: sticky;
-      top: 0;
-      z-index: 2;
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      min-height: 60px;
-      padding: 8px 10px 10px;
-      border-bottom: 1px solid rgba(214, 198, 174, 0.55);
-      background: rgba(250, 246, 239, 0.96);
-      backdrop-filter: blur(10px);
-    }
-    .analysis-back-btn {
-      width: 36px;
-      height: 36px;
-      flex: 0 0 36px;
-      border: 1px solid rgba(221, 202, 176, 0.95);
-      border-radius: 13px;
-      background: rgba(255, 252, 247, 0.95);
-      color: #4C3B2D;
-      box-shadow: 0 1px 3px rgba(90, 72, 50, 0.08);
-      font-size: 18px;
-      font-weight: 800;
-      line-height: 1;
-    }
-    .analysis-heading {
-      min-width: 0;
-      display: grid;
-      gap: 2px;
-    }
-    .analysis-title {
-      margin: 0;
-      color: #2F2922;
-      font-size: 1.08rem;
-      font-weight: 900;
-      line-height: 1.2;
-      letter-spacing: 0;
-    }
-    .analysis-subtitle {
-      margin: 0;
-      color: #8D7B68;
-      font-size: 0.74rem;
-      font-weight: 750;
-      line-height: 1.3;
-    }
-    .analysis-summary-card {
-      margin: 16px 10px;
-      padding: 18px;
-      border: 1px solid var(--analysis-summary-border, #D8C9E8);
-      border-radius: 18px;
-      background: var(--analysis-summary-bg, #E9E0F2);
-      color: var(--analysis-summary-text, #6F5D82);
-      box-shadow: 0 1px 0 rgba(86, 62, 105, 0.04);
-    }
-    .analysis-summary-title {
-      margin: 0 0 8px;
-      font-size: 0.88rem;
-      font-weight: 900;
-      line-height: 1.3;
-      letter-spacing: 0.01em;
-    }
-    .analysis-summary-body {
-      margin: 0;
-      font-size: 0.8rem;
-      font-weight: 650;
-      line-height: 1.65;
-    }
-    .analysis-chart-card {
-      min-height: 360px;
-      margin: 14px 10px;
-      padding: 14px 16px 18px;
-      border: 1px solid rgba(221, 202, 176, 0.9);
-      border-radius: 17px;
-      background: rgba(255, 255, 255, 0.88);
-      box-shadow: 0 1px 0 rgba(77, 61, 42, 0.035);
-      overflow: hidden;
-    }
-    .analysis-chart-head {
-      display: grid;
-      gap: 2px;
-      margin-bottom: 10px;
-    }
-    .analysis-chart-title {
-      margin: 0;
-      color: #332B23;
-      font-size: 0.92rem;
-      font-weight: 900;
-      line-height: 1.25;
-      letter-spacing: 0;
-    }
-    .analysis-chart-subtitle {
-      margin: 0;
-      color: #8C7D6B;
-      font-size: 0.76rem;
-      font-weight: 750;
-      line-height: 1.45;
-    }
-    .smooth-chart-wrap {
-      min-height: 284px;
-      display: grid;
-      align-items: center;
-    }
-    .smooth-chart-svg {
-      display: block;
-      width: 100%;
-      height: auto;
-      min-height: 260px;
-    }
-    .smooth-chart-empty {
-      min-height: 250px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      padding: 18px;
-      border: 1px dashed rgba(221, 202, 176, 0.95);
-      border-radius: 15px;
-      background: rgba(250, 246, 239, 0.76);
-      color: #9A8770;
-      font-size: 0.84rem;
-      font-weight: 750;
-      line-height: 1.5;
-      text-align: center;
-    }
-    body.analysis-detail-open {
-      overflow: hidden;
-    }
-
     .main-actions {
       display: grid;
       gap: 10px;
@@ -2438,7 +2290,7 @@
   <main class="app app-shell">
     <header class="topbar">
       <div>
-        <div class="version-badge" id="versionBadge">v6.0.3-7day-charts</div>
+        <div class="version-badge" id="versionBadge">v6.0.0</div>
         <h1 id="babyTitle">우리 아기</h1>
         <div class="baby-days" id="babyDays">생년월일을 입력해 주세요</div>
         <div class="today-line" id="todayLine"></div>
@@ -2649,24 +2501,11 @@
     <section class="section analysis-section" aria-labelledby="analysisTitle">
       <button type="button" class="collapsible-head" id="analysisToggle" aria-expanded="false">
         <h2 id="analysisTitle">최근 7일 분석</h2>
-        <span class="collapse-mark" id="analysisMark">›</span>
+        <span class="collapse-mark" id="analysisMark">▾</span>
       </button>
       <p class="report-copy">수유량 · 수면 · 기저귀 흐름 보기</p>
       <div class="collapsible-body hidden" id="analysisBody">
         <div class="analysis-grid" id="analysisDashboard"></div>
-      </div>
-    </section>
-
-    <section class="analysis-screen" id="analysisDetailScreen" aria-labelledby="analysisDetailTitle" hidden>
-      <div class="analysis-screen-inner">
-        <header class="analysis-topbar">
-          <button type="button" class="analysis-back-btn" id="analysisBackButton" aria-label="홈으로 돌아가기">←</button>
-          <div class="analysis-heading">
-            <h2 class="analysis-title" id="analysisDetailTitle">최근 7일 분석</h2>
-            <p class="analysis-subtitle">수유량 · 수면 · 기저귀 흐름 보기</p>
-          </div>
-        </header>
-        <div id="analysisDetailContent"></div>
       </div>
     </section>
 
@@ -3260,7 +3099,7 @@
   <script>
     document.addEventListener("DOMContentLoaded", function () {
       if ("serviceWorker" in navigator) {
-        navigator.serviceWorker.register("./sw.js?v=6.0.3-7day-charts").catch(function (error) {
+        navigator.serviceWorker.register("./sw.js?v=6.0.0-release").catch(function (error) {
           console.warn("Service worker registration failed", error);
         });
       }
@@ -3455,9 +3294,9 @@
       const PRE_REPAIR_BACKUP_KEY = "baby_life_log_app_backup_before_repair";
       const BACKUP_FORMAT_VERSION = 2;
       const APP_NAME = "baby-life-log";
-      const APP_VERSION = "6.0.3-7day-charts";
-      const APP_PHASE_LABEL = "";
-      const SERVICE_WORKER_CACHE_NAME = "baby-life-log-v6.0.3-7day-charts";
+      const APP_VERSION = "6.0.1";
+      const APP_PHASE_LABEL = "Phase 6.0.1 Debugging";
+      const SERVICE_WORKER_CACHE_NAME = "baby-life-log-v6-0-1-release";
       const APP_INIT_TIME = new Date().toISOString();
       const ANALYSIS_API_ENDPOINT = "";
       const SERVER_OVERWRITE_BACKUP_KEY = "babylog_records_backup_before_server_overwrite";
@@ -3770,9 +3609,6 @@
         analysisBody: document.getElementById("analysisBody"),
         analysisMark: document.getElementById("analysisMark"),
         analysisDashboard: document.getElementById("analysisDashboard"),
-        analysisDetailScreen: document.getElementById("analysisDetailScreen"),
-        analysisBackButton: document.getElementById("analysisBackButton"),
-        analysisDetailContent: document.getElementById("analysisDetailContent"),
         logs: document.getElementById("logs"),
         recordCount: document.getElementById("recordCount"),
         deleteSelectedButton: document.getElementById("deleteSelectedButton"),
@@ -5908,7 +5744,7 @@
       function calculateSleepSessions(records) {
         records = (records || []).filter(isActiveRecord);
         const sleepRecords = (records || []).filter(function (record) {
-          return record && (record.type === "sleep" || record.type === "sleep_start" || record.type === "wake" || record.type === "sleep_end") && validRecordDate(record);
+          return record && (record.type === "sleep" || record.type === "wake") && validRecordDate(record);
         }).slice().sort(function (a, b) {
           return new Date(a.createdAt) - new Date(b.createdAt);
         });
@@ -5917,11 +5753,11 @@
         sleepRecords.forEach(function (record) {
           const date = validRecordDate(record);
           if (!date) return;
-          if (record.type === "sleep" || record.type === "sleep_start") {
+          if (record.type === "sleep") {
             activeSleep = date;
             return;
           }
-          if ((record.type === "wake" || record.type === "sleep_end") && activeSleep && date > activeSleep) {
+          if (record.type === "wake" && activeSleep && date > activeSleep) {
             sessions.push({
               startedAt: activeSleep.toISOString(),
               endedAt: date.toISOString(),
@@ -17501,9 +17337,9 @@
         if (els.lifeReportBody) els.lifeReportBody.classList.toggle("hidden", !lifeReportExpanded);
         if (els.lifeReportToggle) els.lifeReportToggle.setAttribute("aria-expanded", lifeReportExpanded ? "true" : "false");
         if (els.lifeReportMark) els.lifeReportMark.textContent = lifeReportExpanded ? "▴" : "▾";
-        if (els.analysisBody) els.analysisBody.classList.add("hidden");
-        if (els.analysisToggle) els.analysisToggle.setAttribute("aria-expanded", "false");
-        if (els.analysisMark) els.analysisMark.textContent = "›";
+        if (els.analysisBody) els.analysisBody.classList.toggle("hidden", !analysisExpanded);
+        if (els.analysisToggle) els.analysisToggle.setAttribute("aria-expanded", analysisExpanded ? "true" : "false");
+        if (els.analysisMark) els.analysisMark.textContent = analysisExpanded ? "▴" : "▾";
       }
 
       function renderProfile() {
@@ -18739,281 +18575,6 @@
           recordMobileDiagnosticError("render_recent_7_day_analysis", error, { fallback: "analysis_dashboard_basic" });
           els.analysisDashboard.innerHTML = analysisCardHtml("최근 7일 분석", "", analysisEmptyHtml("분석을 계산하는 중 문제가 생겨 기본 화면으로 표시합니다."));
         }
-      }
-
-      function formatAnalysisCount(value, digits) {
-        const number = Number(value);
-        if (!Number.isFinite(number)) return "0";
-        return digits ? number.toFixed(digits) : String(Math.round(number));
-      }
-
-      function getAnalysisDetailDays() {
-        return getLastNDays(7);
-      }
-
-      function getAnalysisAmount(record) {
-        const raw = record && (record.amount !== undefined ? record.amount : (record.amount_ml !== undefined ? record.amount_ml : record.value));
-        const number = Number(raw);
-        return Number.isFinite(number) && number > 0 ? number : 0;
-      }
-
-      function averageAnalysisValues(values) {
-        const nums = (values || []).map(Number).filter(Number.isFinite);
-        return nums.length ? nums.reduce(function (sum, value) { return sum + value; }, 0) / nums.length : 0;
-      }
-
-      function calculateCompletedDailySleepTotals(records) {
-        const dayList = getAnalysisDetailDays();
-        const totals = dayList.reduce(function (map, day) {
-          map[day.dateKey] = Object.assign({}, day, { totalMinutes: 0 });
-          return map;
-        }, {});
-        calculateSleepSessions(records).forEach(function (session) {
-          if (!session || session.isOngoing || !session.startedAt || !session.endedAt) return;
-          const start = new Date(session.startedAt);
-          const end = new Date(session.endedAt);
-          if (!Number.isFinite(start.getTime()) || !Number.isFinite(end.getTime()) || end <= start) return;
-          dayList.forEach(function (day) {
-            totals[day.dateKey].totalMinutes += Math.round(overlappedMinutes(start, end, day.date, endOfLocalDay(day.date)));
-          });
-        });
-        return dayList.map(function (day) { return totals[day.dateKey]; });
-      }
-
-      function buildAnalysisDetailMetrics(records) {
-        const scopedRecords = getAnalysisScopedRecords(records || []).filter(isActiveRecord);
-        const days = getAnalysisDetailDays();
-        const todayKey = days[days.length - 1].dateKey;
-        const start = days[0].date;
-        const end = endOfLocalDay(days[days.length - 1].date);
-        const recentRecords = scopedRecords.filter(function (record) {
-          const date = validRecordDate(record);
-          return date && date >= start && date < end;
-        });
-        const feedingTotals = calculateDailyFeedingTotals(scopedRecords, 7).map(function (day) {
-          return Object.assign({}, day, { totalAmount: 0 });
-        });
-        const feedingAmountByKey = feedingTotals.reduce(function (map, day) {
-          map[day.dateKey] = day;
-          return map;
-        }, {});
-        recentRecords.forEach(function (record) {
-          if (!record || record.type !== "feeding") return;
-          const date = validRecordDate(record);
-          if (!date) return;
-          const key = localDateKey(date);
-          if (feedingAmountByKey[key]) feedingAmountByKey[key].totalAmount += getAnalysisAmount(record);
-        });
-        const feedingCounts = calculateDailyFeedingCounts(scopedRecords, 7);
-        const sleepTotals = calculateCompletedDailySleepTotals(scopedRecords);
-        const diaperCounts = calculateDailyDiaperCounts(scopedRecords, 7);
-        const completedSleepSessions = calculateSleepSessions(scopedRecords).filter(function (session) {
-          return session && !session.isOngoing && Number(session.durationMinutes) > 0;
-        });
-        const todayFeeding = feedingCounts.find(function (day) { return day.dateKey === todayKey; }) || { total: 0, formula: 0, breast: 0, pumped: 0 };
-        const todaySleep = sleepTotals.find(function (day) { return day.dateKey === todayKey; }) || { totalMinutes: 0 };
-        const todayDiaper = diaperCounts.find(function (day) { return day.dateKey === todayKey; }) || { total: 0, pee: 0, poop: 0 };
-        return {
-          days: days,
-          recentRecords: recentRecords,
-          feedingTotals: feedingTotals,
-          feedingCounts: feedingCounts,
-          sleepTotals: sleepTotals,
-          diaperCounts: diaperCounts,
-          completedSleepSessions: completedSleepSessions,
-          today: {
-            feedingAmount: (feedingTotals.find(function (day) { return day.dateKey === todayKey; }) || {}).totalAmount || 0,
-            feedingCount: todayFeeding.total || 0,
-            feedingSubtypes: todayFeeding,
-            sleepMinutes: todaySleep.totalMinutes || 0,
-            diaper: todayDiaper
-          },
-          averages: {
-            feedingAmount: averageAnalysisValues(feedingTotals.map(function (day) { return day.totalAmount; })),
-            feedingCount: averageAnalysisValues(feedingCounts.map(function (day) { return day.total; })),
-            sleepMinutes: averageAnalysisValues(sleepTotals.map(function (day) { return day.totalMinutes; })),
-            diaperCount: averageAnalysisValues(diaperCounts.map(function (day) { return day.total; }))
-          }
-        };
-      }
-
-      function buildAnalysisReviewSummary(records, metrics) {
-        const recentRecords = metrics && Array.isArray(metrics.recentRecords) ? metrics.recentRecords : [];
-        const timedRecords = recentRecords.map(function (record) {
-          const date = validRecordDate(record);
-          return date ? { record: record, date: date } : null;
-        }).filter(Boolean).sort(function (a, b) { return a.date - b.date; });
-        if (timedRecords.length < 2 && !(metrics && metrics.completedSleepSessions && metrics.completedSleepSessions.length)) {
-          return "아직 최근 7일 분석에 사용할 기록이 충분하지 않아요. 수유, 기저귀, 수면 기록이 조금 더 쌓이면 흐름을 정리해드릴게요.";
-        }
-        const lastDate = timedRecords.length ? timedRecords[timedRecords.length - 1].date : null;
-        const intervals = [];
-        for (let i = 1; i < timedRecords.length; i += 1) {
-          const minutes = Math.round((timedRecords[i].date - timedRecords[i - 1].date) / 60000);
-          if (minutes > 0 && minutes < 10080) intervals.push(minutes);
-        }
-        const avgInterval = averageMinutes(intervals);
-        const sleepSessions = metrics.completedSleepSessions || [];
-        const avgSleep = averageMinutes(sleepSessions.map(function (session) { return session.durationMinutes; }));
-        return "마지막으로 반영된 기록은 " + (lastDate ? elapsedText(lastDate.toISOString()) : "조금 전") + "이에요. 최근 7일 동안 시간 정보가 있는 기록 " + timedRecords.length + "개를 모아 흐름을 정리했어요. 기록 사이 평균 간격은 " + (avgInterval ? durationText(avgInterval) : "기록 더 필요") + "이고, 완료된 수면 기록 " + sleepSessions.length + "개 평균 수면 시간은 " + (avgSleep ? durationText(avgSleep) : "기록 더 필요") + "이에요. 짝이 맞지 않는 일부 기록은 최근 흐름 반영에서 제외했어요. 큰 변화가 보이면 전문가와 상의해 주세요.";
-      }
-
-      function buildSmoothPath(points) {
-        if (!points.length) return "";
-        if (points.length === 1) return "M " + points[0].x + " " + points[0].y;
-        let d = "M " + points[0].x + " " + points[0].y;
-        for (let i = 0; i < points.length - 1; i += 1) {
-          const p0 = points[i - 1] || points[i];
-          const p1 = points[i];
-          const p2 = points[i + 1];
-          const p3 = points[i + 2] || p2;
-          const cp1x = p1.x + (p2.x - p0.x) / 6;
-          const cp1y = p1.y + (p2.y - p0.y) / 6;
-          const cp2x = p2.x - (p3.x - p1.x) / 6;
-          const cp2y = p2.y - (p3.y - p1.y) / 6;
-          d += " C " + cp1x + " " + cp1y + ", " + cp2x + " " + cp2y + ", " + p2.x + " " + p2.y;
-        }
-        return d;
-      }
-
-      function buildAreaPath(linePath, points, baselineY) {
-        if (!linePath || !points.length) return "";
-        return linePath + " L " + points[points.length - 1].x + " " + baselineY + " L " + points[0].x + " " + baselineY + " Z";
-      }
-
-      function renderSmoothAreaChart(container, options) {
-        if (!container) return;
-        const opts = options || {};
-        const labels = Array.isArray(opts.labels) ? opts.labels : [];
-        const values = (Array.isArray(opts.values) ? opts.values : []).map(function (value) {
-          const number = Number(value);
-          return Number.isFinite(number) && number > 0 ? number : 0;
-        });
-        const hasData = values.some(function (value) { return value > 0; });
-        if (!labels.length || !values.length || !hasData) {
-          container.innerHTML = '<div class="smooth-chart-empty">' + escapeHtml(opts.emptyText || "최근 7일 기록이 충분하지 않아요.") + '</div>';
-          return;
-        }
-        const width = 360;
-        const height = 260;
-        const padding = { left: 20, right: 20, top: 42, bottom: 44 };
-        const chartWidth = width - padding.left - padding.right;
-        const chartHeight = 164;
-        const baselineY = padding.top + chartHeight;
-        const minValue = Math.min.apply(null, values);
-        const maxValue = Math.max.apply(null, values);
-        const range = maxValue - minValue;
-        const points = values.map(function (value, index) {
-          const x = padding.left + (labels.length === 1 ? chartWidth / 2 : (chartWidth / (labels.length - 1)) * index);
-          let y;
-          if (range === 0) y = padding.top + chartHeight * 0.5;
-          else y = padding.top + (1 - ((value - minValue) / range)) * chartHeight;
-          if (value === 0 && maxValue > 0) y = baselineY - 6;
-          return { x: Math.round(x * 100) / 100, y: Math.round(y * 100) / 100, value: value };
-        });
-        const linePath = buildSmoothPath(points);
-        const areaPath = buildAreaPath(linePath, points, baselineY);
-        const color = opts.color || "#E6A078";
-        const fillColor = opts.fillColor || "rgba(230, 160, 120, 0.22)";
-        const strongColor = opts.strongColor || color;
-        const labelHtml = labels.map(function (label, index) {
-          const point = points[index];
-          return '<text x="' + point.x + '" y="244" text-anchor="middle" fill="#A3917D" font-size="13" font-weight="750">' + escapeHtml(label) + '</text>';
-        }).join("");
-        const markerHtml = points.map(function (point, index) {
-          const isLast = index === points.length - 1;
-          return '<circle cx="' + point.x + '" cy="' + point.y + '" r="' + (isLast ? 10 : 7) + '" fill="' + (isLast ? strongColor : "rgba(255,255,255,0.96)") + '" stroke="' + (isLast ? "rgba(255,255,255,0.82)" : color) + '" stroke-width="' + (isLast ? 4 : 3.5) + '"></circle>';
-        }).join("");
-        container.innerHTML = '<svg class="smooth-chart-svg" viewBox="0 0 ' + width + ' ' + height + '" preserveAspectRatio="xMidYMid meet" role="img" aria-label="' + escapeHtml(opts.ariaLabel || "최근 7일 차트") + '">' +
-          '<path d="' + areaPath + '" fill="' + fillColor + '"></path>' +
-          '<path d="' + linePath + '" fill="none" stroke="' + color + '" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round"></path>' +
-          markerHtml +
-          labelHtml +
-          '</svg>';
-      }
-
-      function analysisChartCardHtml(key, title, subtitle) {
-        return '<section class="analysis-chart-card">' +
-          '<div class="analysis-chart-head">' +
-          '<h3 class="analysis-chart-title">' + escapeHtml(title) + '</h3>' +
-          '<p class="analysis-chart-subtitle">' + escapeHtml(subtitle) + '</p>' +
-          '</div>' +
-          '<div class="smooth-chart-wrap" data-analysis-chart="' + escapeHtml(key) + '"></div>' +
-          '</section>';
-      }
-
-      function renderAnalysisDetailScreen() {
-        if (!els.analysisDetailContent) return;
-        try {
-          const metrics = buildAnalysisDetailMetrics(appData.records || []);
-          const labels = metrics.days.map(function (day) { return day.label; });
-          const summaryText = buildAnalysisReviewSummary(appData.records || [], metrics);
-          const feedingSubtype = metrics.today.feedingSubtypes || {};
-          const content = '<section class="analysis-summary-card">' +
-            '<h3 class="analysis-summary-title">✦ 기록 검토 요약</h3>' +
-            '<p class="analysis-summary-body">' + escapeHtml(summaryText) + '</p>' +
-            '</section>' +
-            analysisChartCardHtml("feeding-amount", "수유량 추이", "오늘 " + Math.round(metrics.today.feedingAmount) + "ml · 최근 평균 " + Math.round(metrics.averages.feedingAmount) + "ml") +
-            analysisChartCardHtml("feeding-count", "수유 횟수", "오늘 " + metrics.today.feedingCount + "회 · 평균 " + formatAnalysisCount(metrics.averages.feedingCount, 1) + "회 · 분유 " + (feedingSubtype.formula || 0) + " 모유 " + (feedingSubtype.breast || 0) + " 유축 " + (feedingSubtype.pumped || 0)) +
-            analysisChartCardHtml("sleep", "수면 분석", "오늘 " + durationText(metrics.today.sleepMinutes) + " · 최근 평균 " + durationText(metrics.averages.sleepMinutes)) +
-            analysisChartCardHtml("diaper", "기저귀 분석", "오늘 " + metrics.today.diaper.total + "회 · 평균 " + formatAnalysisCount(metrics.averages.diaperCount, 1) + "회 · 소변 " + metrics.today.diaper.pee + " 대변 " + metrics.today.diaper.poop);
-          els.analysisDetailContent.innerHTML = content;
-          renderSmoothAreaChart(els.analysisDetailContent.querySelector('[data-analysis-chart="feeding-amount"]'), {
-            labels: labels,
-            values: metrics.feedingTotals.map(function (day) { return day.totalAmount; }),
-            color: "#E6A078",
-            fillColor: "rgba(230, 160, 120, 0.22)",
-            strongColor: "#D88755",
-            emptyText: "최근 7일 수유량 기록이 충분하지 않아요.",
-            ariaLabel: "수유량 추이"
-          });
-          renderSmoothAreaChart(els.analysisDetailContent.querySelector('[data-analysis-chart="feeding-count"]'), {
-            labels: labels,
-            values: metrics.feedingCounts.map(function (day) { return day.total; }),
-            color: "#86A97C",
-            fillColor: "rgba(134, 169, 124, 0.18)",
-            strongColor: "#6F9366",
-            emptyText: "최근 7일 수유 기록이 충분하지 않아요.",
-            ariaLabel: "수유 횟수"
-          });
-          renderSmoothAreaChart(els.analysisDetailContent.querySelector('[data-analysis-chart="sleep"]'), {
-            labels: labels,
-            values: metrics.sleepTotals.map(function (day) { return day.totalMinutes; }),
-            color: "#9D8BC5",
-            fillColor: "rgba(157, 139, 197, 0.18)",
-            strongColor: "#8C78BB",
-            emptyText: "최근 7일 수면 기록이 충분하지 않아요.",
-            ariaLabel: "수면 분석"
-          });
-          renderSmoothAreaChart(els.analysisDetailContent.querySelector('[data-analysis-chart="diaper"]'), {
-            labels: labels,
-            values: metrics.diaperCounts.map(function (day) { return day.total; }),
-            color: "#D8B85F",
-            fillColor: "rgba(216, 184, 95, 0.18)",
-            strongColor: "#C8A54F",
-            emptyText: "최근 7일 기저귀 기록이 충분하지 않아요.",
-            ariaLabel: "기저귀 분석"
-          });
-        } catch (error) {
-          console.error("Failed to render analysis detail screen", error);
-          if (els.analysisDetailContent) {
-            els.analysisDetailContent.innerHTML = '<section class="analysis-summary-card"><h3 class="analysis-summary-title">✦ 기록 검토 요약</h3><p class="analysis-summary-body">분석 화면을 준비하는 중 문제가 있었어요. 기록은 그대로 보존되어 있어요.</p></section>';
-          }
-        }
-      }
-
-      function showAnalysisScreen() {
-        if (!els.analysisDetailScreen) return;
-        renderAnalysisDetailScreen();
-        els.analysisDetailScreen.hidden = false;
-        document.body.classList.add("analysis-detail-open");
-        els.analysisDetailScreen.scrollTop = 0;
-      }
-
-      function showHomeScreen() {
-        if (!els.analysisDetailScreen) return;
-        els.analysisDetailScreen.hidden = true;
-        document.body.classList.remove("analysis-detail-open");
       }
 
       function setLastRecord(type) {
@@ -22303,13 +21864,9 @@
         renderApp();
       });
       els.analysisToggle.addEventListener("click", function () {
-        showAnalysisScreen();
+        analysisExpanded = !analysisExpanded;
+        renderApp();
       });
-      if (els.analysisBackButton) {
-        els.analysisBackButton.addEventListener("click", function () {
-          showHomeScreen();
-        });
-      }
       document.getElementById("feedSaveButton").addEventListener("click", function () { saveFeeding(currentFeedAmount()); });
       document.getElementById("feedSaveBottomButton").addEventListener("click", function () {
         saveFeeding(selectedFeedingSubtype === "breast" ? null : currentFeedAmount());

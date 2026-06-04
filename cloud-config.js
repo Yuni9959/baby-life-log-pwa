@@ -1,4 +1,4 @@
-// Baby life log - Phase 6.0.0 release Supabase cloud configuration.
+// Baby life log - Phase 5.27 release Supabase cloud configuration.
 // Do not place Service Role keys, AI API keys, secret keys, or database passwords here.
 
 window.BABY_APP_CLOUD_CONFIG = {
@@ -6,7 +6,7 @@ window.BABY_APP_CLOUD_CONFIG = {
   enabled: true,
   supabaseUrl: "https://vburjgyfjhgtkulabrnf.supabase.co",
   supabaseAnonKey: "sb_publishable_o1NUthUHmVjaH4f-j186ng_AbspdQwa",
-  appVersion: "6.0.0",
+  appVersion: "5.27",
   schemaVersion: 4,
   analysisApiEndpoint: "",
   debug: true
