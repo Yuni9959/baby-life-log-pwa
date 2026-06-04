@@ -3403,6 +3403,7 @@
         { key: "not_sure", label: "잘 모르겠어요", relatedReasonKeys: ["unknown"] }
       ];
       const CRY_ATTEMPT_MAJOR_REASON_KEYS = ["hunger", "diaper", "burpGas", "sleepiness", "comfort", "temperature", "condition"];
+      const CRY_CARE_ACTION_REASON_KEYS = ["hunger", "diaper", "burpGas", "sleepiness", "comfort"];
       const CRY_ATTEMPT_MESSAGE_KEY_MAP = {
         fed: "cry_attempt_fed_checked",
         checked_diaper: "cry_attempt_diaper_checked",
@@ -12134,6 +12135,111 @@
         };
       }
 
+      function isCryDataLimitReason(reason) {
+        if (!reason) return false;
+        const key = String(reason.reasonKey || reason.key || reason.issueKey || reason.missingReason || "").toLowerCase();
+        if (["unknown", "record_insufficient", "insufficient_data", "data_unavailable", "no_recent_records", "not_enough_recent_records"].indexOf(key) !== -1) return true;
+        const text = [
+          reason.label,
+          reason.title,
+          reason.message,
+          reason.text,
+          reason.note,
+          reason.actionHint,
+          reason.nextActionHint
+        ].concat(Array.isArray(reason.missingData) ? reason.missingData : []).filter(Boolean).join(" ").toLowerCase();
+        return text.indexOf("record_insufficient") !== -1 ||
+          text.indexOf("insufficient_data") !== -1 ||
+          text.indexOf("data_unavailable") !== -1 ||
+          text.indexOf("no_recent_records") !== -1 ||
+          text.indexOf("기록 부족") !== -1 ||
+          text.indexOf("판단 어려움") !== -1 ||
+          text.indexOf("기록이 더 필요") !== -1;
+      }
+
+      function cryActualCareActionCandidateCount(reasons) {
+        return (Array.isArray(reasons) ? reasons : []).filter(function (reason) {
+          return reason && CRY_CARE_ACTION_REASON_KEYS.indexOf(reason.reasonKey) !== -1 && !isCryDataLimitReason(reason);
+        }).length;
+      }
+
+      function hasCryMeaningfulEvidence(source) {
+        const scores = source && source.scores ? source.scores : {};
+        return ["hunger", "diaper", "burpGas", "sleepiness"].some(function (key) {
+          const score = scores[key];
+          if (!score || score.available === false) return false;
+          if (Array.isArray(score.evidence) && score.evidence.length) return true;
+          return Number.isFinite(score.rawScore) && score.rawScore >= 20 && score.confidenceLevel !== "unavailable";
+        });
+      }
+
+      function hasEnoughCryReasonData(snapshotOrResult) {
+        const source = snapshotOrResult || {};
+        const quality = source.quality || source.snapshotQuality || (source.diagnostics && source.diagnostics.quality) || {};
+        const counts = source.counts || {};
+        const engine = source.engine || {};
+        const diagnostics = source.diagnostics || engine.diagnostics || {};
+        const usableRecordCount = Number(quality.usableRecordCount);
+        const countUsableRecordCount = Number(counts.usableRecordCount);
+        const usedInputCount = Number(engine.usedInputCount);
+        const diagnosticUsableRecordCount = Number(diagnostics.usableRecordCount);
+        const diagnosticUsedInputCount = Number(diagnostics.usedInputCount);
+        const inWindowCount = Number(diagnostics.inWindowCount);
+        if ((Number.isFinite(usableRecordCount) && usableRecordCount >= 10) ||
+          (Number.isFinite(countUsableRecordCount) && countUsableRecordCount >= 10) ||
+          (Number.isFinite(diagnosticUsableRecordCount) && diagnosticUsableRecordCount >= 10) ||
+          (Number.isFinite(usedInputCount) && usedInputCount >= 5) ||
+          (Number.isFinite(diagnosticUsedInputCount) && diagnosticUsedInputCount >= 5) ||
+          (Number.isFinite(inWindowCount) && inWindowCount >= 5)) {
+          return true;
+        }
+        if (hasCryMeaningfulEvidence(source)) return true;
+        const evidence = Array.isArray(source.evidence) ? source.evidence : [];
+        if (evidence.length) return true;
+        const ranked = Array.isArray(source.rankedReasons) ? source.rankedReasons : [];
+        return cryActualCareActionCandidateCount(ranked) > 0;
+      }
+
+      function filterCryRankedReasonsForDataLimit(reasons, snapshotOrResult, options) {
+        const opts = options || {};
+        const list = Array.isArray(reasons) ? reasons.slice() : [];
+        const dataLimitReasons = list.filter(isCryDataLimitReason);
+        const careActionCount = cryActualCareActionCandidateCount(list);
+        const enoughData = hasEnoughCryReasonData(snapshotOrResult);
+        const shouldSuppress = dataLimitReasons.length > 0 && (enoughData || careActionCount >= 2 || opts.forceWhenCareActionCountAtLeastTwo === true);
+        if (shouldSuppress) {
+          return {
+            reasons: list.filter(function (reason) { return !isCryDataLimitReason(reason); }),
+            suppressed: true,
+            suppressedCount: dataLimitReasons.length,
+            enoughData: enoughData,
+            careActionCandidateCount: careActionCount
+          };
+        }
+        if (dataLimitReasons.length > 1) {
+          let keptDataLimit = false;
+          return {
+            reasons: list.filter(function (reason) {
+              if (!isCryDataLimitReason(reason)) return true;
+              if (keptDataLimit) return false;
+              keptDataLimit = true;
+              return true;
+            }),
+            suppressed: true,
+            suppressedCount: dataLimitReasons.length - 1,
+            enoughData: enoughData,
+            careActionCandidateCount: careActionCount
+          };
+        }
+        return {
+          reasons: list,
+          suppressed: false,
+          suppressedCount: 0,
+          enoughData: enoughData,
+          careActionCandidateCount: careActionCount
+        };
+      }
+
       function cryMetricValue(metric) {
         if (!metric || metric.available === false) return null;
         const candidates = [metric.median, metric.mean, metric.value];
@@ -12475,7 +12581,8 @@
         rankable.forEach(function (score, index) {
           score.rank = index + 1;
         });
-        const rankedReasons = rankable.slice(0, CRY_REASON_DISPLAY_LIMIT);
+        const rankFilter = filterCryRankedReasonsForDataLimit(rankable, snapshot, {});
+        const rankedReasons = rankFilter.reasons.slice(0, CRY_REASON_DISPLAY_LIMIT);
         const primary = rankedReasons[0] || scores.unknown;
         const reasonMessageKeyMap = {
           hunger: "cry_reason_hunger_top",
@@ -12533,6 +12640,22 @@
               sleepMinutes: Math.round(todayTotalSleep)
             },
             baselineRefs: baselineRefs
+          },
+          reliabilityGuidance: {
+            dataLimitReasonSuppressed: rankFilter.suppressed,
+            dataLimitReasonSuppressedCount: rankFilter.suppressedCount,
+            enoughDataForCryReason: rankFilter.enoughData,
+            usableRecordCount: snapshot.quality && Number.isFinite(snapshot.quality.usableRecordCount) ? snapshot.quality.usableRecordCount : normalized.length,
+            actualCareActionCandidateCount: rankFilter.careActionCandidateCount,
+            message: rankFilter.suppressed
+              ? "기록 수는 충분해 보여 기록 부족 항목은 후보 순위에서 제외하고 참고 안내로만 사용했어요."
+              : (rankFilter.enoughData ? "기록 기반 참고 정보로 확인 순서를 정리했어요." : "기록이 더 쌓이면 후보 순서가 달라질 수 있어요.")
+          },
+          diagnostics: {
+            usableRecordCount: snapshot.quality && Number.isFinite(snapshot.quality.usableRecordCount) ? snapshot.quality.usableRecordCount : normalized.length,
+            dataLimitReasonSuppressed: rankFilter.suppressed,
+            dataLimitReasonSuppressedCount: rankFilter.suppressedCount,
+            actualCareActionCandidateCount: rankFilter.careActionCandidateCount
           },
           messageKeys: messageKeys,
           warnings: [],
@@ -15875,9 +15998,11 @@
           if (action.key === "not_sure") return keys;
           return keys.concat(action.relatedReasonKeys || []);
         }, []));
-        const rankedReasons = Array.isArray(source.feedbackAdjustedRankedReasons) && source.feedbackAdjustedRankedReasons.length
+        const sourceRankedReasons = Array.isArray(source.feedbackAdjustedRankedReasons) && source.feedbackAdjustedRankedReasons.length
           ? source.feedbackAdjustedRankedReasons.slice()
           : Array.isArray(source.rankedReasons) ? source.rankedReasons.slice() : [];
+        const attemptRankFilter = filterCryRankedReasonsForDataLimit(sourceRankedReasons, source, {});
+        const rankedReasons = attemptRankFilter.reasons;
         const adjusted = rankedReasons.map(function (reason, index) {
           const reasonKey = reason && reason.reasonKey ? reason.reasonKey : "";
           const attemptedActionKeys = selectedActions.filter(function (action) {
@@ -15953,6 +16078,15 @@
           },
           messageKeys: messageKeys,
           warnings: source.ok ? [] : ["cryReasonSuggestion unavailable; calculate cry reason result first."],
+          diagnostics: {
+            dataLimitReasonSuppressed: attemptRankFilter.suppressed,
+            dataLimitReasonSuppressedCount: attemptRankFilter.suppressedCount,
+            enoughDataForCryReason: attemptRankFilter.enoughData,
+            actualCareActionCandidateCount: attemptRankFilter.careActionCandidateCount,
+            usableRecordCount: source.diagnostics && Number.isFinite(source.diagnostics.usableRecordCount)
+              ? source.diagnostics.usableRecordCount
+              : (source.reliabilityGuidance && Number.isFinite(source.reliabilityGuidance.usableRecordCount) ? source.reliabilityGuidance.usableRecordCount : null)
+          },
           errors: []
         };
         state.phase513CompletionCheck = buildPhase513CompletionCheck(state);
@@ -18618,7 +18752,31 @@
           feedbackLearningSummary: result.cryFeedbackLearningSummary
         });
         console.debug("[Phase 5.15 Similar Cry Situations]", result.similarCrySituations);
-        const reasons = Array.isArray(result.cryAttemptState.adjustedRankedReasons) ? result.cryAttemptState.adjustedRankedReasons : [];
+        const renderRankFilter = filterCryRankedReasonsForDataLimit(
+          Array.isArray(result.cryAttemptState.adjustedRankedReasons) ? result.cryAttemptState.adjustedRankedReasons : [],
+          result,
+          {}
+        );
+        const reasons = renderRankFilter.reasons.map(function (reason, index) {
+          return Object.assign({}, reason, { adjustedRank: index + 1 });
+        });
+        result.cryAttemptState.adjustedRankedReasons = reasons;
+        result.cryAttemptState.diagnostics = Object.assign({}, result.cryAttemptState.diagnostics || {}, {
+          renderDataLimitReasonSuppressed: renderRankFilter.suppressed,
+          renderDataLimitReasonSuppressedCount: renderRankFilter.suppressedCount,
+          renderActualCareActionCandidateCount: renderRankFilter.careActionCandidateCount
+        });
+        console.debug("[Phase 5.28.1 Cry Data Limit Filter]", {
+          usableRecordCount: result.diagnostics ? result.diagnostics.usableRecordCount : null,
+          suggestionSuppressed: result.diagnostics ? result.diagnostics.dataLimitReasonSuppressed : null,
+          attemptSuppressed: result.cryAttemptState.diagnostics ? result.cryAttemptState.diagnostics.dataLimitReasonSuppressed : null,
+          renderSuppressed: renderRankFilter.suppressed,
+          actualCareActionCandidateCount: renderRankFilter.careActionCandidateCount
+        });
+        const enoughCryReasonData = hasEnoughCryReasonData(result);
+        const reliabilityMessage = result.reliabilityGuidance && result.reliabilityGuidance.message
+          ? result.reliabilityGuidance.message
+          : "";
         if (els.crySafetyView) els.crySafetyView.classList.add("hidden");
         if (els.cryResultView) els.cryResultView.classList.remove("hidden");
         if (els.cryResultSafetyGuidance) {
@@ -18626,16 +18784,27 @@
           els.cryResultSafetyGuidance.classList.toggle("hidden", !hasSafetyConcern);
         }
         if (els.cryResultSummary) {
-          els.cryResultSummary.textContent = result.summary && result.summary.shortSummary
+          const summaryText = result.summary && result.summary.shortSummary
             ? result.summary.shortSummary
             : "기록을 바탕으로 먼저 확인해볼 순서를 정리했어요.";
+          if (!reasons.length && !enoughCryReasonData) {
+            els.cryResultSummary.textContent = "최근 기록이 부족해서 정확히 비교하기는 어려워요. 수유, 기저귀, 졸림 신호를 차례로 가볍게 확인해 보세요.";
+          } else {
+            els.cryResultSummary.textContent = reliabilityMessage
+              ? summaryText + " " + reliabilityMessage
+              : summaryText;
+          }
         }
         if (!els.cryResultList) return;
         renderCryAttemptChips(result.cryAttemptState);
         renderSimilarCrySituations(result.similarCrySituations);
         renderCryFeedbackChips();
+        if (!reasons.length && !enoughCryReasonData) {
+          els.cryResultList.innerHTML = "";
+          return;
+        }
         if (!reasons.length) {
-          els.cryResultList.innerHTML = '<li class="cry-result-card"><div class="cry-result-head"><span>기록 부족으로 판단 어려움</span></div><p class="cry-result-note">최근 기록이 부족해서 정확히 비교하기는 어려워요.</p><p class="cry-result-action">수유, 기저귀, 졸림 신호를 차례로 가볍게 확인해 보세요.</p></li>';
+          els.cryResultList.innerHTML = '<li class="cry-result-card"><div class="cry-result-head"><span>기록 기반 참고 정보</span></div><p class="cry-result-note">현재 기록을 바탕으로 확인 순서를 계산했지만 화면에 표시할 후보가 적어요.</p><p class="cry-result-action">수유, 기저귀, 트림/가스, 잠/안정 신호를 차례로 가볍게 확인해 보세요.</p></li>';
           return;
         }
         els.cryResultList.innerHTML = reasons.map(function (reason) {
