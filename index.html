@@ -2625,7 +2625,7 @@
   <main class="app app-shell">
     <header class="topbar">
       <div>
-        <div class="version-badge" id="versionBadge">v6.0.6-analysis-thin-client</div>
+        <div class="version-badge" id="versionBadge">v6.0.7-chart-labels</div>
         <h1 id="babyTitle">우리 아기</h1>
         <div class="baby-days" id="babyDays">생년월일을 입력해 주세요</div>
         <div class="today-line" id="todayLine"></div>
@@ -3675,9 +3675,9 @@
       const PRE_REPAIR_BACKUP_KEY = "baby_life_log_app_backup_before_repair";
       const BACKUP_FORMAT_VERSION = 2;
       const APP_NAME = "baby-life-log";
-      const APP_VERSION = "6.0.6-analysis-thin-client";
+      const APP_VERSION = "6.0.7-chart-labels";
       const APP_PHASE_LABEL = "";
-      const SERVICE_WORKER_CACHE_NAME = "baby-life-log-v6.0.6-analysis-thin-client";
+      const SERVICE_WORKER_CACHE_NAME = "baby-life-log-v6.0.7-chart-labels";
       const MIN_ANALYSIS_RECORDS = 10;
       const ANALYSIS_SERVER_RECONNECT_MESSAGE = "서버 연결 후 분석을 확인할 수 있어요. 서버 재연결을 눌러 주세요.";
       const ANALYSIS_GATE_DETAIL_MESSAGE = "기록이 조금 더 쌓이면 최근 흐름을 더 안정적으로 보여드릴게요.";
@@ -4239,7 +4239,7 @@
       };
       var DEBUG_LOGS = [];
       var DEBUG_STATE = {
-        version: "v6.0.6-analysis-thin-client",
+        version: "v6.0.7-chart-labels",
         swInfo: null,
         localStorageTest: "",
         lastButtonEvent: "",
@@ -19958,6 +19958,48 @@
         return linePath + " L " + points[points.length - 1].x + " " + baselineY + " L " + points[0].x + " " + baselineY + " Z";
       }
 
+      function formatCompactSleepLabel(minutes) {
+        const n = Math.max(0, Math.round(Number(minutes) || 0));
+        if (n < 60) return n + "m";
+        const hours = Math.floor(n / 60);
+        const remainingMinutes = n % 60;
+        if (!remainingMinutes) return hours + "h";
+        if (hours >= 10) return hours + "h";
+        return hours + "h" + remainingMinutes + "m";
+      }
+
+      function formatChartValueLabel(value, type) {
+        let n = Number(value);
+        if (!Number.isFinite(n)) n = 0;
+        if (type === "feedingAmount") return Math.round(n) + "ml";
+        if (type === "feedingCount") return Math.round(n) + "회";
+        if (type === "diaperCount") return Math.round(n) + "회";
+        if (type === "sleepMinutes") return formatCompactSleepLabel(n);
+        return String(Math.round(n));
+      }
+
+      function calculatePointLabelPositions(points, height, baselineY) {
+        const topSafeY = 22;
+        const bottomSafeY = Math.min(baselineY - 18, height - 46);
+        const positions = [];
+        points.forEach(function (point, index) {
+          const isLast = index === points.length - 1;
+          let y = point.y + (isLast ? -22 : -18);
+          if (y < topSafeY) y = point.y + 20;
+          if (y > bottomSafeY) y = point.y - 18;
+          y = Math.max(topSafeY, Math.min(bottomSafeY, y));
+          if (index > 0) {
+            const previous = positions[index - 1];
+            if (previous && Math.abs(point.x - previous.x) < 56 && Math.abs(y - previous.y) < 13) {
+              const shiftDown = previous.y < y || y - 8 < topSafeY;
+              y = Math.max(topSafeY, Math.min(bottomSafeY, y + (shiftDown ? 9 : -9)));
+            }
+          }
+          positions.push({ x: point.x, y: Math.round(y * 100) / 100 });
+        });
+        return positions;
+      }
+
       function renderSmoothAreaChart(container, options) {
         if (!container) return;
         const opts = options || {};
@@ -19973,9 +20015,9 @@
         }
         const width = 360;
         const height = 260;
-        const padding = { left: 20, right: 20, top: 42, bottom: 44 };
+        const padding = { left: 20, right: 20, top: 52, bottom: 44 };
         const chartWidth = width - padding.left - padding.right;
-        const chartHeight = 164;
+        const chartHeight = 154;
         const baselineY = padding.top + chartHeight;
         const minValue = Math.min.apply(null, values);
         const maxValue = Math.max.apply(null, values);
@@ -19993,6 +20035,10 @@
         const color = opts.color || "#E6A078";
         const fillColor = opts.fillColor || "rgba(230, 160, 120, 0.22)";
         const strongColor = opts.strongColor || color;
+        const valueLabelFormatter = typeof opts.valueLabelFormatter === "function"
+          ? opts.valueLabelFormatter
+          : function (value) { return formatChartValueLabel(value, opts.chartType); };
+        const pointLabelPositions = calculatePointLabelPositions(points, height, baselineY);
         const labelHtml = labels.map(function (label, index) {
           const point = points[index];
           return '<text x="' + point.x + '" y="244" text-anchor="middle" fill="#A3917D" font-size="13" font-weight="750">' + escapeHtml(label) + '</text>';
@@ -20001,10 +20047,25 @@
           const isLast = index === points.length - 1;
           return '<circle cx="' + point.x + '" cy="' + point.y + '" r="' + (isLast ? 10 : 7) + '" fill="' + (isLast ? strongColor : "rgba(255,255,255,0.96)") + '" stroke="' + (isLast ? "rgba(255,255,255,0.82)" : color) + '" stroke-width="' + (isLast ? 4 : 3.5) + '"></circle>';
         }).join("");
+        const valueLabelHtml = opts.showPointLabels ? points.map(function (point, index) {
+          const isLast = index === points.length - 1;
+          const position = pointLabelPositions[index] || { x: point.x, y: point.y - 18 };
+          const text = valueLabelFormatter(point.value, index, point);
+          if (text === null || text === undefined || text === "") return "";
+          const fontSize = isLast ? 12 : 10.5;
+          const fontWeight = isLast ? 800 : 700;
+          const labelText = escapeHtml(String(text));
+          const textWidth = Math.max(28, Math.min(58, String(text).length * 6.5 + 12));
+          const pillHtml = isLast
+            ? '<rect x="' + (position.x - textWidth / 2) + '" y="' + (position.y - 10) + '" width="' + textWidth + '" height="20" rx="7" ry="7" fill="rgba(255,255,255,0.84)" stroke="' + strongColor + '" stroke-opacity="0.22" stroke-width="1"></rect>'
+            : "";
+          return pillHtml + '<text x="' + position.x + '" y="' + position.y + '" text-anchor="middle" dominant-baseline="middle" fill="' + (isLast ? strongColor : color) + '" font-size="' + fontSize + '" font-weight="' + fontWeight + '" style="pointer-events:none;user-select:none;">' + labelText + '</text>';
+        }).join("") : "";
         container.innerHTML = '<svg class="smooth-chart-svg" viewBox="0 0 ' + width + ' ' + height + '" preserveAspectRatio="xMidYMid meet" role="img" aria-label="' + escapeHtml(opts.ariaLabel || "최근 7일 차트") + '">' +
           '<path d="' + areaPath + '" fill="' + fillColor + '"></path>' +
           '<path d="' + linePath + '" fill="none" stroke="' + color + '" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round"></path>' +
           markerHtml +
+          valueLabelHtml +
           labelHtml +
           '</svg>';
       }
@@ -20021,10 +20082,22 @@
 
       function renderAnalysisDetailScreen() {
         if (!els.analysisDetailContent) return;
+        const serverBlockMessage = getServerAnalysisBlockMessage();
+        if (serverBlockMessage) {
+          els.analysisDetailContent.innerHTML = '<section class="analysis-summary-card"><h3 class="analysis-summary-title">✦ 기록 검토 요약</h3><p class="analysis-summary-body">' + escapeHtml(serverBlockMessage) + '</p></section>';
+          return;
+        }
+        const appRecords = appData.records || [];
+        const analysisRangeDays = (appData.settings && appData.settings.analysisRangeDays) || 7;
+        const gate = getLocalAnalysisGate(appRecords, analysisRangeDays);
+        if (!gate.analysisReady) {
+          els.analysisDetailContent.innerHTML = '<section class="analysis-summary-card"><h3 class="analysis-summary-title">✦ 기록 검토 요약</h3><p class="analysis-summary-body">' + escapeHtml(gate.gateMessage) + '</p></section>';
+          return;
+        }
         try {
-          const metrics = buildAnalysisDetailMetrics(appData.records || []);
+          const metrics = buildAnalysisDetailMetrics(appRecords);
           const labels = metrics.days.map(function (day) { return day.label; });
-          const summaryHtml = buildAnalysisReviewSummary(appData.records || [], metrics);
+          const summaryHtml = buildAnalysisReviewSummary(appRecords, metrics);
           const feedingSubtype = metrics.today.feedingSubtypes || {};
           const content = '<section class="analysis-summary-card">' +
             '<h3 class="analysis-summary-title">✦ 기록 검토 요약</h3>' +
@@ -20042,7 +20115,10 @@
             fillColor: "rgba(230, 160, 120, 0.22)",
             strongColor: "#D88755",
             emptyText: "최근 7일 수유량 기록이 충분하지 않아요.",
-            ariaLabel: "수유량 추이"
+            ariaLabel: "수유량 추이",
+            chartType: "feedingAmount",
+            showPointLabels: true,
+            valueLabelFormatter: function (value) { return formatChartValueLabel(value, "feedingAmount"); }
           });
           renderSmoothAreaChart(els.analysisDetailContent.querySelector('[data-analysis-chart="feeding-count"]'), {
             labels: labels,
@@ -20051,7 +20127,10 @@
             fillColor: "rgba(134, 169, 124, 0.18)",
             strongColor: "#6F9366",
             emptyText: "최근 7일 수유 기록이 충분하지 않아요.",
-            ariaLabel: "수유 횟수"
+            ariaLabel: "수유 횟수",
+            chartType: "feedingCount",
+            showPointLabels: true,
+            valueLabelFormatter: function (value) { return formatChartValueLabel(value, "feedingCount"); }
           });
           renderSmoothAreaChart(els.analysisDetailContent.querySelector('[data-analysis-chart="sleep"]'), {
             labels: labels,
@@ -20060,7 +20139,10 @@
             fillColor: "rgba(157, 139, 197, 0.18)",
             strongColor: "#8C78BB",
             emptyText: "최근 7일 수면 기록이 충분하지 않아요.",
-            ariaLabel: "수면 분석"
+            ariaLabel: "수면 분석",
+            chartType: "sleepMinutes",
+            showPointLabels: true,
+            valueLabelFormatter: function (value) { return formatChartValueLabel(value, "sleepMinutes"); }
           });
           renderSmoothAreaChart(els.analysisDetailContent.querySelector('[data-analysis-chart="diaper"]'), {
             labels: labels,
@@ -20069,7 +20151,10 @@
             fillColor: "rgba(216, 184, 95, 0.18)",
             strongColor: "#C8A54F",
             emptyText: "최근 7일 기저귀 기록이 충분하지 않아요.",
-            ariaLabel: "기저귀 분석"
+            ariaLabel: "기저귀 분석",
+            chartType: "diaperCount",
+            showPointLabels: true,
+            valueLabelFormatter: function (value) { return formatChartValueLabel(value, "diaperCount"); }
           });
         } catch (error) {
           console.error("Failed to render analysis detail screen", error);
