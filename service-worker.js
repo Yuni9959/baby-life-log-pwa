@@ -1,5 +1,5 @@
-const APP_VERSION = "6.0.3-7day-charts";
-const CACHE_NAME = "baby-life-log-v6.0.3-7day-charts";
+const APP_VERSION = "6.0.4-onboarding";
+const CACHE_NAME = "baby-life-log-v6.0.4-onboarding";
 const APP_SHELL = [
   "./manifest.json",
   `./service-worker.js?v=${APP_VERSION}`,

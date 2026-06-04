@@ -1,4 +1,4 @@
-const CACHE_NAME = "baby-life-log-v6.0.3-7day-charts";
+const CACHE_NAME = "baby-life-log-v6.0.4-onboarding";
 const CACHE_PREFIX = "babylog-cache-";
 const OLD_CACHE_PREFIX = "baby-life-log-";
 const PRIMARY_CACHE_NAME = CACHE_NAME;
