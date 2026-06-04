@@ -2562,7 +2562,10 @@
           <div class="data-grid" id="diagnosticsGrid"></div>
           <div class="data-tool-actions">
             <button type="button" class="small-action" id="repairDataButton">데이터 보정 실행</button>
+            <button type="button" class="small-action" id="copyMobileDiagnosticsButton">모바일 진단 로그 복사</button>
+            <button type="button" class="ghost-action" id="clearMobileDiagnosticsButton">모바일 진단 로그 초기화</button>
           </div>
+          <textarea class="hidden" id="mobileDiagnosticsFallbackText" rows="8" readonly></textarea>
         </div>
         <div class="data-subsection" aria-labelledby="storageStatusTitle">
           <h3 id="storageStatusTitle">저장소 상태</h3>
@@ -3284,6 +3287,7 @@
       initializeWallpaperTweaks();
 
       const STORAGE_KEY = "baby_life_log_app_v2";
+      const MOBILE_REPORT_DIAGNOSTICS_KEY = "babylog_mobile_report_diagnostics_v1";
       const LEGACY_STORAGE_KEY = "baby_life_records_v1";
       const LEGACY_BACKUP_KEY = "baby_life_log_app_legacy_backup_before_v2";
       const PRE_RESTORE_BACKUP_KEY = "baby_life_log_app_backup_before_restore";
@@ -3653,6 +3657,9 @@
         csvDataButton: document.getElementById("csvDataButton"),
         diagnosticsSummary: document.getElementById("diagnosticsSummary"),
         diagnosticsGrid: document.getElementById("diagnosticsGrid"),
+        copyMobileDiagnosticsButton: document.getElementById("copyMobileDiagnosticsButton"),
+        clearMobileDiagnosticsButton: document.getElementById("clearMobileDiagnosticsButton"),
+        mobileDiagnosticsFallbackText: document.getElementById("mobileDiagnosticsFallbackText"),
         storageStatusGrid: document.getElementById("storageStatusGrid"),
         phase3Summary: document.getElementById("phase3Summary"),
         phase3Grid: document.getElementById("phase3Grid"),
@@ -3779,6 +3786,12 @@
       let currentShareImageBlob = null;
       let currentShareImageObjectUrl = "";
       let currentPrintableReportState = null;
+      let mobileDiagnosticRuntimeInfo = {
+        cacheKeys: null,
+        serviceWorkerRegistrations: null,
+        checkedAt: null,
+        error: null
+      };
       let activePremiumPreviewGroup = "premiumCandidate";
       let familyShareUiOptions = null;
       let shareImageUiOptions = null;
@@ -3810,6 +3823,247 @@
 
       function pad(value) { return pad2(value); }
       function nowIso() { return new Date().toISOString(); }
+
+      function mobileDiagnosticRecordBabyId(record) {
+        if (!record || typeof record !== "object") return "missing";
+        return record.baby_id || record.babyId || (record.cloud && (record.cloud.babyId || record.cloud.baby_id)) || "missing";
+      }
+
+      function mobileDiagnosticCountBy(records, mapper) {
+        return (Array.isArray(records) ? records : []).reduce(function (counts, record) {
+          const key = String(mapper(record) || "missing");
+          counts[key] = (counts[key] || 0) + 1;
+          return counts;
+        }, {});
+      }
+
+      function mobileDiagnosticRecordSummary(record) {
+        const cloud = record && record.cloud ? record.cloud : {};
+        return {
+          id: record && record.id ? String(record.id).slice(0, 24) : null,
+          type: record && record.type ? record.type : null,
+          subtype: record && record.subtype ? record.subtype : null,
+          createdAt: record && record.createdAt ? record.createdAt : null,
+          updatedAt: record && record.updatedAt ? record.updatedAt : null,
+          deletedAt: record && (record.deletedAt || record.deleted_at) ? (record.deletedAt || record.deleted_at) : null,
+          baby_id: record && record.baby_id ? record.baby_id : null,
+          babyId: record && record.babyId ? record.babyId : null,
+          cloudBabyId: cloud.babyId || cloud.baby_id || null,
+          cloudStatus: cloud.status || null
+        };
+      }
+
+      function mobileDiagnosticErrorSummary(error) {
+        if (!error) return { message: "unknown_error", stack: "" };
+        if (error.reason) return mobileDiagnosticErrorSummary(error.reason);
+        if (error.error) return mobileDiagnosticErrorSummary(error.error);
+        return {
+          message: error.message ? String(error.message) : String(error),
+          stack: error.stack ? String(error.stack).slice(0, 4000) : ""
+        };
+      }
+
+      function collectCurrentStateSummary(extra) {
+        try {
+          const opts = extra || {};
+          const records = appData && Array.isArray(appData.records) ? appData.records : [];
+          const activeRecords = records.filter(function (record) {
+            try { return typeof isActiveRecord === "function" ? isActiveRecord(record) : !(record && (record.deletedAt || record.deleted_at)); } catch (error) { return false; }
+          });
+          const deletedRecords = records.filter(function (record) {
+            try { return typeof hasDeletedMarker === "function" ? hasDeletedMarker(record) : !!(record && (record.deletedAt || record.deleted_at)); } catch (error) { return false; }
+          });
+          const cloudContext = appData && appData.cloud ? appData.cloud : {};
+          const currentFamilyId = cloudContext.currentFamilyId || (typeof getLocalValue === "function" ? getLocalValue("babylog_family_id") : null) || null;
+          const currentBabyId = cloudContext.currentBabyId || (typeof getCurrentAnalysisBabyId === "function" ? getCurrentAnalysisBabyId() : null) || null;
+          const lastRecords = records.slice().sort(function (a, b) {
+            return new Date((b && b.createdAt) || 0) - new Date((a && a.createdAt) || 0);
+          }).slice(0, 5).map(mobileDiagnosticRecordSummary);
+          let analysisSnapshotSummary = null;
+          let commonAnalysisEngineSummary = null;
+          try {
+            if (!opts.skipAnalysisSummary && typeof buildAnalysisSnapshot === "function") {
+              const snapshot = buildAnalysisSnapshot(records, { baby_id: currentBabyId });
+              analysisSnapshotSummary = {
+                ok: true,
+                babyId: snapshot && snapshot.babyId,
+                counts: snapshot && snapshot.counts,
+                quality: snapshot && snapshot.quality,
+                diagnostics: snapshot && snapshot.diagnostics,
+                hasReportHubState: !!(snapshot && snapshot.reportHubState),
+                hasParentReportBundle: !!(snapshot && snapshot.parentReportBundle),
+                hasCryReasonSuggestion: !!(snapshot && snapshot.cryReasonSuggestion)
+              };
+            }
+          } catch (snapshotError) {
+            analysisSnapshotSummary = mobileDiagnosticErrorSummary(snapshotError);
+          }
+          try {
+            if (!opts.skipAnalysisSummary && typeof buildCommonAnalysisEngine === "function") {
+              const engine = buildCommonAnalysisEngine(records, { baby_id: currentBabyId });
+              commonAnalysisEngineSummary = {
+                ok: true,
+                babyId: engine && engine.babyId,
+                summary: engine && engine.summary,
+                counts: engine && engine.counts,
+                diagnostics: engine && engine.diagnostics,
+                warnings: engine && engine.warnings,
+                errors: engine && engine.errors
+              };
+            }
+          } catch (engineError) {
+            commonAnalysisEngineSummary = mobileDiagnosticErrorSummary(engineError);
+          }
+          return Object.assign({
+            appVersion: APP_VERSION,
+            appPhaseLabel: APP_PHASE_LABEL,
+            locationHref: window.location && window.location.href ? window.location.href : "",
+            userAgent: navigator.userAgent || "",
+            displayModeStandalone: !!((window.matchMedia && window.matchMedia("(display-mode: standalone)").matches) || window.navigator.standalone),
+            currentFamilyId: currentFamilyId,
+            currentBabyId: currentBabyId,
+            recordCount: records.length,
+            activeRecordCount: activeRecords.length,
+            deletedRecordCount: deletedRecords.length,
+            byType: mobileDiagnosticCountBy(records, function (record) { return record && record.type; }),
+            byBaby: mobileDiagnosticCountBy(records, mobileDiagnosticRecordBabyId),
+            last5RecordSummaries: lastRecords,
+            serviceWorkerControllerUrl: navigator.serviceWorker && navigator.serviceWorker.controller ? navigator.serviceWorker.controller.scriptURL : null,
+            serviceWorkerRegistrations: mobileDiagnosticRuntimeInfo.serviceWorkerRegistrations,
+            cacheKeys: mobileDiagnosticRuntimeInfo.cacheKeys,
+            serviceWorkerCacheCheckedAt: mobileDiagnosticRuntimeInfo.checkedAt,
+            serviceWorkerCacheError: mobileDiagnosticRuntimeInfo.error,
+            analysisSnapshotSummary: analysisSnapshotSummary,
+            commonAnalysisEngineSummary: commonAnalysisEngineSummary
+          }, extra || {});
+        } catch (summaryError) {
+          return { summaryError: mobileDiagnosticErrorSummary(summaryError) };
+        }
+      }
+
+      function loadMobileDiagnostics() {
+        try {
+          const parsed = JSON.parse(localStorage.getItem(MOBILE_REPORT_DIAGNOSTICS_KEY) || "[]");
+          return Array.isArray(parsed) ? parsed : [];
+        } catch (error) {
+          return [];
+        }
+      }
+
+      function saveMobileDiagnostics(items) {
+        try {
+          localStorage.setItem(MOBILE_REPORT_DIAGNOSTICS_KEY, JSON.stringify((Array.isArray(items) ? items : []).slice(-20)));
+          return true;
+        } catch (error) {
+          console.warn("[Mobile Report Diagnostics] save failed", error);
+          return false;
+        }
+      }
+
+      function recordMobileDiagnosticError(area, error, extra) {
+        try {
+          const err = mobileDiagnosticErrorSummary(error);
+          const item = Object.assign({
+            createdAt: nowIso(),
+            area: area || "unknown",
+            category: area || "unknown",
+            message: err.message,
+            stack: err.stack
+          }, collectCurrentStateSummary(extra));
+          const items = loadMobileDiagnostics();
+          items.push(item);
+          saveMobileDiagnostics(items);
+          console.warn("[Mobile Report Diagnostics]", item);
+          return item;
+        } catch (recordError) {
+          try { console.warn("[Mobile Report Diagnostics] record failed", recordError); } catch (ignore) {}
+          return null;
+        }
+      }
+
+      function collectMobileDiagnosticsPayload(area) {
+        return {
+          createdAt: nowIso(),
+          area: area || "manual_copy",
+          currentState: collectCurrentStateSummary(),
+          diagnostics: loadMobileDiagnostics()
+        };
+      }
+
+      async function copyMobileDiagnostics() {
+        const text = JSON.stringify(collectMobileDiagnosticsPayload("manual_copy"), null, 2);
+        try {
+          if (!navigator.clipboard || !navigator.clipboard.writeText) throw new Error("clipboard_unavailable");
+          await navigator.clipboard.writeText(text);
+          if (els.mobileDiagnosticsFallbackText) els.mobileDiagnosticsFallbackText.classList.add("hidden");
+          showToast("진단 로그를 복사했어요.");
+          return true;
+        } catch (error) {
+          if (els.mobileDiagnosticsFallbackText) {
+            els.mobileDiagnosticsFallbackText.value = text;
+            els.mobileDiagnosticsFallbackText.classList.remove("hidden");
+            try {
+              els.mobileDiagnosticsFallbackText.focus();
+              els.mobileDiagnosticsFallbackText.select();
+            } catch (selectError) {}
+          }
+          showToast("진단 로그를 직접 복사해 주세요.");
+          return false;
+        }
+      }
+
+      function clearMobileDiagnostics() {
+        try {
+          localStorage.removeItem(MOBILE_REPORT_DIAGNOSTICS_KEY);
+          if (els.mobileDiagnosticsFallbackText) {
+            els.mobileDiagnosticsFallbackText.value = "";
+            els.mobileDiagnosticsFallbackText.classList.add("hidden");
+          }
+          showToast("모바일 진단 로그를 초기화했어요.");
+          return true;
+        } catch (error) {
+          recordMobileDiagnosticError("clear_mobile_diagnostics_failed", error);
+          showToast("진단 로그 초기화에 실패했어요.");
+          return false;
+        }
+      }
+
+      function refreshMobileServiceWorkerDiagnostics() {
+        try {
+          const tasks = [];
+          if (navigator.serviceWorker && navigator.serviceWorker.getRegistrations) {
+            tasks.push(navigator.serviceWorker.getRegistrations().then(function (registrations) {
+              mobileDiagnosticRuntimeInfo.serviceWorkerRegistrations = registrations.map(function (registration) {
+                return {
+                  scope: registration.scope,
+                  active: registration.active ? registration.active.scriptURL : null,
+                  waiting: registration.waiting ? registration.waiting.scriptURL : null,
+                  installing: registration.installing ? registration.installing.scriptURL : null
+                };
+              });
+            }));
+          }
+          if (window.caches && caches.keys) {
+            tasks.push(caches.keys().then(function (keys) {
+              mobileDiagnosticRuntimeInfo.cacheKeys = keys.slice();
+            }));
+          }
+          if (!tasks.length) {
+            mobileDiagnosticRuntimeInfo.checkedAt = nowIso();
+            return;
+          }
+          Promise.all(tasks).then(function () {
+            mobileDiagnosticRuntimeInfo.checkedAt = nowIso();
+            mobileDiagnosticRuntimeInfo.error = null;
+          }).catch(function (error) {
+            mobileDiagnosticRuntimeInfo.checkedAt = nowIso();
+            mobileDiagnosticRuntimeInfo.error = mobileDiagnosticErrorSummary(error);
+          });
+        } catch (error) {
+          mobileDiagnosticRuntimeInfo.checkedAt = nowIso();
+          mobileDiagnosticRuntimeInfo.error = mobileDiagnosticErrorSummary(error);
+        }
+      }
 
       function generateId(prefix) {
         const safePrefix = prefix || "record";
@@ -16313,7 +16567,25 @@
         const familyShareReport = buildFamilyShareReport(snapshot, opts);
         snapshot.familyShareReport = familyShareReport;
         snapshot.phase519CompletionCheck = familyShareReport.phase519CompletionCheck;
-        const reportHubState = buildReportHubState(snapshot, { openedFrom: "analysis_snapshot" });
+        let reportHubState = null;
+        try {
+          reportHubState = buildReportHubState(snapshot, { openedFrom: "analysis_snapshot" });
+        } catch (error) {
+          recordMobileDiagnosticError("build_report_hub_state", error, { openedFrom: "analysis_snapshot", skipAnalysisSummary: true });
+          reportHubState = {
+            ok: false,
+            phase: "5.21",
+            babyId: snapshot.babyId || getCurrentAnalysisBabyId() || null,
+            generatedAt: nowIso(),
+            babyName: (appData.profile && appData.profile.babyName) || "아기",
+            summary: { available: false, primarySummary: "리포트 허브 계산 중 문제가 생겨 기본 안내로 표시합니다.", confidenceLevel: "low", missingReason: "calculation_failed" },
+            sections: {},
+            messageKeys: ["report_hub_calculation_failed"],
+            warnings: ["report_hub_state_fallback"],
+            errors: [mobileDiagnosticErrorSummary(error).message]
+          };
+          reportHubState.phase521CompletionCheck = buildPhase521CompletionCheck(reportHubState);
+        }
         snapshot.reportHubState = reportHubState;
         snapshot.phase521CompletionCheck = reportHubState.phase521CompletionCheck;
         const premiumAccessState = buildPremiumAccessState(snapshot, { source: "analysis_snapshot" });
@@ -17256,6 +17528,7 @@
           renderPatternReport({ feedings: feedings, diapers: diapers, totalFeed: totalFeed, sleepMinutes: sleepMinutes });
         } catch (error) {
           console.error("Failed to render report", error);
+          recordMobileDiagnosticError("render_life_report", error, { fallback: "life_report_basic" });
           els.statsGrid.innerHTML = '<div class="stat report-empty">기록이 쌓이면 아기의 생활 패턴을 요약해드릴게요.</div>';
           if (els.reportSummary) els.reportSummary.textContent = "리포트 계산 중 문제가 생겨 기본 화면으로 표시합니다.";
           if (els.reportGrid) els.reportGrid.innerHTML = "";
@@ -17913,54 +18186,64 @@
 
       function renderReportHub() {
         if (!els.reportHubContent) return;
-        const snapshot = buildAnalysisSnapshot(appData.records || [], { baby_id: getCurrentAnalysisBabyId() });
-        currentReportHubState = snapshot.reportHubState || buildReportHubState(snapshot, { openedFrom: "life_report" });
-        const state = currentReportHubState;
-        const sections = state.sections || {};
-        const expanded = state.ui && state.ui.expandedSections ? state.ui.expandedSections : [];
-        const domainCards = sections.domains && sections.domains.cards ? sections.domains.cards : [];
-        els.reportHubContent.innerHTML =
-          '<div class="report-hub-summary" aria-label="리포트 허브 상단 요약">' +
-          '<div class="report-hub-kicker"><span>' + escapeHtml(state.babyName || "아기") + '</span><span>' + escapeHtml(fullDateTimeText(state.generatedAt)) + '</span><span class="report-hub-badge">' + escapeHtml(reportHubConfidenceLabel(state.summary && state.summary.confidenceLevel)) + '</span></div>' +
-          '<p class="report-hub-primary">' + escapeHtml(state.summary && state.summary.primarySummary || "기록이 조금 더 쌓이면 표시할 수 있어요.") + '</p></div>' +
-          '<div class="report-hub-section-list">' +
-          reportHubSectionHtml(sections.today, "today", expanded.indexOf("today") !== -1) +
-          reportHubSectionHtml(sections.recent7Days, "recent7Days", expanded.indexOf("recent7Days") !== -1) +
-          reportHubSectionHtml(sections.rhythm, "rhythm", expanded.indexOf("rhythm") !== -1) +
-          '<details class="report-hub-section" data-report-hub-section="domains" open><summary>수면 / 수유 / 기저귀 요약</summary><div class="report-hub-section-body"><div class="report-hub-mini-grid">' +
-          domainCards.map(function (card) {
-            return '<div class="report-card"><div class="report-label">' + escapeHtml(card.title) + '</div><div class="report-title">' + escapeHtml((card.lines || [])[0] || "기록이 조금 더 쌓이면 표시할 수 있어요.") + '</div><div class="report-note">' + escapeHtml(reportHubConfidenceLabel(card.confidenceLevel)) + "</div></div>";
-          }).join("") + '</div></div></details>' +
-          reportHubSectionHtml(sections.nextPrediction, "nextPrediction", expanded.indexOf("nextPrediction") !== -1) +
-          reportHubSectionHtml(sections.cry, "cry", expanded.indexOf("cry") !== -1) +
-          reportHubSectionHtml(sections.reliability, "reliability", expanded.indexOf("reliability") !== -1) +
-          '<details class="report-hub-section" data-report-hub-section="tools" open><summary>공유/도구 바로가기</summary><div class="report-hub-section-body"><div class="report-hub-actions">' +
-          '<button type="button" class="small-action" data-report-hub-tool="doctor">병원 상담용 요약 보기</button>' +
-          '<button type="button" class="small-action" data-report-hub-tool="handoff">인수인계 요약 보기</button>' +
-          '<button type="button" class="small-action" data-report-hub-tool="family">가족에게 공유하기</button>' +
-          '<button type="button" class="small-action" data-open-printable-report="report_hub_summary_pdf">PDF/인쇄</button>' +
-          '<button type="button" class="small-action" data-open-share-image="family_today">오늘 이미지</button>' +
-          '<button type="button" class="small-action" data-open-share-image="family_recent7">최근 7일 이미지</button>' +
-          '</div><div class="report-hub-tool-detail" id="reportHubToolDetail">도구를 선택하면 기록 기반 참고 요약을 확인할 수 있어요.</div></div></details>' +
-          '<div class="premium-preview-entry sheet-block"><p class="premium-preview-entry-title">고급 기능 미리보기</p><p class="premium-preview-entry-note">현재는 고급 기능을 미리보기로 사용할 수 있어요. 어떤 기능이 기본 기능이고, 어떤 기능이 향후 프리미엄 후보인지 볼 수 있어요.</p><button type="button" class="ghost-action" data-open-premium-preview="report_hub">기능 보기</button></div>' +
-          '</div>';
+        try {
+          const snapshot = buildAnalysisSnapshot(appData.records || [], { baby_id: getCurrentAnalysisBabyId() });
+          currentReportHubState = snapshot.reportHubState || buildReportHubState(snapshot, { openedFrom: "life_report" });
+          const state = currentReportHubState;
+          const sections = state.sections || {};
+          const expanded = state.ui && state.ui.expandedSections ? state.ui.expandedSections : [];
+          const domainCards = sections.domains && sections.domains.cards ? sections.domains.cards : [];
+          els.reportHubContent.innerHTML =
+            '<div class="report-hub-summary" aria-label="리포트 허브 상단 요약">' +
+            '<div class="report-hub-kicker"><span>' + escapeHtml(state.babyName || "아기") + '</span><span>' + escapeHtml(fullDateTimeText(state.generatedAt)) + '</span><span class="report-hub-badge">' + escapeHtml(reportHubConfidenceLabel(state.summary && state.summary.confidenceLevel)) + '</span></div>' +
+            '<p class="report-hub-primary">' + escapeHtml(state.summary && state.summary.primarySummary || "기록이 조금 더 쌓이면 표시할 수 있어요.") + '</p></div>' +
+            '<div class="report-hub-section-list">' +
+            reportHubSectionHtml(sections.today, "today", expanded.indexOf("today") !== -1) +
+            reportHubSectionHtml(sections.recent7Days, "recent7Days", expanded.indexOf("recent7Days") !== -1) +
+            reportHubSectionHtml(sections.rhythm, "rhythm", expanded.indexOf("rhythm") !== -1) +
+            '<details class="report-hub-section" data-report-hub-section="domains" open><summary>수면 / 수유 / 기저귀 요약</summary><div class="report-hub-section-body"><div class="report-hub-mini-grid">' +
+            domainCards.map(function (card) {
+              return '<div class="report-card"><div class="report-label">' + escapeHtml(card.title) + '</div><div class="report-title">' + escapeHtml((card.lines || [])[0] || "기록이 조금 더 쌓이면 표시할 수 있어요.") + '</div><div class="report-note">' + escapeHtml(reportHubConfidenceLabel(card.confidenceLevel)) + "</div></div>";
+            }).join("") + '</div></div></details>' +
+            reportHubSectionHtml(sections.nextPrediction, "nextPrediction", expanded.indexOf("nextPrediction") !== -1) +
+            reportHubSectionHtml(sections.cry, "cry", expanded.indexOf("cry") !== -1) +
+            reportHubSectionHtml(sections.reliability, "reliability", expanded.indexOf("reliability") !== -1) +
+            '<details class="report-hub-section" data-report-hub-section="tools" open><summary>공유/도구 바로가기</summary><div class="report-hub-section-body"><div class="report-hub-actions">' +
+            '<button type="button" class="small-action" data-report-hub-tool="doctor">병원 상담용 요약 보기</button>' +
+            '<button type="button" class="small-action" data-report-hub-tool="handoff">인수인계 요약 보기</button>' +
+            '<button type="button" class="small-action" data-report-hub-tool="family">가족에게 공유하기</button>' +
+            '<button type="button" class="small-action" data-open-printable-report="report_hub_summary_pdf">PDF/인쇄</button>' +
+            '<button type="button" class="small-action" data-open-share-image="family_today">오늘 이미지</button>' +
+            '<button type="button" class="small-action" data-open-share-image="family_recent7">최근 7일 이미지</button>' +
+            '</div><div class="report-hub-tool-detail" id="reportHubToolDetail">도구를 선택하면 기록 기반 참고 요약을 확인할 수 있어요.</div></div></details>' +
+            '<div class="premium-preview-entry sheet-block"><p class="premium-preview-entry-title">고급 기능 미리보기</p><p class="premium-preview-entry-note">현재는 고급 기능을 미리보기로 사용할 수 있어요. 어떤 기능이 기본 기능이고, 어떤 기능이 향후 프리미엄 후보인지 볼 수 있어요.</p><button type="button" class="ghost-action" data-open-premium-preview="report_hub">기능 보기</button></div>' +
+            '</div>';
+        } catch (error) {
+          recordMobileDiagnosticError("render_report_hub", error, { fallback: "report_hub_basic" });
+          els.reportHubContent.innerHTML = '<div class="report-card report-empty">리포트 허브를 계산하는 중 문제가 생겨 기본 안내로 표시합니다.</div>';
+        }
       }
 
       function renderReportHubToolDetail(tool) {
         const detail = document.getElementById("reportHubToolDetail");
         if (!detail) return;
-        const snapshot = buildAnalysisSnapshot(appData.records || [], { baby_id: getCurrentAnalysisBabyId() });
-        if (tool === "doctor") {
-          const doctor = snapshot.doctorVisitSummary || {};
-          detail.innerHTML = '<div class="report-note">' + escapeHtml(doctor.shareText && doctor.shareText.text ? doctor.shareText.text : (doctor.summary && doctor.summary.primarySummary) || "아직 요약할 기록이 충분하지 않아요.") + '</div><div class="form-row sheet-block"><button type="button" class="small-action" data-open-share-image="doctor_recent7">이미지로 저장</button><button type="button" class="small-action" data-open-printable-report="doctor_recent7_pdf">PDF/인쇄</button></div>';
-          return;
-        }
-        if (tool === "handoff") {
-          openSheet("caregiverHandoff");
-          return;
-        }
-        if (tool === "family") {
-          openSheet("familyShare");
+        try {
+          const snapshot = buildAnalysisSnapshot(appData.records || [], { baby_id: getCurrentAnalysisBabyId() });
+          if (tool === "doctor") {
+            const doctor = snapshot.doctorVisitSummary || {};
+            detail.innerHTML = '<div class="report-note">' + escapeHtml(doctor.shareText && doctor.shareText.text ? doctor.shareText.text : (doctor.summary && doctor.summary.primarySummary) || "아직 요약할 기록이 충분하지 않아요.") + '</div><div class="form-row sheet-block"><button type="button" class="small-action" data-open-share-image="doctor_recent7">이미지로 저장</button><button type="button" class="small-action" data-open-printable-report="doctor_recent7_pdf">PDF/인쇄</button></div>';
+            return;
+          }
+          if (tool === "handoff") {
+            openSheet("caregiverHandoff");
+            return;
+          }
+          if (tool === "family") {
+            openSheet("familyShare");
+          }
+        } catch (error) {
+          recordMobileDiagnosticError("render_report_hub_tool_detail", error, { tool: tool });
+          detail.innerHTML = '<div class="report-note">도구 내용을 계산하는 중 문제가 생겨 기본 안내로 표시합니다.</div>';
         }
       }
 
@@ -17972,26 +18255,31 @@
 
       function renderCaregiverHandoffSummary() {
         if (!els.caregiverHandoffContent) return;
-        const snapshot = buildAnalysisSnapshot(appData.records || [], { baby_id: getCurrentAnalysisBabyId() });
-        const handoff = snapshot.caregiverHandoffSummary || buildCaregiverHandoffSummary(snapshot, {});
-        currentCaregiverHandoffSummary = handoff;
-        const recent = handoff.recentCare || {};
-        const status = handoff.currentStatus || {};
-        const checks = caregiverHandoffArray(handoff.nextToCheck);
-        const cards = [
-          caregiverHandoffCardHtml("지금 상태", "마지막 수유", status.lastFeed ? status.lastFeed.label : "기록 없음"),
-          caregiverHandoffCardHtml("지금 상태", "마지막 기저귀", status.lastDiaper ? status.lastDiaper.label : "기록 없음"),
-          caregiverHandoffCardHtml("지금 상태", "현재 수면", status.sleepState ? status.sleepState.label : "기록 부족"),
-          caregiverHandoffCardHtml("지금 상태", "마지막 트림", status.lastBurp ? status.lastBurp.label : "기록 없음"),
-          caregiverHandoffCardHtml("최근 " + (recent.periodHours || 12) + "시간", "수유 " + (recent.feedingCount || 0) + "회 · 기저귀 " + (recent.diaperCount || 0) + "회", "수유량 총 " + (recent.totalFeedMl || 0) + "ml · 수면 " + caregiverHandoffDuration(recent.totalSleepMinutes || 0) + " · 트림 " + (recent.burpCount || 0) + "회"),
-          caregiverHandoffCardHtml("다음에 확인하면 좋은 것", checks.length ? checks[0].title : "기록 기반 참고", checks.length ? checks.map(function (item) { return item.text; }).join(" ") : "지금은 기록상 따로 강조할 항목이 적어요."),
-          caregiverHandoffCardHtml("최근 울어요 참고", handoff.recentCryContext && handoff.recentCryContext.available ? "참고 기록 있음" : "최근 참고 없음", handoff.recentCryContext && handoff.recentCryContext.summaryText ? handoff.recentCryContext.summaryText : "울어요 확인 기록이 생기면 함께 보여줘요."),
-          caregiverHandoffCardHtml("기록 신뢰도", handoff.reliability ? handoff.reliability.confidenceLevel : "low", handoff.reliability ? handoff.reliability.summaryText : "요약은 참고용이에요.")
-        ];
-        els.caregiverHandoffContent.innerHTML = cards.join("");
-        if (els.caregiverHandoffFallbackText) {
-          els.caregiverHandoffFallbackText.value = handoff.shareText && handoff.shareText.text ? handoff.shareText.text : "";
-          els.caregiverHandoffFallbackText.classList.add("hidden");
+        try {
+          const snapshot = buildAnalysisSnapshot(appData.records || [], { baby_id: getCurrentAnalysisBabyId() });
+          const handoff = snapshot.caregiverHandoffSummary || buildCaregiverHandoffSummary(snapshot, {});
+          currentCaregiverHandoffSummary = handoff;
+          const recent = handoff.recentCare || {};
+          const status = handoff.currentStatus || {};
+          const checks = caregiverHandoffArray(handoff.nextToCheck);
+          const cards = [
+            caregiverHandoffCardHtml("지금 상태", "마지막 수유", status.lastFeed ? status.lastFeed.label : "기록 없음"),
+            caregiverHandoffCardHtml("지금 상태", "마지막 기저귀", status.lastDiaper ? status.lastDiaper.label : "기록 없음"),
+            caregiverHandoffCardHtml("지금 상태", "현재 수면", status.sleepState ? status.sleepState.label : "기록 부족"),
+            caregiverHandoffCardHtml("지금 상태", "마지막 트림", status.lastBurp ? status.lastBurp.label : "기록 없음"),
+            caregiverHandoffCardHtml("최근 " + (recent.periodHours || 12) + "시간", "수유 " + (recent.feedingCount || 0) + "회 · 기저귀 " + (recent.diaperCount || 0) + "회", "수유량 총 " + (recent.totalFeedMl || 0) + "ml · 수면 " + caregiverHandoffDuration(recent.totalSleepMinutes || 0) + " · 트림 " + (recent.burpCount || 0) + "회"),
+            caregiverHandoffCardHtml("다음에 확인하면 좋은 것", checks.length ? checks[0].title : "기록 기반 참고", checks.length ? checks.map(function (item) { return item.text; }).join(" ") : "지금은 기록상 따로 강조할 항목이 적어요."),
+            caregiverHandoffCardHtml("최근 울어요 참고", handoff.recentCryContext && handoff.recentCryContext.available ? "참고 기록 있음" : "최근 참고 없음", handoff.recentCryContext && handoff.recentCryContext.summaryText ? handoff.recentCryContext.summaryText : "울어요 확인 기록이 생기면 함께 보여줘요."),
+            caregiverHandoffCardHtml("기록 신뢰도", handoff.reliability ? handoff.reliability.confidenceLevel : "low", handoff.reliability ? handoff.reliability.summaryText : "요약은 참고용이에요.")
+          ];
+          els.caregiverHandoffContent.innerHTML = cards.join("");
+          if (els.caregiverHandoffFallbackText) {
+            els.caregiverHandoffFallbackText.value = handoff.shareText && handoff.shareText.text ? handoff.shareText.text : "";
+            els.caregiverHandoffFallbackText.classList.add("hidden");
+          }
+        } catch (error) {
+          recordMobileDiagnosticError("render_caregiver_handoff_summary", error);
+          els.caregiverHandoffContent.innerHTML = caregiverHandoffCardHtml("인수인계 요약", "계산 중 문제가 생겼어요", "기록 목록을 확인하며 기본 정보로 전달해 주세요.");
         }
       }
 
@@ -18019,29 +18307,35 @@
 
       function renderFamilyShareReport() {
         if (!els.familyShareContent) return;
-        const options = ensureFamilyShareUiOptions();
-        const snapshot = buildAnalysisSnapshot(appData.records || [], { baby_id: getCurrentAnalysisBabyId() });
-        const report = buildFamilyShareReport(snapshot, options);
-        currentFamilyShareReport = report;
-        syncFamilyShareOptionChips();
-        const highlights = familyShareArray(report.highlights);
-        const cards = [
-          familyShareCardHtml("한 줄 요약", report.babyInfo ? report.babyInfo.displayName : "아기", report.summary ? report.summary.primarySummary : "기록 기반 참고 요약이에요."),
-          familyShareCardHtml("오늘 요약", report.today ? report.today.oneLineSummary : "오늘 기록을 더 모으면 공유 요약을 만들 수 있어요.", report.today ? [report.today.feedingText, report.today.diaperText, report.today.sleepText].filter(Boolean).join(" ") : ""),
-          familyShareCardHtml("최근 7일", report.recent7Days ? report.recent7Days.oneLineSummary : "최근 기록을 더 모으면 7일 흐름을 볼 수 있어요.", report.recent7Days ? report.recent7Days.dataQualityText : ""),
-          familyShareCardHtml("공유 포인트", highlights.length ? highlights.map(function (item) { return item.text; }).join(" ") : "가족이 함께 볼 포인트는 기록이 쌓이면 더 자연스럽게 정리돼요.", report.gentleNotes ? report.gentleNotes[0] : "참고용 요약이에요."),
-          familyShareCardHtml("울어요 참고", report.crySummary && report.crySummary.available ? "참고 기록 있음" : "최근 참고 없음", report.crySummary && report.crySummary.available ? [report.crySummary.text, report.crySummary.similarCaseText].filter(Boolean).join(" ") : "옵션이 켜져 있고 기록이 있으면 함께 보여줘요."),
-          familyShareCardHtml("다음에 참고할 것", report.nextPrediction && report.nextPrediction.available ? "기록 기반 참고" : "예상 없음", report.nextPrediction && report.nextPrediction.available ? report.nextPrediction.text : "다음 이벤트 예상은 기록이 더 쌓이면 참고할 수 있어요.")
-        ];
-        els.familyShareContent.innerHTML = cards.join("");
-        if (els.familySharePrivacyText) els.familySharePrivacyText.textContent = report.privacy ? report.privacy.warningText : "공유 전 포함된 내용을 한 번 확인해 주세요.";
-        if (els.familyShareTextPreview) els.familyShareTextPreview.value = report.shareText && report.shareText.text ? report.shareText.text : "";
-        if (els.familyShareFallbackText) {
-          els.familyShareFallbackText.value = report.shareText && report.shareText.text ? report.shareText.text : "";
-          els.familyShareFallbackText.classList.add("hidden");
-        }
-        if (els.webShareFamilyReportButton) {
-          els.webShareFamilyReportButton.disabled = !(report.shareText && report.shareText.available);
+        try {
+          const options = ensureFamilyShareUiOptions();
+          const snapshot = buildAnalysisSnapshot(appData.records || [], { baby_id: getCurrentAnalysisBabyId() });
+          const report = buildFamilyShareReport(snapshot, options);
+          currentFamilyShareReport = report;
+          syncFamilyShareOptionChips();
+          const highlights = familyShareArray(report.highlights);
+          const cards = [
+            familyShareCardHtml("한 줄 요약", report.babyInfo ? report.babyInfo.displayName : "아기", report.summary ? report.summary.primarySummary : "기록 기반 참고 요약이에요."),
+            familyShareCardHtml("오늘 요약", report.today ? report.today.oneLineSummary : "오늘 기록을 더 모으면 공유 요약을 만들 수 있어요.", report.today ? [report.today.feedingText, report.today.diaperText, report.today.sleepText].filter(Boolean).join(" ") : ""),
+            familyShareCardHtml("최근 7일", report.recent7Days ? report.recent7Days.oneLineSummary : "최근 기록을 더 모으면 7일 흐름을 볼 수 있어요.", report.recent7Days ? report.recent7Days.dataQualityText : ""),
+            familyShareCardHtml("공유 포인트", highlights.length ? highlights.map(function (item) { return item.text; }).join(" ") : "가족이 함께 볼 포인트는 기록이 쌓이면 더 자연스럽게 정리돼요.", report.gentleNotes ? report.gentleNotes[0] : "참고용 요약이에요."),
+            familyShareCardHtml("울어요 참고", report.crySummary && report.crySummary.available ? "참고 기록 있음" : "최근 참고 없음", report.crySummary && report.crySummary.available ? [report.crySummary.text, report.crySummary.similarCaseText].filter(Boolean).join(" ") : "옵션이 켜져 있고 기록이 있으면 함께 보여줘요."),
+            familyShareCardHtml("다음에 참고할 것", report.nextPrediction && report.nextPrediction.available ? "기록 기반 참고" : "예상 없음", report.nextPrediction && report.nextPrediction.available ? report.nextPrediction.text : "다음 이벤트 예상은 기록이 더 쌓이면 참고할 수 있어요.")
+          ];
+          els.familyShareContent.innerHTML = cards.join("");
+          if (els.familySharePrivacyText) els.familySharePrivacyText.textContent = report.privacy ? report.privacy.warningText : "공유 전 포함된 내용을 한 번 확인해 주세요.";
+          if (els.familyShareTextPreview) els.familyShareTextPreview.value = report.shareText && report.shareText.text ? report.shareText.text : "";
+          if (els.familyShareFallbackText) {
+            els.familyShareFallbackText.value = report.shareText && report.shareText.text ? report.shareText.text : "";
+            els.familyShareFallbackText.classList.add("hidden");
+          }
+          if (els.webShareFamilyReportButton) {
+            els.webShareFamilyReportButton.disabled = !(report.shareText && report.shareText.available);
+          }
+        } catch (error) {
+          recordMobileDiagnosticError("render_family_share_report", error);
+          els.familyShareContent.innerHTML = familyShareCardHtml("가족 공유", "계산 중 문제가 생겼어요", "공유 전 기록을 직접 확인해 주세요.");
+          if (els.webShareFamilyReportButton) els.webShareFamilyReportButton.disabled = true;
         }
       }
 
@@ -18072,27 +18366,36 @@
       }
 
       function renderShareImagePreview(templateKey) {
-        const options = ensureShareImageUiOptions(templateKey);
-        const snapshot = buildAnalysisSnapshot(appData.records || [], { baby_id: getCurrentAnalysisBabyId() });
-        currentShareImageState = buildShareImageData(snapshot, options);
-        currentShareImageBlob = null;
-        if (currentShareImageObjectUrl) {
-          URL.revokeObjectURL(currentShareImageObjectUrl);
-          currentShareImageObjectUrl = "";
+        try {
+          const options = ensureShareImageUiOptions(templateKey);
+          const snapshot = buildAnalysisSnapshot(appData.records || [], { baby_id: getCurrentAnalysisBabyId() });
+          currentShareImageState = buildShareImageData(snapshot, options);
+          currentShareImageBlob = null;
+          if (currentShareImageObjectUrl) {
+            URL.revokeObjectURL(currentShareImageObjectUrl);
+            currentShareImageObjectUrl = "";
+          }
+          renderShareImageTemplateChips();
+          renderShareImageOptionChips();
+          renderShareImageCanvas(currentShareImageState);
+          if (els.shareImageTextFallback) els.shareImageTextFallback.value = currentShareImageState.payload.shareText || "";
+          if (els.shareImageAccessNote) {
+            els.shareImageAccessNote.textContent = (currentShareImageState.access && currentShareImageState.access.message ? currentShareImageState.access.message : "현재는 미리보기로 사용할 수 있어요.") + " 가족 연결 코드, 보호자 메모, 울어요 요약은 기본으로 제외돼요.";
+          }
+          console.debug("[Phase 5.24 Share Image Preview]", {
+            templateKey: currentShareImageState.summary && currentShareImageState.summary.templateKey,
+            options: currentShareImageState.options,
+            canvas: { width: 1080, height: 1350 },
+            messageKeys: currentShareImageState.messageKeys
+          });
+        } catch (error) {
+          recordMobileDiagnosticError("render_share_image_preview", error, { templateKey: templateKey || null });
+          if (els.shareImageTextFallback) {
+            els.shareImageTextFallback.value = "공유 이미지 내용을 계산하는 중 문제가 생겼어요. 기록 목록을 확인해 주세요.";
+            els.shareImageTextFallback.classList.remove("hidden");
+          }
+          if (els.shareImageAccessNote) els.shareImageAccessNote.textContent = "공유 이미지 미리보기를 기본 안내로 표시합니다.";
         }
-        renderShareImageTemplateChips();
-        renderShareImageOptionChips();
-        renderShareImageCanvas(currentShareImageState);
-        if (els.shareImageTextFallback) els.shareImageTextFallback.value = currentShareImageState.payload.shareText || "";
-        if (els.shareImageAccessNote) {
-          els.shareImageAccessNote.textContent = (currentShareImageState.access && currentShareImageState.access.message ? currentShareImageState.access.message : "현재는 미리보기로 사용할 수 있어요.") + " 가족 연결 코드, 보호자 메모, 울어요 요약은 기본으로 제외돼요.";
-        }
-        console.debug("[Phase 5.24 Share Image Preview]", {
-          templateKey: currentShareImageState.summary && currentShareImageState.summary.templateKey,
-          options: currentShareImageState.options,
-          canvas: { width: 1080, height: 1350 },
-          messageKeys: currentShareImageState.messageKeys
-        });
       }
 
       function ensurePrintableReportUiOptions(templateKey) {
@@ -18150,22 +18453,31 @@
       }
 
       function renderPrintableReportPreview(templateKey) {
-        const options = ensurePrintableReportUiOptions(templateKey);
-        const snapshot = buildAnalysisSnapshot(appData.records || [], { baby_id: getCurrentAnalysisBabyId() });
-        currentPrintableReportState = buildPrintableReportData(snapshot, options);
-        renderPrintableReportTemplateChips();
-        renderPrintableReportOptionChips();
-        renderPrintableReportPage(currentPrintableReportState);
-        if (els.printableReportTextFallback) els.printableReportTextFallback.value = currentPrintableReportState.payload.shareText || "";
-        if (els.printableReportAccessNote) {
-          els.printableReportAccessNote.textContent = (currentPrintableReportState.access && currentPrintableReportState.access.message ? currentPrintableReportState.access.message : "현재는 미리보기로 사용할 수 있어요.") + " 가족 연결 코드, 보호자 메모, 울어요 요약은 기본으로 제외돼요.";
+        try {
+          const options = ensurePrintableReportUiOptions(templateKey);
+          const snapshot = buildAnalysisSnapshot(appData.records || [], { baby_id: getCurrentAnalysisBabyId() });
+          currentPrintableReportState = buildPrintableReportData(snapshot, options);
+          renderPrintableReportTemplateChips();
+          renderPrintableReportOptionChips();
+          renderPrintableReportPage(currentPrintableReportState);
+          if (els.printableReportTextFallback) els.printableReportTextFallback.value = currentPrintableReportState.payload.shareText || "";
+          if (els.printableReportAccessNote) {
+            els.printableReportAccessNote.textContent = (currentPrintableReportState.access && currentPrintableReportState.access.message ? currentPrintableReportState.access.message : "현재는 미리보기로 사용할 수 있어요.") + " 가족 연결 코드, 보호자 메모, 울어요 요약은 기본으로 제외돼요.";
+          }
+          console.debug("[Phase 5.25 Printable Report Preview]", {
+            templateKey: currentPrintableReportState.summary && currentPrintableReportState.summary.templateKey,
+            options: currentPrintableReportState.options,
+            printResult: currentPrintableReportState.printResult,
+            messageKeys: currentPrintableReportState.messageKeys
+          });
+        } catch (error) {
+          recordMobileDiagnosticError("render_printable_report_preview", error, { templateKey: templateKey || null });
+          if (els.printableReportPreview) els.printableReportPreview.innerHTML = '<section class="print-section"><h3>리포트 미리보기</h3><p class="print-section-note">계산 중 문제가 생겨 기본 안내로 표시합니다.</p></section>';
+          if (els.printableReportTextFallback) {
+            els.printableReportTextFallback.value = "리포트 미리보기를 계산하는 중 문제가 생겼어요. 기록 목록을 확인해 주세요.";
+            els.printableReportTextFallback.classList.remove("hidden");
+          }
         }
-        console.debug("[Phase 5.25 Printable Report Preview]", {
-          templateKey: currentPrintableReportState.summary && currentPrintableReportState.summary.templateKey,
-          options: currentPrintableReportState.options,
-          printResult: currentPrintableReportState.printResult,
-          messageKeys: currentPrintableReportState.messageKeys
-        });
       }
 
       function chartRowsHtml(items, valueKey, formatter, fillClass) {
@@ -18260,6 +18572,7 @@
           els.analysisDashboard.innerHTML = observationReviewCardHtml(review) + feedingAmountCard + feedingCountCard + intervalCard + sleepCard + diaperCard + rhythmCard + diagnosticsCard;
         } catch (error) {
           console.error("Failed to render analysis dashboard", error);
+          recordMobileDiagnosticError("render_recent_7_day_analysis", error, { fallback: "analysis_dashboard_basic" });
           els.analysisDashboard.innerHTML = analysisCardHtml("최근 7일 분석", "", analysisEmptyHtml("분석을 계산하는 중 문제가 생겨 기본 화면으로 표시합니다."));
         }
       }
@@ -18719,6 +19032,7 @@
       }
 
       function renderCryReasonResult() {
+        try {
         const checkedItems = getCryCheckedItems();
         const hasSafetyConcern = checkedItems.length > 0;
         const summary = calculateAnalysisSummary(appData.records);
@@ -18820,6 +19134,15 @@
             '<p class="cry-result-action">' + escapeHtml(actionText || "") + '</p>' +
             '</li>';
         }).join("");
+        } catch (error) {
+          recordMobileDiagnosticError("render_cry_reason_result", error, { selectedAttemptKeys: cryAttemptSelectedKeys.slice() });
+          if (els.crySafetyView) els.crySafetyView.classList.add("hidden");
+          if (els.cryResultView) els.cryResultView.classList.remove("hidden");
+          if (els.cryResultSummary) els.cryResultSummary.textContent = "울어요 확인 순서를 계산하는 중 문제가 생겨 기본 안내로 표시합니다.";
+          if (els.cryResultList) {
+            els.cryResultList.innerHTML = '<li class="cry-result-card"><div class="cry-result-head"><span>기록 기반 참고 정보</span></div><p class="cry-result-note">수유, 기저귀, 트림/가스, 잠/안정 신호를 차례로 가볍게 확인해 보세요.</p></li>';
+          }
+        }
       }
 
       function openEditSheet(id) {
@@ -20988,6 +21311,18 @@
 
       document.querySelectorAll(".record-action").forEach(setupLongPress);
 
+      window.addEventListener("error", function (event) {
+        recordMobileDiagnosticError("global_error", event.error || event.message || "global_error", {
+          filename: event.filename || "",
+          lineno: event.lineno || null,
+          colno: event.colno || null
+        });
+      });
+
+      window.addEventListener("unhandledrejection", function (event) {
+        recordMobileDiagnosticError("global_unhandledrejection", event.reason || "unhandledrejection");
+      });
+
       // ─── 이벤트 ───────────────────────────────────────────────
       document.addEventListener("click", function (event) {
         if (suppressNextClick) {
@@ -21550,6 +21885,15 @@
       els.jsonImportButton.addEventListener("click", function () { els.jsonImportInput.click(); });
       els.jsonImportInput.addEventListener("change", handleBackupFileSelected);
       els.repairDataButton.addEventListener("click", repairAppData);
+      if (els.copyMobileDiagnosticsButton) {
+        els.copyMobileDiagnosticsButton.addEventListener("click", function () {
+          refreshMobileServiceWorkerDiagnostics();
+          copyMobileDiagnostics();
+        });
+      }
+      if (els.clearMobileDiagnosticsButton) {
+        els.clearMobileDiagnosticsButton.addEventListener("click", clearMobileDiagnostics);
+      }
       els.createSampleButton.addEventListener("click", createSampleData);
       els.deleteSampleButton.addEventListener("click", deleteSampleData);
       if (els.runFullConnectionDiagnosticButton) {
@@ -22344,10 +22688,27 @@
         normalizeRecordForAnalysis: normalizeRecordForAnalysis
       };
 
+      window.__mobileReportDiagnostics = {
+        collectCurrentStateSummary: collectCurrentStateSummary,
+        recordMobileDiagnosticError: recordMobileDiagnosticError,
+        copyMobileDiagnostics: copyMobileDiagnostics,
+        clearMobileDiagnostics: clearMobileDiagnostics
+      };
+
       initializeManagementPanel();
       detectInviteFromUrl();
       saveAppData();
       renderApp();
+      refreshMobileServiceWorkerDiagnostics();
+      if (window.location && window.location.search && new URLSearchParams(window.location.search).get("debugReport") === "1") {
+        recordMobileDiagnosticError("manual_debug_report", new Error("manual_debug_report"), { manual: true });
+        if (els.settingsDetails) els.settingsDetails.open = true;
+        if (els.mobileDiagnosticsFallbackText) {
+          els.mobileDiagnosticsFallbackText.value = JSON.stringify(collectMobileDiagnosticsPayload("manual_debug_report"), null, 2);
+          els.mobileDiagnosticsFallbackText.classList.remove("hidden");
+        }
+        showToast("모바일 진단 로그를 준비했어요.");
+      }
       if (getLocalValue("babylog_family_id")) loadFamilyMembers();
       startAutoFamilySync();
       setInterval(renderApp, 60000);
