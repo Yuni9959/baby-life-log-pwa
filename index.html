@@ -968,6 +968,55 @@
     .log-memo { color: var(--text); white-space: pre-wrap; }
     .edit-record { min-height: 44px; padding: 0 12px; border-radius: var(--radius); background: var(--brand); color: #fff; font-weight: 850; }
     .delete-record { min-height: 44px; padding: 0 12px; border-radius: var(--radius); background: var(--danger); color: #fff; font-weight: 850; }
+    .demo-mode-badge {
+      display: inline-flex;
+      align-items: center;
+      width: fit-content;
+      margin-top: 6px;
+      padding: 5px 10px;
+      border-radius: 999px;
+      border: 1px solid rgba(74, 151, 112, 0.24);
+      background: rgba(236, 253, 245, 0.82);
+      color: #166534;
+      font-size: 0.78rem;
+      font-weight: 850;
+    }
+    .demo-mode-note {
+      display: grid;
+      gap: 8px;
+      margin-top: 12px;
+      padding: 12px;
+      border-radius: var(--radius);
+      border: 1px solid rgba(74, 151, 112, 0.22);
+      background: rgba(247, 253, 248, 0.86);
+      color: var(--text);
+      font-size: 0.9rem;
+    }
+    .demo-mode-note.hidden { display: none; }
+    .start-real-records-btn {
+      min-height: 42px;
+      justify-self: start;
+      padding: 0 14px;
+      border-radius: 999px;
+      border: 1px solid rgba(22, 101, 52, 0.25);
+      background: #15803d;
+      color: #fff;
+      font-weight: 900;
+      box-shadow: 0 8px 18px rgba(21, 128, 61, 0.16);
+    }
+    .demo-record-badge {
+      display: inline-flex;
+      align-items: center;
+      width: fit-content;
+      margin-left: 6px;
+      padding: 2px 7px;
+      border-radius: 999px;
+      border: 1px solid rgba(124, 58, 237, 0.18);
+      background: rgba(245, 243, 255, 0.9);
+      color: #5b21b6;
+      font-size: 0.72rem;
+      font-weight: 850;
+    }
     .empty { padding: 14px; color: var(--muted); border: 1px dashed var(--line); border-radius: var(--radius); background: var(--panel); }
 
     .data-tools { display: grid; gap: 10px; }
@@ -2625,7 +2674,8 @@
   <main class="app app-shell">
     <header class="topbar">
       <div>
-        <div class="version-badge" id="versionBadge">v6.0.7-chart-labels</div>
+        <div class="version-badge" id="versionBadge">v6.0.8-demo-data</div>
+        <div class="demo-mode-badge hidden" id="demoModeBadge">체험 모드</div>
         <h1 id="babyTitle">우리 아기</h1>
         <div class="baby-days" id="babyDays">생년월일을 입력해 주세요</div>
         <div class="today-line" id="todayLine"></div>
@@ -2659,6 +2709,10 @@
             <label>&nbsp;</label>
             <button type="button" class="small-action" id="saveProfileButton">프로필 저장</button>
           </div>
+        </div>
+        <div class="demo-mode-note hidden" id="demoModeNote">
+          <span>지금 보이는 기록은 앱 사용을 돕기 위한 체험용 데이터예요.</span>
+          <button type="button" class="start-real-records-btn" id="startRealRecordsButton">우리 아이 기록하기</button>
         </div>
         <div class="error-text" id="profileError"></div>
       </details>
@@ -3675,13 +3729,15 @@
       const PRE_REPAIR_BACKUP_KEY = "baby_life_log_app_backup_before_repair";
       const BACKUP_FORMAT_VERSION = 2;
       const APP_NAME = "baby-life-log";
-      const APP_VERSION = "6.0.7-chart-labels";
+      const APP_VERSION = "6.0.8-demo-data";
       const APP_PHASE_LABEL = "";
-      const SERVICE_WORKER_CACHE_NAME = "baby-life-log-v6.0.7-chart-labels";
+      const SERVICE_WORKER_CACHE_NAME = "baby-life-log-v6.0.8-demo-data";
       const MIN_ANALYSIS_RECORDS = 10;
       const ANALYSIS_SERVER_RECONNECT_MESSAGE = "서버 연결 후 분석을 확인할 수 있어요. 서버 재연결을 눌러 주세요.";
       const ANALYSIS_GATE_DETAIL_MESSAGE = "기록이 조금 더 쌓이면 최근 흐름을 더 안정적으로 보여드릴게요.";
       const ONBOARDING_STORAGE_KEY = "touchbebe_onboarding_v1_dismissed";
+      const DEMO_DATA_DISMISSED_KEY = "touchbebe_demo_data_dismissed_v1";
+      const DEMO_RECORDS_KEY = "touchbebe_demo_records_v1";
       const ONBOARDING_CARDS = [
         {
           id: "quick-record",
@@ -3962,6 +4018,9 @@
       const els = {
         babyTitle: document.getElementById("babyTitle"),
         versionBadge: document.getElementById("versionBadge"),
+        demoModeBadge: document.getElementById("demoModeBadge"),
+        demoModeNote: document.getElementById("demoModeNote"),
+        startRealRecordsButton: document.getElementById("startRealRecordsButton"),
         babyDays: document.getElementById("babyDays"),
         todayLine: document.getElementById("todayLine"),
         managementButton: document.getElementById("managementButton"),
@@ -4239,7 +4298,7 @@
       };
       var DEBUG_LOGS = [];
       var DEBUG_STATE = {
-        version: "v6.0.7-chart-labels",
+        version: "v6.0.8-demo-data",
         swInfo: null,
         localStorageTest: "",
         lastButtonEvent: "",
@@ -4979,6 +5038,9 @@
           amount: amount && amount > 0 ? amount : null,
           memo: String(record.memo !== undefined ? record.memo : (record.note || "")).slice(0, 100),
           isSample: record.isSample === true,
+          is_demo: record.is_demo === true,
+          source: record.source === "demo" ? "demo" : undefined,
+          demo: record.demo === true,
           createdAt: createdAt,
           updatedAt: safeIso(record.updatedAt || record.createdAt || record.timestamp || createdAt),
           deletedAt: record.deletedAt ? safeIso(record.deletedAt) : null,
@@ -5062,6 +5124,7 @@
         try {
           debugLog("localSave:start", { key: STORAGE_KEY, count: appData && Array.isArray(appData.records) ? appData.records.length : -1 });
           appData = normalizeV2Data(appData);
+          appData.records = stripDemoRecords(appData.records);
           localStorage.setItem(STORAGE_KEY, JSON.stringify(appData));
           DEBUG_STATE.lastLocalSave = "ok " + new Date().toLocaleTimeString();
           debugLog("localSave:ok", { key: STORAGE_KEY, count: appData.records.length, readBackCount: (JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}").records || []).length });
@@ -5120,7 +5183,7 @@
         if (!item || typeof item !== "object") return null;
         const record = normalizeRecord(item.record, item.record && item.record.type);
         const localRecordId = item.localRecordId || (record && record.id);
-        if (!localRecordId || !record) return null;
+        if (!localRecordId || !record || isDemoRecord(record)) return null;
         const createdAt = item.createdAt ? safeIso(item.createdAt) : nowIso();
         return {
           pendingId: item.pendingId || generateId("pending"),
@@ -5183,7 +5246,7 @@
 
       function enqueuePendingSync(action, record, options) {
         debugLog("cloudSave:queueStart", { action: action, recordId: record && record.id, enabled: shouldAttemptCloudSave() });
-        if (!record || isDiagnosticTestRecord(record) || !shouldAttemptCloudSave()) {
+        if (!record || isDemoRecord(record) || isDiagnosticTestRecord(record) || !shouldAttemptCloudSave()) {
           DEBUG_STATE.lastCloudSave = "skipped: local_only_or_disabled";
           debugLog("cloudSave:queueSkipped", { action: action, recordId: record && record.id });
           return null;
@@ -5493,18 +5556,232 @@
         return record.type === "test" || record.isSample === true || record.is_sample === true || record.subtype === "connection" || id.indexOf("diagnostic_record_") === 0 || id.indexOf("test_record_") === 0;
       }
 
+      function isDemoDataDismissed() {
+        try {
+          return localStorage.getItem(DEMO_DATA_DISMISSED_KEY) === "true";
+        } catch (error) {
+          return false;
+        }
+      }
+
+      function markDemoDataDismissed() {
+        try {
+          localStorage.setItem(DEMO_DATA_DISMISSED_KEY, "true");
+          localStorage.removeItem(DEMO_RECORDS_KEY);
+        } catch (error) {
+          console.warn("Failed to mark demo data dismissed", error);
+        }
+      }
+
+      function isDemoRecord(record) {
+        if (!record || typeof record !== "object") return false;
+        return record.is_demo === true ||
+          record.demo === true ||
+          record.source === "demo" ||
+          String(record.id || "").indexOf("demo_") === 0;
+      }
+
+      function stripDemoRecords(records) {
+        return (Array.isArray(records) ? records : []).filter(function (record) {
+          return !isDemoRecord(record);
+        });
+      }
+
+      function shouldUseDemoData(realRecords) {
+        const count = stripDemoRecords(realRecords || []).filter(function (record) {
+          return record && !hasDeletedMarker(record) && !isDiagnosticTestRecord(record);
+        }).length;
+        return count === 0 && !isDemoDataDismissed();
+      }
+
+      function demoBaseBabyId() {
+        return getCurrentAnalysisBabyId() || "demo_baby";
+      }
+
+      function minutesAgo(baseDate, minutes) {
+        return new Date(baseDate.getTime() - (Number(minutes) || 0) * 60000);
+      }
+
+      function hoursAgo(baseDate, hours) {
+        return minutesAgo(baseDate, (Number(hours) || 0) * 60);
+      }
+
+      function daysAgoAt(baseDate, daysAgo, hour, minute) {
+        const date = new Date(baseDate);
+        date.setDate(date.getDate() - (Number(daysAgo) || 0));
+        date.setHours(Number(hour) || 0, Number(minute) || 0, 0, 0);
+        return date;
+      }
+
+      function createDemoRecord(type, recordedAt, extra) {
+        const date = recordedAt instanceof Date ? recordedAt : new Date(recordedAt || Date.now());
+        const safeDate = Number.isNaN(date.getTime()) ? new Date() : date;
+        const data = extra || {};
+        const idSuffix = safeDate.toISOString().replace(/[-:.TZ]/g, "").slice(0, 14) + "_" + String(data.seq || "001");
+        const babyId = demoBaseBabyId();
+        return {
+          id: data.id || ("demo_" + type + "_" + idSuffix),
+          type: type,
+          subtype: data.subtype || "",
+          amount: data.amount === undefined ? null : data.amount,
+          memo: data.memo || "체험용 기록",
+          note: data.note || data.memo || "체험용 기록",
+          createdAt: safeDate.toISOString(),
+          recordedAt: safeDate.toISOString(),
+          recorded_at: safeDate.toISOString(),
+          updatedAt: safeDate.toISOString(),
+          is_demo: true,
+          source: "demo",
+          demo: true,
+          babyId: babyId,
+          baby_id: babyId,
+          cloud: { status: "demo_only", syncedAt: null, error: "", familyId: null, babyId: babyId, lastAttemptAt: null, retryCount: 0 }
+        };
+      }
+
+      function generateDemoRecords(baseDate) {
+        const base = baseDate instanceof Date ? baseDate : new Date();
+        const records = [];
+        const feedingPlans = [
+          { amounts: [120, 140], subtypes: ["formula", "formula"] },
+          { amounts: [100, 110, 110], subtypes: ["formula", "breast", "formula"] },
+          { amounts: [90, 110, 100], subtypes: ["formula", "pumped", "formula"] },
+          { amounts: [90, 110, 100, 120], subtypes: ["formula", "breast", "formula", "formula"] },
+          { amounts: [100, 120, 140], subtypes: ["formula", "formula", "pumped"] },
+          { amounts: [100, 120, 120, 140], subtypes: ["formula", "breast", "formula", "formula"] },
+          { amounts: [80, 100], subtypes: ["formula", "formula"] }
+        ];
+        const feedingTimes = [[6, 30], [11, 0], [15, 30], [20, 30]];
+        const diaperPlans = [
+          ["urine", "stool", "urine"],
+          ["urine", "both", "urine", "change"],
+          ["urine", "stool", "urine", "urine"],
+          ["urine", "both", "urine", "stool", "change"],
+          ["urine", "stool", "urine", "change"],
+          ["urine", "both", "urine", "stool", "urine"],
+          ["urine", "both"]
+        ];
+        const diaperTimes = [[7, 10], [10, 20], [13, 40], [17, 10], [21, 0]];
+        const sleepPlans = [
+          { night: [22, 0, 6, 40], nap: [13, 20, 14, 50] },
+          { night: [21, 50, 6, 55], nap: [13, 10, 14, 35] },
+          { night: [21, 40, 7, 0], nap: [13, 30, 14, 50] },
+          { night: [22, 20, 6, 50], nap: [14, 0, 15, 0] },
+          { night: [21, 55, 6, 45], nap: [13, 15, 15, 0] },
+          { night: [21, 45, 7, 5], nap: [13, 30, 15, 10] },
+          { night: [22, 10, 6, 20], nap: [13, 20, 14, 10] }
+        ];
+
+        for (let dayIndex = 0; dayIndex < 7; dayIndex += 1) {
+          const daysAgo = 6 - dayIndex;
+          const feedingPlan = feedingPlans[dayIndex];
+          feedingPlan.amounts.forEach(function (amount, index) {
+            if (daysAgo === 0 && index === feedingPlan.amounts.length - 1) return;
+            const time = feedingTimes[index] || feedingTimes[feedingTimes.length - 1];
+            const at = daysAgoAt(base, daysAgo, time[0], time[1]);
+            if (at > base) return;
+            records.push(createDemoRecord("feeding", at, {
+              subtype: feedingPlan.subtypes[index] || "formula",
+              amount: amount,
+              seq: "feed_" + dayIndex + "_" + index
+            }));
+            if (index % 2 === 0) {
+              records.push(createDemoRecord("burp", new Date(at.getTime() + 18 * 60000), {
+                seq: "burp_" + dayIndex + "_" + index
+              }));
+            }
+          });
+
+          diaperPlans[dayIndex].forEach(function (subtype, index) {
+            if (daysAgo === 0 && index === diaperPlans[dayIndex].length - 1) return;
+            const time = diaperTimes[index] || diaperTimes[diaperTimes.length - 1];
+            const at = daysAgoAt(base, daysAgo, time[0], time[1]);
+            if (at > base) return;
+            records.push(createDemoRecord("diaper", at, {
+              subtype: subtype,
+              seq: "diaper_" + dayIndex + "_" + index
+            }));
+          });
+
+          const sleep = sleepPlans[dayIndex];
+          const prevNightStartDaysAgo = daysAgo + 1;
+          const nightStart = daysAgoAt(base, prevNightStartDaysAgo, sleep.night[0], sleep.night[1]);
+          const nightEnd = daysAgoAt(base, daysAgo, sleep.night[2], sleep.night[3]);
+          if (nightStart <= base && nightEnd <= base && nightEnd > nightStart) {
+            records.push(createDemoRecord("sleep", nightStart, { seq: "sleep_night_start_" + dayIndex }));
+            records.push(createDemoRecord("wake", nightEnd, { seq: "sleep_night_end_" + dayIndex }));
+          }
+          const napStart = daysAgoAt(base, daysAgo, sleep.nap[0], sleep.nap[1]);
+          const napEnd = daysAgoAt(base, daysAgo, sleep.nap[2], sleep.nap[3]);
+          if (napStart <= base && napEnd <= base && napEnd > napStart) {
+            records.push(createDemoRecord("sleep", napStart, { seq: "sleep_nap_start_" + dayIndex }));
+            records.push(createDemoRecord("wake", napEnd, { seq: "sleep_nap_end_" + dayIndex }));
+          }
+        }
+
+        records.push(createDemoRecord("feeding", hoursAgo(base, 1), {
+          id: "demo_feeding_recent_1h",
+          subtype: "formula",
+          amount: 100,
+          memo: "체험용 기록 · 최근 수유"
+        }));
+        records.push(createDemoRecord("burp", minutesAgo(base, 30), {
+          id: "demo_burp_recent_30m",
+          memo: "체험용 기록 · 최근 트림"
+        }));
+        records.push(createDemoRecord("diaper", minutesAgo(base, 10), {
+          id: "demo_diaper_recent_10m",
+          subtype: "both",
+          memo: "체험용 기록 · 최근 기저귀"
+        }));
+
+        return records.filter(function (record) {
+          return record && validRecordDate(record) && validRecordDate(record) <= base;
+        }).sort(sortNewestFirst);
+      }
+
+      function getActiveRecordsForDisplay() {
+        const realRecords = stripDemoRecords(appData && Array.isArray(appData.records) ? appData.records : []);
+        return shouldUseDemoData(realRecords) ? generateDemoRecords(new Date()) : realRecords;
+      }
+
+      function buildDisplayAnalysisSnapshot() {
+        return buildGuardedAnalysisSnapshot(getActiveRecordsForDisplay(), {
+          baby_id: getCurrentAnalysisBabyId() || (isDemoModeActive() ? demoBaseBabyId() : null)
+        });
+      }
+
+      function isDemoModeActive() {
+        return shouldUseDemoData(appData && Array.isArray(appData.records) ? appData.records : []);
+      }
+
+      function exitDemoMode() {
+        markDemoDataDismissed();
+        appData.records = stripDemoRecords(appData.records || []);
+        saveAppData();
+        renderApp();
+        showToast("이제 우리 아이 기록을 시작할 수 있어요.");
+      }
+
+      function handleStartRealRecords() {
+        const message = "우리 아이 기록을 시작할까요?\n\n체험용 기록을 지우고 실제 우리 아이 기록을 시작해요. 실제 기록은 삭제되지 않아요.";
+        if (!window.confirm(message)) return;
+        exitDemoMode();
+      }
+
       function hasDeletedMarker(record) {
         return !!(record && (record.deletedAt || record.deleted_at));
       }
 
       function isActiveRecord(record) { return !!(record && !hasDeletedMarker(record) && !isDiagnosticTestRecord(record)); }
-      function getRecords(type) { return getAnalysisScopedRecords(appData.records).filter(function (r) { return !type || r.type === type; }).sort(sortNewestFirst); }
-      function getAllRecords() { return getAnalysisScopedRecords(appData.records).sort(sortNewestFirst); }
+      function getRecords(type) { return getAnalysisScopedRecords(getActiveRecordsForDisplay()).filter(function (r) { return !type || r.type === type; }).sort(sortNewestFirst); }
+      function getAllRecords() { return getAnalysisScopedRecords(getActiveRecordsForDisplay()).sort(sortNewestFirst); }
       function findRecord(id) { return appData.records.find(function (r) { return r.id === id; }); }
 
       function createRecord(type, subtype, amount, memo) {
         debugLog("addRecord:start", { type: type, subtype: subtype || "", amount: amount, memoLength: memo ? String(memo).length : 0 });
         try {
+          if (isDemoModeActive()) markDemoDataDismissed();
           const beforeCount = appData && Array.isArray(appData.records) ? appData.records.length : -1;
           debugLog("addRecord:beforeCount", { count: beforeCount });
           const record = normalizeRecord({
@@ -5593,6 +5870,7 @@
       function trySaveRecordToCloud(recordId) {
         const record = findRecord(recordId);
         if (!record) return Promise.resolve({ ok: false, status: "error", error: "record_not_found" });
+        if (isDemoRecord(record)) return Promise.resolve({ ok: true, status: "demo_skipped", skipped: true });
 
         if (!window.BabyCloud || typeof window.BabyCloud.saveRecord !== "function") {
           updateRecordCloudState(recordId, { status: shouldAttemptCloudSave() ? "pending" : "local_only", syncedAt: null, error: "" });
@@ -5627,6 +5905,7 @@
       function tryUpdateRecordToCloud(recordId) {
         const record = findRecord(recordId);
         if (!record) return Promise.resolve({ ok: false, status: "error", error: "record_not_found" });
+        if (isDemoRecord(record)) return Promise.resolve({ ok: true, status: "demo_skipped", skipped: true });
 
         if (!window.BabyCloud || typeof window.BabyCloud.updateRecord !== "function") {
           updateRecordCloudState(recordId, { status: shouldAttemptCloudSave() ? "pending" : "local_only", syncedAt: null, error: "" });
@@ -5656,7 +5935,7 @@
       }
 
       function trySoftDeleteRecordsToCloud(records) {
-        const targets = (records || []).filter(Boolean);
+        const targets = (records || []).filter(function (record) { return record && !isDemoRecord(record); });
         if (!targets.length) return Promise.resolve({ ok: true, count: 0, results: [] });
         if (!window.BabyCloud || typeof window.BabyCloud.softDeleteRecords !== "function") {
           targets.forEach(function (record) {
@@ -5699,7 +5978,7 @@
       function retryCloudRecords(options) {
         const opts = options || {};
         const statuses = opts.statuses || ["pending", "error", "deleted_pending", "deleted_error"];
-        const targets = appData.records.filter(function (record) {
+        const targets = stripDemoRecords(appData.records).filter(function (record) {
           return record && !isDiagnosticTestRecord(record) && statuses.includes(getRecordCloudStatus(record).status);
         });
         if (!targets.length) {
@@ -6135,7 +6414,7 @@
           "\n계속할까요?";
         if (!window.confirm(message)) return;
         try {
-          localStorage.setItem(SERVER_OVERWRITE_BACKUP_KEY, JSON.stringify(appData.records || []));
+          localStorage.setItem(SERVER_OVERWRITE_BACKUP_KEY, JSON.stringify(stripDemoRecords(appData.records || [])));
           localStorage.setItem(SERVER_OVERWRITE_BACKUP_AT_KEY, nowIso());
         } catch (error) {
           showToast("로컬 기록 백업에 실패해 덮어쓰기를 중단했어요.");
@@ -6176,6 +6455,12 @@
       function deleteRecord(id) {
         const record = findRecord(id);
         if (!record) return;
+        if (isDemoRecord(record)) {
+          appData.records = stripDemoRecords(appData.records || []);
+          saveAppData();
+          renderApp();
+          return;
+        }
         const deletedAt = nowIso();
         record.deletedAt = deletedAt;
         record.updatedAt = deletedAt;
@@ -6194,6 +6479,7 @@
         const deleted = [];
         appData.records.forEach(function (record) {
           if (!record || !idSet.has(record.id)) return;
+          if (isDemoRecord(record)) return;
           record.deletedAt = deletedAt;
           record.updatedAt = deletedAt;
           markRecordCloudPending(record);
@@ -6213,8 +6499,16 @@
           showToast("삭제할 기록이 없습니다.");
           return;
         }
+        if (isDemoRecord(latest)) {
+          showToast("체험 기록은 삭제할 수 없어요. 우리 아이 기록하기를 눌러 실제 기록을 시작해 주세요.");
+          return;
+        }
         if (window.confirm("직전 " + typeLabels[type] + " 기록을 삭제하시겠습니까?\n기록 시간: " + fullDateTimeText(latest.createdAt))) {
           const record = findRecord(latest.id);
+          if (!record) {
+            showToast("삭제할 기록을 찾을 수 없습니다.");
+            return;
+          }
           const deletedAt = nowIso();
           record.deletedAt = deletedAt;
           record.updatedAt = deletedAt;
@@ -6783,6 +7077,7 @@
       }
 
       function getServerAnalysisBlockMessage() {
+        if (isDemoModeActive()) return "";
         const endpoint = typeof getAnalysisApiEndpoint === "function" ? getAnalysisApiEndpoint() : "";
         const online = typeof navigator === "undefined" ? true : navigator.onLine !== false;
         if (!online) return ANALYSIS_SERVER_RECONNECT_MESSAGE;
@@ -6872,7 +7167,7 @@
 
       function canUseCachedAnalysisOutput() {
         const serverBlockMessage = getServerAnalysisBlockMessage();
-        const gate = getLocalAnalysisGate(appData && appData.records ? appData.records : [], null);
+        const gate = getLocalAnalysisGate(getActiveRecordsForDisplay(), null);
         return !serverBlockMessage && gate.analysisReady;
       }
 
@@ -18489,7 +18784,10 @@
 
       function renderProfile() {
         const name = appData.profile.babyName || "우리 아기";
+        const demoActive = isDemoModeActive();
         if (els.versionBadge) els.versionBadge.textContent = APP_PHASE_LABEL ? ("v" + APP_VERSION + " · " + APP_PHASE_LABEL) : ("v" + APP_VERSION);
+        if (els.demoModeBadge) els.demoModeBadge.classList.toggle("hidden", !demoActive);
+        if (els.demoModeNote) els.demoModeNote.classList.toggle("hidden", !demoActive);
         els.babyTitle.textContent = name;
         document.title = name + " 생활 기록";
         els.babyNameInput.value = appData.profile.babyName || "";
@@ -18739,7 +19037,7 @@
           { label: "수면 요약", title: sleepInsight.title, note: sleepInsight.note },
           { label: "최근 기록 기반 분석", title: "최근 흐름", note: recentInsight }
         ];
-        const predictionSnapshot = buildGuardedAnalysisSnapshot(appData.records, { baby_id: getCurrentAnalysisBabyId() });
+        const predictionSnapshot = buildGuardedAnalysisSnapshot(getActiveRecordsForDisplay(), { baby_id: getCurrentAnalysisBabyId() || demoBaseBabyId() });
         const nextPrediction = predictionSnapshot.nextEventPrediction || {};
         dispatchPredictiveAlerts(predictionSnapshot.predictiveAlertState);
         const nextPredictions = nextPrediction.predictions || {};
@@ -18757,7 +19055,7 @@
             nextPredictions.nextBurpCheck && nextPredictions.nextBurpCheck.status === "already_recorded" ? "트림 확인: 최근 기록 있음" : (nextPredictions.nextBurpCheck && (nextPredictions.nextBurpCheck.available || nextPredictions.nextBurpCheck.status === "reference_only") ? "트림 확인: 확인해볼 만해요" : "트림 확인: 기록이 더 필요해요")
           ].join(" · ")
         });
-        const analysis = calculateAnalysisSummary(appData.records);
+        const analysis = calculateAnalysisSummary(getActiveRecordsForDisplay());
         cards.push({
           label: "최근 7일 비교",
           title: "오늘과 최근 흐름",
@@ -19316,7 +19614,7 @@
 
       function renderPremiumPreview(openedFrom) {
         if (!els.premiumPreviewContent) return;
-        const snapshot = buildGuardedAnalysisSnapshot(appData.records || [], { baby_id: getCurrentAnalysisBabyId() });
+        const snapshot = buildDisplayAnalysisSnapshot();
         const state = snapshot.premiumPreviewState || buildPremiumPreviewState(snapshot, { openedFrom: openedFrom || "premium_preview" });
         state.ui.openedFrom = openedFrom || state.ui.openedFrom;
         const activeGroup = state.ui.activeGroup || "premiumCandidate";
@@ -19406,7 +19704,7 @@
       function renderReportHub() {
         if (!els.reportHubContent) return;
         try {
-          const snapshot = buildGuardedAnalysisSnapshot(appData.records || [], { baby_id: getCurrentAnalysisBabyId() });
+          const snapshot = buildDisplayAnalysisSnapshot();
           currentReportHubState = snapshot.reportHubState || buildReportHubState(snapshot, { openedFrom: "life_report" });
           const state = currentReportHubState;
           const sections = state.sections || {};
@@ -19447,7 +19745,7 @@
         const detail = document.getElementById("reportHubToolDetail");
         if (!detail) return;
         try {
-          const snapshot = buildGuardedAnalysisSnapshot(appData.records || [], { baby_id: getCurrentAnalysisBabyId() });
+          const snapshot = buildDisplayAnalysisSnapshot();
           if (tool === "doctor") {
             const doctor = snapshot.doctorVisitSummary || {};
             detail.innerHTML = '<div class="report-note">' + escapeHtml(doctor.shareText && doctor.shareText.text ? doctor.shareText.text : (doctor.summary && doctor.summary.primarySummary) || "아직 요약할 기록이 충분하지 않아요.") + '</div><div class="form-row sheet-block"><button type="button" class="small-action" data-open-share-image="doctor_recent7">이미지로 저장</button><button type="button" class="small-action" data-open-printable-report="doctor_recent7_pdf">PDF/인쇄</button></div>';
@@ -19475,7 +19773,7 @@
       function renderCaregiverHandoffSummary() {
         if (!els.caregiverHandoffContent) return;
         try {
-          const snapshot = buildGuardedAnalysisSnapshot(appData.records || [], { baby_id: getCurrentAnalysisBabyId() });
+          const snapshot = buildDisplayAnalysisSnapshot();
           const handoff = snapshot.caregiverHandoffSummary || buildCaregiverHandoffSummary(snapshot, {});
           currentCaregiverHandoffSummary = handoff;
           const recent = handoff.recentCare || {};
@@ -19528,7 +19826,7 @@
         if (!els.familyShareContent) return;
         try {
           const options = ensureFamilyShareUiOptions();
-          const snapshot = buildGuardedAnalysisSnapshot(appData.records || [], { baby_id: getCurrentAnalysisBabyId() });
+          const snapshot = buildDisplayAnalysisSnapshot();
           const report = buildFamilyShareReport(snapshot, options);
           currentFamilyShareReport = report;
           syncFamilyShareOptionChips();
@@ -19587,7 +19885,7 @@
       function renderShareImagePreview(templateKey) {
         try {
           const options = ensureShareImageUiOptions(templateKey);
-          const snapshot = buildGuardedAnalysisSnapshot(appData.records || [], { baby_id: getCurrentAnalysisBabyId() });
+          const snapshot = buildDisplayAnalysisSnapshot();
           currentShareImageState = buildShareImageData(snapshot, options);
           currentShareImageBlob = null;
           if (currentShareImageObjectUrl) {
@@ -19674,7 +19972,7 @@
       function renderPrintableReportPreview(templateKey) {
         try {
           const options = ensurePrintableReportUiOptions(templateKey);
-          const snapshot = buildGuardedAnalysisSnapshot(appData.records || [], { baby_id: getCurrentAnalysisBabyId() });
+          const snapshot = buildDisplayAnalysisSnapshot();
           currentPrintableReportState = buildPrintableReportData(snapshot, options);
           renderPrintableReportTemplateChips();
           renderPrintableReportOptionChips();
@@ -19729,7 +20027,8 @@
         try {
           const serverBlockMessage = getServerAnalysisBlockMessage();
           const days = appData.settings.analysisRangeDays || 7;
-          const gate = getLocalAnalysisGate(appData.records, days);
+          const displayRecords = getActiveRecordsForDisplay();
+          const gate = getLocalAnalysisGate(displayRecords, days);
           const analysisTitles = ["기록 검토 요약", "수유량 추이", "수유 횟수", "수면 분석", "기저귀 분석"];
           if (serverBlockMessage) {
             els.analysisDashboard.innerHTML = analysisGateCardsHtml(analysisTitles, serverBlockMessage, "");
@@ -19739,8 +20038,8 @@
             els.analysisDashboard.innerHTML = analysisGateCardsHtml(analysisTitles, gate.gateMessage, ANALYSIS_GATE_DETAIL_MESSAGE);
             return;
           }
-          const summary = calculateAnalysisSummary(appData.records);
-          const review = calculateObservationReview(appData.records, summary);
+          const summary = calculateAnalysisSummary(displayRecords);
+          const review = calculateObservationReview(displayRecords, summary);
           const hasFeedings = summary.feedingCounts.some(function (day) { return day.total > 0; });
           const hasFeedingAmount = summary.feedingTotals.some(function (day) { return day.totalAmount > 0; });
           const hasSleep = summary.sleepTotals.some(function (day) { return day.totalMinutes > 0; });
@@ -20087,7 +20386,7 @@
           els.analysisDetailContent.innerHTML = '<section class="analysis-summary-card"><h3 class="analysis-summary-title">✦ 기록 검토 요약</h3><p class="analysis-summary-body">' + escapeHtml(serverBlockMessage) + '</p></section>';
           return;
         }
-        const appRecords = appData.records || [];
+        const appRecords = getActiveRecordsForDisplay();
         const analysisRangeDays = (appData.settings && appData.settings.analysisRangeDays) || 7;
         const gate = getLocalAnalysisGate(appRecords, analysisRangeDays);
         if (!gate.analysisReady) {
@@ -20218,11 +20517,12 @@
         }
 
         const items = limited.map(function (record) {
+          const demo = isDemoRecord(record);
           return '<li class="log-item">' +
-            '<input class="log-select" type="checkbox" aria-label="기록 선택" value="' + escapeHtml(record.id) + '">' +
+            (demo ? '<span class="demo-record-badge">체험 기록</span>' : '<input class="log-select" type="checkbox" aria-label="기록 선택" value="' + escapeHtml(record.id) + '">') +
             '<span class="log-text">' + logItemHtml(record) + '</span>' +
-            '<button type="button" class="edit-record" data-edit-id="' + escapeHtml(record.id) + '">수정</button>' +
-            '<button type="button" class="delete-record" data-delete-id="' + escapeHtml(record.id) + '">삭제</button>' +
+            (demo ? '' : '<button type="button" class="edit-record" data-edit-id="' + escapeHtml(record.id) + '">수정</button>' +
+            '<button type="button" class="delete-record" data-delete-id="' + escapeHtml(record.id) + '">삭제</button>') +
             '</li>';
         }).join("");
 
@@ -20236,7 +20536,9 @@
         const when = isToday(record.createdAt) ? localTimeText(new Date(record.createdAt)) : fullDateTimeText(record.createdAt);
         const memo = record.memo ? '<span class="log-memo">메모: ' + escapeHtml(record.memo) + '</span>' : "";
         const cloudStatus = getRecordCloudStatus(record);
-        const cloud = '<span class="sync-badge ' + escapeHtml(cloudStatus.tone) + '">' + escapeHtml(recordCloudLabel(record)) + '</span>';
+        const cloud = isDemoRecord(record)
+          ? '<span class="sync-badge local">서버 제외</span>'
+          : '<span class="sync-badge ' + escapeHtml(cloudStatus.tone) + '">' + escapeHtml(recordCloudLabel(record)) + '</span>';
         return '<span class="log-main"><span class="type-pill type-' + escapeHtml(record.type) + '">' + escapeHtml(type) +
           '</span><span>' + escapeHtml(value) + '</span></span><span class="log-meta">' +
           escapeHtml(when + " · " + elapsedText(record.createdAt)) + '</span>' + memo + cloud;
@@ -20667,16 +20969,17 @@
         const checkedItems = getCryCheckedItems();
         const hasSafetyConcern = checkedItems.length > 0;
         const serverBlockMessage = getServerAnalysisBlockMessage();
-        const gate = getLocalAnalysisGate(appData.records, null);
+        const displayRecords = getActiveRecordsForDisplay();
+        const gate = getLocalAnalysisGate(displayRecords, null);
         if (serverBlockMessage || !gate.analysisReady) {
           renderCryAnalysisBlocked(serverBlockMessage || gate.gateMessage, checkedItems, hasSafetyConcern);
           return;
         }
-        const summary = calculateAnalysisSummary(appData.records);
-        const review = calculateObservationReview(appData.records, summary);
+        const summary = calculateAnalysisSummary(displayRecords);
+        const review = calculateObservationReview(displayRecords, summary);
         const base = review && review.engine && review.engine.cryReasonSuggestion
           ? review.engine.cryReasonSuggestion
-          : buildCryReasonSuggestion(buildGuardedAnalysisSnapshot(appData.records || [], { baby_id: getCurrentAnalysisBabyId() }), {});
+          : buildCryReasonSuggestion(buildGuardedAnalysisSnapshot(displayRecords, { baby_id: getCurrentAnalysisBabyId() || (isDemoModeActive() ? demoBaseBabyId() : null) }), {});
         const result = Object.assign({}, base, {
           safetyCheck: Object.assign({}, base.safetyCheck || {}, {
             completed: true,
@@ -20738,12 +21041,13 @@
           const summaryText = result.summary && result.summary.shortSummary
             ? result.summary.shortSummary
             : "기록을 바탕으로 먼저 확인해볼 순서를 정리했어요.";
+          const demoPrefix = isDemoModeActive() ? "체험용 분석 결과예요. " : "";
           if (!reasons.length && !enoughCryReasonData) {
-            els.cryResultSummary.textContent = "최근 기록이 부족해서 정확히 비교하기는 어려워요. 수유, 기저귀, 졸림 신호를 차례로 가볍게 확인해 보세요.";
+            els.cryResultSummary.textContent = demoPrefix + "최근 기록이 부족해서 정확히 비교하기는 어려워요. 수유, 기저귀, 졸림 신호를 차례로 가볍게 확인해 보세요.";
           } else {
-            els.cryResultSummary.textContent = reliabilityMessage
+            els.cryResultSummary.textContent = demoPrefix + (reliabilityMessage
               ? summaryText + " " + reliabilityMessage
-              : summaryText;
+              : summaryText);
           }
         }
         if (!els.cryResultList) return;
@@ -20844,7 +21148,7 @@
 
       function downloadCsv() {
         const header = ["id", "type", "typeLabel", "subtype", "subtypeLabel", "amount", "memo", "createdAt", "updatedAt"];
-        const rows = getAllRecords().slice().reverse().map(function (record) {
+        const rows = stripDemoRecords(getAllRecords()).slice().reverse().map(function (record) {
           return [
             record.id, record.type, typeLabels[record.type] || record.type,
             record.subtype || "", subtypeLabels[record.subtype] || "",
@@ -20857,6 +21161,8 @@
 
       function buildBackupPayload() {
         const data = normalizeV2Data(appData);
+        data.records = stripDemoRecords(data.records);
+        const backupData = Object.assign({}, data, { records: data.records });
         return {
           backupFormatVersion: BACKUP_FORMAT_VERSION,
           appName: APP_NAME,
@@ -20867,7 +21173,7 @@
           profile: data.profile,
           settings: data.settings,
           records: data.records,
-          data: data,
+          data: backupData,
           localStorageSnapshot: buildLocalStorageSnapshot()
         };
       }
@@ -20876,7 +21182,19 @@
         const snapshot = {};
         [STORAGE_KEY, LEGACY_STORAGE_KEY, LEGACY_BACKUP_KEY, PRE_RESTORE_BACKUP_KEY, PRE_REPAIR_BACKUP_KEY].forEach(function (key) {
           const value = localStorage.getItem(key);
-          if (value !== null) snapshot[key] = value;
+          if (value !== null) {
+            if (key === STORAGE_KEY || key === LEGACY_STORAGE_KEY) {
+              try {
+                const parsed = JSON.parse(value);
+                if (parsed && typeof parsed === "object" && Array.isArray(parsed.records)) {
+                  parsed.records = stripDemoRecords(parsed.records);
+                  snapshot[key] = JSON.stringify(parsed);
+                  return;
+                }
+              } catch (error) {}
+            }
+            snapshot[key] = value;
+          }
         });
         return snapshot;
       }
@@ -23165,7 +23483,7 @@
         if (event.target.closest("#printPrintableReportButton")) {
           event.preventDefault();
           event.stopPropagation();
-          const state = (canUseCachedAnalysisOutput() ? currentPrintableReportState : null) || buildPrintableReportData(buildGuardedAnalysisSnapshot(appData.records || [], { baby_id: getCurrentAnalysisBabyId() }), ensurePrintableReportUiOptions());
+          const state = (canUseCachedAnalysisOutput() ? currentPrintableReportState : null) || buildPrintableReportData(buildDisplayAnalysisSnapshot(), ensurePrintableReportUiOptions());
           currentPrintableReportState = state;
           if (!state.printResult || state.printResult.printSupported === false || typeof window.print !== "function") {
             state.messageKeys.push("pdf_print_not_supported", "pdf_text_fallback_used");
@@ -23196,7 +23514,7 @@
         if (event.target.closest("#copyPrintableReportButton")) {
           event.preventDefault();
           event.stopPropagation();
-          const state = (canUseCachedAnalysisOutput() ? currentPrintableReportState : null) || buildPrintableReportData(buildGuardedAnalysisSnapshot(appData.records || [], { baby_id: getCurrentAnalysisBabyId() }), ensurePrintableReportUiOptions());
+          const state = (canUseCachedAnalysisOutput() ? currentPrintableReportState : null) || buildPrintableReportData(buildDisplayAnalysisSnapshot(), ensurePrintableReportUiOptions());
           currentPrintableReportState = state;
           state.messageKeys.push("pdf_text_fallback_used");
           copyTextToClipboard(state.payload.shareText || "", "PDF 리포트 텍스트를 복사했어요.").then(function (ok) {
@@ -23211,7 +23529,7 @@
         if (event.target.closest("#generateShareImageButton")) {
           event.preventDefault();
           event.stopPropagation();
-          const state = (canUseCachedAnalysisOutput() ? currentShareImageState : null) || buildShareImageData(buildGuardedAnalysisSnapshot(appData.records || [], { baby_id: getCurrentAnalysisBabyId() }), ensureShareImageUiOptions());
+          const state = (canUseCachedAnalysisOutput() ? currentShareImageState : null) || buildShareImageData(buildDisplayAnalysisSnapshot(), ensureShareImageUiOptions());
           createShareImageBlob(state).then(function (blob) {
             currentShareImageBlob = blob;
             state.exportResult.generatedAt = nowIso();
@@ -23242,7 +23560,7 @@
         if (event.target.closest("#downloadShareImageButton")) {
           event.preventDefault();
           event.stopPropagation();
-          const state = (canUseCachedAnalysisOutput() ? currentShareImageState : null) || buildShareImageData(buildGuardedAnalysisSnapshot(appData.records || [], { baby_id: getCurrentAnalysisBabyId() }), ensureShareImageUiOptions());
+          const state = (canUseCachedAnalysisOutput() ? currentShareImageState : null) || buildShareImageData(buildDisplayAnalysisSnapshot(), ensureShareImageUiOptions());
           (currentShareImageBlob ? Promise.resolve(currentShareImageBlob) : createShareImageBlob(state)).then(function (blob) {
             currentShareImageBlob = blob;
             if (currentShareImageObjectUrl) URL.revokeObjectURL(currentShareImageObjectUrl);
@@ -23271,7 +23589,7 @@
         if (event.target.closest("#shareImageButton")) {
           event.preventDefault();
           event.stopPropagation();
-          const state = (canUseCachedAnalysisOutput() ? currentShareImageState : null) || buildShareImageData(buildGuardedAnalysisSnapshot(appData.records || [], { baby_id: getCurrentAnalysisBabyId() }), ensureShareImageUiOptions());
+          const state = (canUseCachedAnalysisOutput() ? currentShareImageState : null) || buildShareImageData(buildDisplayAnalysisSnapshot(), ensureShareImageUiOptions());
           (currentShareImageBlob ? Promise.resolve(currentShareImageBlob) : createShareImageBlob(state)).then(function (blob) {
             currentShareImageBlob = blob;
             const fileName = state.exportResult.fileName || "baby-life-log-share-image.png";
@@ -23392,7 +23710,7 @@
         if (event.target.closest("#webShareFamilyReportButton")) {
           event.preventDefault();
           event.stopPropagation();
-          const report = (canUseCachedAnalysisOutput() ? currentFamilyShareReport : null) || buildFamilyShareReport(buildGuardedAnalysisSnapshot(appData.records || [], { baby_id: getCurrentAnalysisBabyId() }), ensureFamilyShareUiOptions());
+          const report = (canUseCachedAnalysisOutput() ? currentFamilyShareReport : null) || buildFamilyShareReport(buildDisplayAnalysisSnapshot(), ensureFamilyShareUiOptions());
           const text = report && report.shareText ? report.shareText.text : "";
           if (navigator.share && text) {
             navigator.share({
@@ -23428,7 +23746,7 @@
         if (event.target.closest("#copyFamilyShareButton")) {
           event.preventDefault();
           event.stopPropagation();
-          const report = (canUseCachedAnalysisOutput() ? currentFamilyShareReport : null) || buildFamilyShareReport(buildGuardedAnalysisSnapshot(appData.records || [], { baby_id: getCurrentAnalysisBabyId() }), ensureFamilyShareUiOptions());
+          const report = (canUseCachedAnalysisOutput() ? currentFamilyShareReport : null) || buildFamilyShareReport(buildDisplayAnalysisSnapshot(), ensureFamilyShareUiOptions());
           const text = report && report.shareText ? report.shareText.text : "";
           copyTextToClipboard(text, "가족 공유 리포트를 복사했어요.").then(function (ok) {
             if (!ok && els.familyShareFallbackText) {
@@ -23445,7 +23763,7 @@
         if (event.target.closest("#copyCaregiverHandoffButton")) {
           event.preventDefault();
           event.stopPropagation();
-          const handoff = (canUseCachedAnalysisOutput() ? currentCaregiverHandoffSummary : null) || buildCaregiverHandoffSummary(buildGuardedAnalysisSnapshot(appData.records || [], { baby_id: getCurrentAnalysisBabyId() }), {});
+          const handoff = (canUseCachedAnalysisOutput() ? currentCaregiverHandoffSummary : null) || buildCaregiverHandoffSummary(buildDisplayAnalysisSnapshot(), {});
           const text = handoff && handoff.shareText ? handoff.shareText.text : "";
           copyTextToClipboard(text, "인수인계 요약을 복사했어요.").then(function (ok) {
             if (!ok && els.caregiverHandoffFallbackText) {
@@ -23604,6 +23922,7 @@
 
       // 기타 버튼 이벤트
       els.saveProfileButton.addEventListener("click", saveProfile);
+      if (els.startRealRecordsButton) els.startRealRecordsButton.addEventListener("click", handleStartRealRecords);
       els.saveSettingsButton.addEventListener("click", saveSettings);
       if (els.predictiveAlertEnabledInput) {
         els.predictiveAlertEnabledInput.addEventListener("change", function () {
@@ -24273,7 +24592,7 @@
           }
           cloudMergePreview = typeof window.BabyCloud.buildSafeMergePreview === "function"
             ? window.BabyCloud.buildSafeMergePreview(appData, cloudFetchedRows)
-            : window.BabyCloud.buildMergePreview(appData.records, cloudFetchedRows);
+            : window.BabyCloud.buildMergePreview(stripDemoRecords(appData.records), cloudFetchedRows);
           renderCloudMergeStatus();
           if (els.cloudActionMessage) {
             els.cloudActionMessage.textContent = "병합 미리보기를 만들었어요. 서버에만 있는 기록 " + cloudMergePreview.serverOnlyCount + "개를 추가할 수 있어요.";
@@ -24312,7 +24631,7 @@
           if (saveAppData()) {
             cloudMergePreview = typeof window.BabyCloud.buildSafeMergePreview === "function"
               ? window.BabyCloud.buildSafeMergePreview(appData, cloudFetchedRows)
-              : window.BabyCloud.buildMergePreview(appData.records, cloudFetchedRows);
+              : window.BabyCloud.buildMergePreview(stripDemoRecords(appData.records), cloudFetchedRows);
             renderApp();
             if (els.cloudActionMessage) {
               els.cloudActionMessage.textContent = "병합 전 현재 기기의 데이터를 안전 백업했어요. 서버 기록 " + (result.addedCount || result.added || 0) + "개를 이 기기에 추가했고, 삭제 기록 " + (result.deletedApplied || 0) + "개를 반영했어요.";
