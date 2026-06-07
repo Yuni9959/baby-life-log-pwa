@@ -1351,11 +1351,55 @@
     }
     .family-member-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
     .family-member-name { min-width: 0; font-weight: 800; overflow-wrap: anywhere; }
-    .family-member-role { color: var(--muted); font-size: 0.8rem; font-weight: 850; }
+    .family-member-role { color: #5f8058; font-size: 0.8rem; font-weight: 850; }
     .family-member-badge { flex: 0 0 auto; padding: 3px 7px; border-radius: 999px; color: #fff; background: var(--brand); font-size: 0.72rem; font-weight: 800; }
-    .family-member-meta { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; color: var(--text); font-size: 0.78rem; }
+    .family-member-meta { display: grid; grid-template-columns: 1fr; gap: 6px; color: var(--text); font-size: 0.78rem; }
     .family-member-meta span { min-width: 0; overflow-wrap: anywhere; }
     .family-invite-button { width: 100%; }
+    .family-code-panel {
+      display: grid;
+      gap: 8px;
+      padding: 12px;
+      border: 1px dashed rgba(111, 147, 102, 0.38);
+      border-radius: 16px;
+      background: rgba(255, 253, 248, 0.96);
+    }
+    .family-code-label {
+      color: var(--muted);
+      font-size: 0.76rem;
+      font-weight: 900;
+    }
+    .family-code-value {
+      padding: 10px 12px;
+      border-radius: 12px;
+      background: rgba(232, 242, 223, 0.58);
+      color: #354b31;
+      font-size: 0.94rem;
+      font-weight: 950;
+      letter-spacing: 0.02em;
+      overflow-wrap: anywhere;
+      user-select: text;
+    }
+    .family-copy-button,
+    .family-reconnect-button {
+      min-height: 44px;
+      border-radius: 14px;
+      font-size: 0.9rem;
+      font-weight: 900;
+    }
+    .family-copy-button {
+      background: var(--accent);
+      color: #fff;
+    }
+    .family-copy-button:disabled {
+      background: rgba(80, 74, 66, 0.1);
+      color: var(--muted);
+    }
+    .family-reconnect-button {
+      border: 1px solid rgba(221, 202, 176, 0.9);
+      background: var(--surface-soft);
+      color: var(--text);
+    }
     .family-activity-card {
       padding: 10px 12px;
       border: 1px solid rgba(111, 147, 102, 0.2);
@@ -1365,6 +1409,21 @@
       font-size: 0.84rem;
       font-weight: 850;
       line-height: 1.4;
+    }
+    .family-empty-card,
+    .family-server-warning {
+      padding: 12px;
+      border-radius: 16px;
+      color: var(--muted);
+      font-size: 0.84rem;
+      font-weight: 850;
+      line-height: 1.45;
+      background: rgba(255, 253, 248, 0.92);
+      border: 1px solid rgba(221, 202, 176, 0.9);
+    }
+    .family-server-warning {
+      color: #825c31;
+      background: rgba(255, 244, 225, 0.82);
     }
     @media (max-width: 430px) {
       .daily-timeline-row { grid-template-columns: 42px 26px minmax(0, 1fr); gap: 6px; }
@@ -2989,7 +3048,7 @@
   <main class="app app-shell">
     <header class="topbar">
       <div>
-        <div class="version-badge" id="versionBadge">v6.1.2-swipe-delete</div>
+        <div class="version-badge" id="versionBadge">v6.1.3-family-share</div>
         <div class="demo-mode-badge hidden" id="demoModeBadge">체험 모드</div>
         <h1 id="babyTitle">우리 아기</h1>
         <div class="baby-days" id="babyDays">생년월일을 입력해 주세요</div>
@@ -3850,7 +3909,7 @@
   <script>
     document.addEventListener("DOMContentLoaded", function () {
       if ("serviceWorker" in navigator) {
-        navigator.serviceWorker.register("./sw.js?v=6.1.2-swipe-delete").catch(function (error) {
+        navigator.serviceWorker.register("./sw.js?v=6.1.3-family-share").catch(function (error) {
           console.warn("Service worker registration failed", error);
         });
       }
@@ -4045,9 +4104,9 @@
       const PRE_REPAIR_BACKUP_KEY = "baby_life_log_app_backup_before_repair";
       const BACKUP_FORMAT_VERSION = 2;
       const APP_NAME = "baby-life-log";
-      const APP_VERSION = "6.1.2-swipe-delete";
+      const APP_VERSION = "6.1.3-family-share";
       const APP_PHASE_LABEL = "";
-      const SERVICE_WORKER_CACHE_NAME = "baby-life-log-v6.1.2-swipe-delete";
+      const SERVICE_WORKER_CACHE_NAME = "baby-life-log-v6.1.3-family-share";
       const MIN_ANALYSIS_RECORDS = 10;
       const ANALYSIS_SERVER_RECONNECT_MESSAGE = "서버 연결 후 분석을 확인할 수 있어요. 서버 재연결을 눌러 주세요.";
       const ANALYSIS_GATE_DETAIL_MESSAGE = "기록이 조금 더 쌓이면 최근 흐름을 더 안정적으로 보여드릴게요.";
@@ -4614,7 +4673,7 @@
       };
       var DEBUG_LOGS = [];
       var DEBUG_STATE = {
-        version: "v6.1.2-swipe-delete",
+        version: "v6.1.3-family-share",
         swInfo: null,
         localStorageTest: "",
         lastButtonEvent: "",
@@ -4642,7 +4701,15 @@
         last_swipe_action: "",
         last_delete_source: "",
         last_delete_result: "",
-        last_delete_error: ""
+        last_delete_error: "",
+        family_share_loaded: "",
+        family_member_count: "",
+        family_invite_code_present: "",
+        family_recent_activity_present: "",
+        family_share_mode: "",
+        family_share_error: "",
+        family_id_present: "",
+        baby_id_present: ""
       };
       var debugPanelEl = null;
       var debugPanelCollapsed = false;
@@ -4844,6 +4911,14 @@
           ["delete.source", DEBUG_STATE.last_delete_source],
           ["delete.result", DEBUG_STATE.last_delete_result],
           ["delete.error", DEBUG_STATE.last_delete_error],
+          ["familyShare.loaded", DEBUG_STATE.family_share_loaded],
+          ["familyShare.memberCount", DEBUG_STATE.family_member_count],
+          ["familyShare.inviteCode", DEBUG_STATE.family_invite_code_present],
+          ["familyShare.recentActivity", DEBUG_STATE.family_recent_activity_present],
+          ["familyShare.mode", DEBUG_STATE.family_share_mode],
+          ["familyShare.error", DEBUG_STATE.family_share_error],
+          ["familyShare.familyId", DEBUG_STATE.family_id_present],
+          ["familyShare.babyId", DEBUG_STATE.baby_id_present],
           ["last.error", DEBUG_STATE.lastError]
         ];
         const logs = DEBUG_LOGS.slice(-12).reverse().map(function (entry) {
@@ -24033,6 +24108,15 @@
         return copyTextToClipboard(link, "가족 초대 링크가 복사되었습니다.");
       }
 
+      async function copyFamilyInviteCode() {
+        const code = getCurrentFamilyCodeForInvite();
+        if (!code) {
+          showToast("서버 연결 후 초대 코드를 확인할 수 있어요.");
+          return false;
+        }
+        return copyTextToClipboard(code, "가족 초대 코드를 복사했어요.", "복사에 실패했어요. 코드를 길게 눌러 복사해 주세요.");
+      }
+
       async function shareFamilyInviteLink() {
         const link = buildFamilyInviteLink(getCurrentFamilyCodeForInvite());
         if (!link) {
@@ -24139,75 +24223,197 @@
         });
       }
 
-      function displayMemberName(member) {
-        if (member.is_current_user) return "나";
-        return member.display_name || member.email || member.account_code || ("보호자 " + shortUserId(member.user_id || ""));
+      function compactEmailName(email) {
+        const prefix = String(email || "").split("@")[0].trim();
+        if (!prefix) return "";
+        return prefix.length > 12 ? prefix.slice(0, 12) + "..." : prefix;
+      }
+
+      function safeFamilyDisplayName(value) {
+        const text = String(value || "").trim();
+        if (!text) return "";
+        if (text.indexOf("@") >= 0) return compactEmailName(text);
+        return text.length > 16 ? text.slice(0, 16) + "..." : text;
+      }
+
+      function displayMemberName(member, index) {
+        if (!member) return "가족 구성원";
+        if (member.is_current_user) return safeFamilyDisplayName(member.display_name || member.name || member.nickname) || "나";
+        const name = safeFamilyDisplayName(member.display_name || member.name || member.nickname) || compactEmailName(member.email);
+        if (name) return name;
+        const role = String(member.role || "").toLowerCase();
+        if (role === "owner" || role === "admin") return "엄마";
+        if (index === 1) return "아빠";
+        return "가족 구성원";
+      }
+
+      function normalizeFamilyMembers(rawMembers) {
+        if (!Array.isArray(rawMembers)) return [];
+        return rawMembers.filter(Boolean).map(function (member, index) {
+          return Object.assign({}, member, {
+            display_name: displayMemberName(member, index),
+            role_label: familyMemberRoleLabel(member),
+            status_label: getFamilyMemberStatusLabel(member.status)
+          });
+        });
       }
 
       function getFamilyMembersForDisplay(state) {
-        if (state && Array.isArray(state.members) && state.members.length) return state.members;
+        if (state && Array.isArray(state.members) && state.members.length) return normalizeFamilyMembers(state.members);
         if (isDemoModeActive()) {
           return [
-            { display_name: "엄마", role: "관리자", status: "active", is_demo_member: true },
-            { display_name: "아빠", role: "함께 기록", status: "active", is_demo_member: true },
-            { display_name: "할머니", role: "함께 기록", status: "active", is_demo_member: true }
+            { display_name: "엄마", role: "owner", role_label: "관리자", status: "active", status_label: "참여 중", is_demo_member: true },
+            { display_name: "아빠", role: "member", role_label: "함께 기록", status: "active", status_label: "참여 중", is_demo_member: true },
+            { display_name: "할머니", role: "member", role_label: "함께 기록", status: "active", status_label: "참여 중", is_demo_member: true }
           ];
         }
         return [];
       }
 
+      function findFamilyMemberByRecord(record, members) {
+        const ids = [
+          record && record.user_id,
+          record && record.created_by,
+          record && record.author_id,
+          record && record.synced_by,
+          record && record.cloud && record.cloud.userId
+        ].filter(Boolean).map(String);
+        if (!ids.length || !Array.isArray(members)) return null;
+        return members.find(function (member) {
+          return ids.includes(String(member.user_id || member.id || member.profile_id || ""));
+        }) || null;
+      }
+
+      function getRecordActorName(record, members) {
+        const explicitName = record && (record.created_by_name || record.caregiver_name || record.caregiverName || record.author_name);
+        if (explicitName) return String(explicitName).slice(0, 16);
+        const member = findFamilyMemberByRecord(record, members);
+        return member ? displayMemberName(member) : "가족";
+      }
+
+      function familySubject(name) {
+        if (!name || name === "가족") return "가족이";
+        if (name === "나") return "내가";
+        const last = name.charCodeAt(name.length - 1);
+        if (last < 0xac00 || last > 0xd7a3) return name + "가";
+        return ((last - 0xac00) % 28 === 0) ? name + "가" : name + "이";
+      }
+
+      function getRecordShortLabel(record) {
+        if (!record) return "기록";
+        const base = getRecordDisplayTitle(record);
+        return base || typeLabels[record.type] || "기록";
+      }
+
       function getFamilyActivityForDisplay(members) {
+        if (isDemoModeActive() && members && members.length && members.every(function (member) { return member.is_demo_member; })) {
+          return "아빠가 방금 수유 100ml를 기록했어요.";
+        }
         const latest = getActiveRecordsForDisplay().find(function (record) { return record && !isDemoRecord(record); });
         if (latest) {
-          return "가족이 최근 " + getRecordDisplayTitle(latest) + " 기록을 남겼어요.";
+          const actor = getRecordActorName(latest, members);
+          const timeText = elapsedText(latest.recorded_at || latest.createdAt || latest.created_at || latest.time || latest.updatedAt) || "최근";
+          return familySubject(actor) + " " + timeText + " " + getRecordShortLabel(latest) + " 기록을 남겼어요.";
         }
-        if (isDemoModeActive() && members && members.length) return "아빠가 방금 수유 100ml를 기록했어요.";
-        return "가족을 초대하면 같은 아기의 기록을 함께 볼 수 있어요.";
+        return "가족이 기록을 남기면 이곳에 최근 활동이 보여요.";
       }
 
       function familyMemberRoleLabel(member) {
-        if (!member) return "함께 기록";
-        if (member.role === "owner" || member.role === "admin") return "관리자";
-        if (member.role === "caregiver") return "함께 기록";
-        return member.role || "함께 기록";
+        const role = String(member && (member.role_label || member.role) || "").toLowerCase();
+        if (role === "관리자" || role === "owner" || role === "admin") return "관리자";
+        if (role === "보기 전용" || role === "viewer" || role === "readonly") return "보기 전용";
+        if (role === "parent" || role === "member" || role === "caregiver" || role === "함께 기록") return "함께 기록";
+        return "함께 기록";
+      }
+
+      function getFamilyMemberStatusLabel(status) {
+        const value = String(status || "").toLowerCase();
+        if (!value || value === "active" || value === "joined") return "참여 중";
+        if (value === "pending" || value === "invited") return "초대 중";
+        if (value === "inactive") return "대기 중";
+        return status;
       }
 
       function familyMemberAvatar(member, index) {
-        const name = displayMemberName(member);
-        return name ? name.slice(0, 1) : String(index + 1);
+        const name = displayMemberName(member, index);
+        const role = String(member && member.role || "").toLowerCase();
+        if (role === "owner" || role === "admin" || name.indexOf("엄마") >= 0) return "🐰";
+        if (name.indexOf("아빠") >= 0) return "🐻";
+        if (name.indexOf("할머니") >= 0 || name.indexOf("가족") >= 0) return "🐶";
+        return "⭐";
+      }
+
+      function getFamilyShareMode(state, members) {
+        if (isDemoModeActive() && members && members.some(function (member) { return member.is_demo_member; })) return "demo";
+        if (state && state.status === "error") return "server_error";
+        if (members && members.length) return "server";
+        return "empty";
+      }
+
+      function updateFamilyShareDebugState(state, members, activityText) {
+        const context = window.BabyCloud && typeof window.BabyCloud.getCloudContext === "function" ? window.BabyCloud.getCloudContext() : {};
+        DEBUG_STATE.family_share_loaded = state && state.status === "loaded" ? "true" : "false";
+        DEBUG_STATE.family_member_count = String(members ? members.length : 0);
+        DEBUG_STATE.family_invite_code_present = getCurrentFamilyCodeForInvite() ? "true" : "false";
+        DEBUG_STATE.family_recent_activity_present = activityText && activityText.indexOf("최근 활동") < 0 ? "true" : "false";
+        DEBUG_STATE.family_share_mode = getFamilyShareMode(state, members);
+        DEBUG_STATE.family_share_error = state && state.error ? String(state.error).slice(0, 80) : "";
+        DEBUG_STATE.family_id_present = (context.currentFamilyId || getLocalValue("babylog_family_id")) ? "true" : "false";
+        DEBUG_STATE.baby_id_present = context.currentBabyId ? "true" : "false";
+      }
+
+      function renderFamilyInviteCodePanel() {
+        const code = getCurrentFamilyCodeForInvite();
+        if (!code) {
+          return '<div class="family-code-panel"><div class="family-code-label">가족 초대 코드</div><div class="family-empty-card">서버 연결 후 초대 코드를 확인할 수 있어요.</div></div>';
+        }
+        return '<div class="family-code-panel"><div class="family-code-label">가족 초대 코드</div>' +
+          '<div class="family-code-value">' + escapeHtml(code) + '</div>' +
+          '<button type="button" class="family-copy-button" data-family-copy-code aria-label="가족 초대 코드 복사">복사하기</button></div>';
       }
 
       function renderFamilyShareCard(state) {
         const members = getFamilyMembersForDisplay(state);
-        if (!members.length) {
-          return '<div class="family-share-card tb-soft-card"><div class="family-share-header"><div><h4 class="family-share-title">우리 가족</h4><p class="family-share-subtitle">함께 기록할 보호자를 초대할 수 있어요.</p></div></div>' +
-            '<div class="empty">가족을 초대하면 같은 아기의 기록을 함께 볼 수 있어요.</div>' +
-            '<button type="button" class="family-invite-button tb-green-button" data-family-invite-action="copy">+ 가족 초대하기</button></div>';
+        const mode = getFamilyShareMode(state, members);
+        const activityText = getFamilyActivityForDisplay(members);
+        updateFamilyShareDebugState(state, members, activityText);
+        if (mode === "server_error") {
+          return '<div class="family-share-card tb-soft-card"><div class="family-share-header"><div><h4 class="family-share-title">가족과 함께 기록해요</h4><p class="family-share-subtitle">가족 정보는 서버 연결 후 확인할 수 있어요.</p></div></div>' +
+            '<div class="family-server-warning">서버 연결 후 가족 정보를 확인할 수 있어요. 서버 재연결을 눌러 주세요.</div>' +
+            '<button type="button" class="family-reconnect-button" data-family-reconnect-action>서버 재연결</button></div>';
         }
-        return '<div class="family-share-card tb-soft-card"><div class="family-share-header"><div><h4 class="family-share-title">우리 가족 · ' + members.length + '명이 함께 기록 중</h4><p class="family-share-subtitle">같은 아기의 하루 기록을 함께 볼 수 있어요.</p></div>' + (isDemoModeActive() ? '<span class="tb-soft-pill">체험 모드</span>' : '') + '</div>' +
+        if (!members.length) {
+          return '<div class="family-share-card tb-soft-card"><div class="family-share-header"><div><h4 class="family-share-title">가족과 함께 기록해요</h4><p class="family-share-subtitle">가족을 초대하면 같은 아기의 기록을 함께 볼 수 있어요.</p></div></div>' +
+            '<div class="family-empty-card">가족을 초대하면 같은 아기의 기록을 함께 볼 수 있어요.</div>' +
+            '<button type="button" class="family-invite-button tb-green-button" data-family-invite-action="show-code" aria-label="가족 초대하기">+ 가족 초대하기</button>' +
+            renderFamilyInviteCodePanel() +
+            '<div class="family-activity-card">' + escapeHtml(activityText) + '</div></div>';
+        }
+        return '<div class="family-share-card tb-soft-card"><div class="family-share-header"><div><h4 class="family-share-title">우리 가족 · ' + members.length + '명이 함께 기록 중</h4><p class="family-share-subtitle">같은 아기의 하루 기록을 함께 볼 수 있어요.</p></div>' + (mode === "demo" ? '<span class="tb-soft-pill">체험용 가족 공유 예시예요.</span>' : '') + '</div>' +
           '<div class="family-member-grid">' + members.map(function (member, index) {
             return '<article class="family-member-card">' +
               '<span class="family-member-avatar" aria-hidden="true">' + escapeHtml(familyMemberAvatar(member, index)) + '</span>' +
-              '<div class="family-member-head"><div><div class="family-member-name">' + escapeHtml(displayMemberName(member)) + '</div><div class="family-member-role">' + escapeHtml(familyMemberRoleLabel(member)) + '</div></div>' +
+              '<div class="family-member-head"><div><div class="family-member-name">' + escapeHtml(displayMemberName(member, index)) + '</div><div class="family-member-role">' + escapeHtml(familyMemberRoleLabel(member)) + '</div></div>' +
               (member.is_current_user ? '<span class="family-member-badge">현재 사용자</span>' : '') + '</div>' +
-              '<div class="family-member-meta"><span><strong>상태</strong> ' + escapeHtml(member.status || "active") + '</span><span><strong>로그인</strong> ' + escapeHtml(member.provider || "-") + '</span></div>' +
+              '<div class="family-member-meta"><span><strong>상태</strong> ' + escapeHtml(member.status_label || getFamilyMemberStatusLabel(member.status)) + '</span></div>' +
               '</article>';
           }).join("") + '</div>' +
-          '<button type="button" class="family-invite-button tb-green-button" data-family-invite-action="copy">+ 가족 초대하기</button>' +
-          '<div class="family-activity-card">' + escapeHtml(getFamilyActivityForDisplay(members)) + '</div></div>';
+          '<button type="button" class="family-invite-button tb-green-button" data-family-invite-action="show-code" aria-label="가족 초대하기">+ 가족 초대하기</button>' +
+          renderFamilyInviteCodePanel() +
+          '<div class="family-activity-card">' + escapeHtml(activityText) + '</div></div>';
       }
 
       function renderFamilyMembers() {
         if (!els.familyMembersList) return;
         const state = familyMembersState;
         if (state.status === "loading") {
-          els.familyMembersList.innerHTML = "";
+          els.familyMembersList.innerHTML = '<div class="family-share-card tb-soft-card"><div class="family-empty-card">가족 구성원 정보를 불러오는 중입니다.</div></div>';
           if (els.familyMembersMessage) els.familyMembersMessage.textContent = "가족 구성원 정보를 불러오는 중입니다.";
           return;
         }
         if (state.status === "error") {
-          els.familyMembersList.innerHTML = "";
-          if (els.familyMembersMessage) els.familyMembersMessage.textContent = "가족 구성원 정보를 불러오지 못했습니다. " + (state.error || "");
+          els.familyMembersList.innerHTML = renderFamilyShareCard(state);
+          if (els.familyMembersMessage) els.familyMembersMessage.textContent = "서버 연결 후 가족 정보를 확인할 수 있어요. 서버 재연결을 눌러 주세요.";
           return;
         }
         if (!state.members.length) {
@@ -24631,7 +24837,7 @@
         savePredictiveAlertHistory(history);
       }
 
-      async function copyTextToClipboard(text, successMessage) {
+      async function copyTextToClipboard(text, successMessage, failureMessage) {
         if (!text || text === "-" || text === "가족 연결 코드 없음") {
           showToast("복사할 값이 없습니다.");
           return false;
@@ -24644,9 +24850,23 @@
         } catch (error) {
           console.warn("Clipboard copy failed:", error);
           try {
-            window.prompt("직접 선택해서 복사해 주세요.", text);
+            const textarea = document.createElement("textarea");
+            textarea.value = text;
+            textarea.setAttribute("readonly", "readonly");
+            textarea.style.position = "fixed";
+            textarea.style.left = "-9999px";
+            textarea.style.top = "0";
+            document.body.appendChild(textarea);
+            textarea.focus();
+            textarea.select();
+            const copied = document.execCommand && document.execCommand("copy");
+            document.body.removeChild(textarea);
+            if (copied) {
+              showToast(successMessage || "복사되었습니다.");
+              return true;
+            }
           } catch (promptError) {}
-          showToast("복사에 실패했습니다. 직접 선택해서 복사해 주세요.");
+          showToast(failureMessage || "복사에 실패했어요. 코드를 길게 눌러 복사해 주세요.");
           return false;
         }
       }
@@ -25734,9 +25954,20 @@
       }
       if (els.familyMembersList) {
         els.familyMembersList.addEventListener("click", function (event) {
+          const copyCodeButton = event.target.closest("[data-family-copy-code]");
+          if (copyCodeButton) {
+            copyFamilyInviteCode();
+            return;
+          }
+          const reconnectButton = event.target.closest("[data-family-reconnect-action]");
+          if (reconnectButton) {
+            if (els.cloudCheckButton) els.cloudCheckButton.click();
+            else renderCloudStatus();
+            return;
+          }
           const inviteButton = event.target.closest("[data-family-invite-action]");
           if (!inviteButton) return;
-          copyFamilyInviteLink();
+          copyFamilyInviteCode();
         });
       }
       if (els.refreshFamilyMembersButton) {
