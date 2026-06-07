@@ -1,5 +1,5 @@
-const APP_VERSION = "6.1.1-daily-timeline";
-const CACHE_NAME = "baby-life-log-v6.1.1-daily-timeline";
+const APP_VERSION = "6.1.2-swipe-delete";
+const CACHE_NAME = "baby-life-log-v6.1.2-swipe-delete";
 const APP_SHELL = [
   "./manifest.json",
   `./service-worker.js?v=${APP_VERSION}`,

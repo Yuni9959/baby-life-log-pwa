@@ -1161,8 +1161,47 @@
     }
     .daily-timeline-event-title { color: var(--text); font-size: 0.9rem; font-weight: 920; line-height: 1.3; }
     .daily-timeline-event-subtitle { margin-top: 3px; color: var(--muted); font-size: 0.78rem; line-height: 1.35; word-break: keep-all; }
+    .record-swipe-shell {
+      position: relative;
+      overflow: hidden;
+      margin: 0;
+      border-radius: 20px;
+      touch-action: pan-y;
+    }
+    .record-delete-bg {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      width: 100%;
+      min-height: 100%;
+      padding: 0 22px 0 12px;
+      border: 0;
+      border-radius: 20px;
+      background: #f4b7a8;
+      color: #8f3f34;
+      font: inherit;
+      font-weight: 950;
+      text-align: right;
+      cursor: pointer;
+    }
+    .record-delete-bg:disabled {
+      cursor: default;
+      opacity: 0.72;
+    }
+    .record-delete-action {
+      display: inline-grid;
+      gap: 2px;
+      justify-items: center;
+      min-width: 58px;
+      pointer-events: none;
+    }
+    .record-delete-icon { font-size: 1.1rem; line-height: 1; }
+    .record-delete-text { font-size: 0.82rem; line-height: 1.1; }
     .record-card-modern {
       position: relative;
+      z-index: 1;
       overflow: hidden;
       display: grid;
       grid-template-columns: auto auto minmax(0, 1fr) auto;
@@ -1173,7 +1212,13 @@
       border-radius: 20px;
       background: rgba(255, 253, 248, 0.96);
       box-shadow: 0 8px 20px rgba(95, 74, 45, 0.07);
+      transform: translateX(0);
+      transition: transform 180ms ease;
+      will-change: transform;
     }
+    .record-card-modern.is-swiping { transition: none; }
+    .record-card-modern.is-open { transform: translateX(-88px); }
+    .record-card-modern.is-resetting { transition: transform 180ms ease; }
     .record-card-icon {
       display: inline-flex;
       width: 38px;
@@ -2944,7 +2989,7 @@
   <main class="app app-shell">
     <header class="topbar">
       <div>
-        <div class="version-badge" id="versionBadge">v6.1.1-daily-timeline</div>
+        <div class="version-badge" id="versionBadge">v6.1.2-swipe-delete</div>
         <div class="demo-mode-badge hidden" id="demoModeBadge">체험 모드</div>
         <h1 id="babyTitle">우리 아기</h1>
         <div class="baby-days" id="babyDays">생년월일을 입력해 주세요</div>
@@ -3805,7 +3850,7 @@
   <script>
     document.addEventListener("DOMContentLoaded", function () {
       if ("serviceWorker" in navigator) {
-        navigator.serviceWorker.register("./sw.js?v=6.1.1-daily-timeline").catch(function (error) {
+        navigator.serviceWorker.register("./sw.js?v=6.1.2-swipe-delete").catch(function (error) {
           console.warn("Service worker registration failed", error);
         });
       }
@@ -4000,9 +4045,9 @@
       const PRE_REPAIR_BACKUP_KEY = "baby_life_log_app_backup_before_repair";
       const BACKUP_FORMAT_VERSION = 2;
       const APP_NAME = "baby-life-log";
-      const APP_VERSION = "6.1.1-daily-timeline";
+      const APP_VERSION = "6.1.2-swipe-delete";
       const APP_PHASE_LABEL = "";
-      const SERVICE_WORKER_CACHE_NAME = "baby-life-log-v6.1.1-daily-timeline";
+      const SERVICE_WORKER_CACHE_NAME = "baby-life-log-v6.1.2-swipe-delete";
       const MIN_ANALYSIS_RECORDS = 10;
       const ANALYSIS_SERVER_RECONNECT_MESSAGE = "서버 연결 후 분석을 확인할 수 있어요. 서버 재연결을 눌러 주세요.";
       const ANALYSIS_GATE_DETAIL_MESSAGE = "기록이 조금 더 쌓이면 최근 흐름을 더 안정적으로 보여드릴게요.";
@@ -4569,7 +4614,7 @@
       };
       var DEBUG_LOGS = [];
       var DEBUG_STATE = {
-        version: "v6.1.1-daily-timeline",
+        version: "v6.1.2-swipe-delete",
         swInfo: null,
         localStorageTest: "",
         lastButtonEvent: "",
@@ -4590,7 +4635,14 @@
         daily_sleep_pair_count: "",
         daily_report_error: "",
         daily_report_uses_demo: "",
-        daily_report_rendered_at: ""
+        daily_report_rendered_at: "",
+        swipe_enabled: "true",
+        last_swipe_record_id: "",
+        last_swipe_dx: "",
+        last_swipe_action: "",
+        last_delete_source: "",
+        last_delete_result: "",
+        last_delete_error: ""
       };
       var debugPanelEl = null;
       var debugPanelCollapsed = false;
@@ -4785,6 +4837,13 @@
           ["daily.demo", DEBUG_STATE.daily_report_uses_demo],
           ["daily.rendered", DEBUG_STATE.daily_report_rendered_at],
           ["daily.error", DEBUG_STATE.daily_report_error],
+          ["swipe.enabled", DEBUG_STATE.swipe_enabled],
+          ["swipe.record", DEBUG_STATE.last_swipe_record_id],
+          ["swipe.dx", DEBUG_STATE.last_swipe_dx],
+          ["swipe.action", DEBUG_STATE.last_swipe_action],
+          ["delete.source", DEBUG_STATE.last_delete_source],
+          ["delete.result", DEBUG_STATE.last_delete_result],
+          ["delete.error", DEBUG_STATE.last_delete_error],
           ["last.error", DEBUG_STATE.lastError]
         ];
         const logs = DEBUG_LOGS.slice(-12).reverse().map(function (entry) {
@@ -21138,6 +21197,7 @@
       }
 
       function renderLogs() {
+        closeAllOpenSwipeCards();
         const filtered = getFilteredRecords();
         const total = getAllRecords().length;
         const limit = appData.settings.recordListLimit;
@@ -21156,6 +21216,7 @@
         if (!limited.length) {
           els.logs.innerHTML = '<div class="empty">조건에 맞는 기록이 없습니다.</div>';
           updateSelectionState();
+          initSwipeDelete();
           return;
         }
 
@@ -21163,6 +21224,7 @@
 
         els.logs.innerHTML = '<ul class="log-list">' + items + '</ul>';
         updateSelectionState();
+        initSwipeDelete();
       }
 
       function renderModernRecordCard(record) {
@@ -21172,13 +21234,222 @@
           ? '<span class="demo-record-badge record-demo-badge">체험 기록</span>'
           : '<button type="button" class="edit-record record-edit-btn" data-edit-id="' + id + '" aria-label="기록 수정">수정</button>' +
             '<button type="button" class="delete-record record-delete-btn" data-delete-id="' + id + '" aria-label="기록 삭제">삭제</button>';
-        return '<li class="log-item record-card-modern' + (demo ? ' demo-record-card' : '') + '">' +
+        const deleteLabel = demo ? "체험 기록 안내" : "이 기록 삭제";
+        return '<li class="record-swipe-shell' + (demo ? ' demo-record-shell' : '') + '" data-record-id="' + id + '" data-demo-record="' + (demo ? 'true' : 'false') + '">' +
+          '<button type="button" class="record-delete-bg" data-swipe-delete-id="' + id + '" aria-label="' + deleteLabel + '"' + (demo ? ' disabled' : '') + '>' +
+            '<span class="record-delete-action"><span class="record-delete-icon" aria-hidden="true">🗑</span><span class="record-delete-text">삭제</span></span>' +
+          '</button>' +
+          '<div class="log-item record-card-modern' + (demo ? ' demo-record-card' : '') + '">' +
           '<span class="record-swipe-bg" aria-hidden="true"></span>' +
           (demo ? '' : '<input class="log-select" type="checkbox" aria-label="기록 선택" value="' + id + '">') +
           '<span class="record-card-icon" aria-hidden="true">' + escapeHtml(getRecordDisplayIcon(record)) + '</span>' +
           '<span class="log-text record-card-content">' + logItemHtml(record) + '</span>' +
           '<span class="record-card-actions">' + actions + '<span class="record-chevron" aria-hidden="true">›</span></span>' +
+          '</div>' +
           '</li>';
+      }
+
+      var SWIPE_REVEAL_THRESHOLD = 48;
+      var SWIPE_DELETE_THRESHOLD = 96;
+      var SWIPE_MAX_DISTANCE = 104;
+      var openSwipeRecordId = null;
+      var activeSwipeState = null;
+
+      function initSwipeDelete() {
+        if (!els.logs || els.logs.dataset.swipeReady === "true") return;
+        els.logs.dataset.swipeReady = "true";
+        els.logs.addEventListener("pointerdown", handleRecordPointerDown);
+        els.logs.addEventListener("pointermove", handleRecordPointerMove);
+        els.logs.addEventListener("pointerup", handleRecordPointerUp);
+        els.logs.addEventListener("pointercancel", handleRecordPointerCancel);
+        document.addEventListener("pointerdown", function (event) {
+          if (!event.target.closest || event.target.closest(".record-swipe-shell")) return;
+          closeAllOpenSwipeCards();
+        });
+        document.addEventListener("keydown", function (event) {
+          if (event.key === "Escape") closeAllOpenSwipeCards();
+        });
+      }
+
+      function handleRecordPointerDown(event) {
+        const shell = getSwipeRecordShell(event.target);
+        if (!shell || isSwipeDisabledForTarget(event.target) || isMultiSelectModeActive()) return;
+        if (shell.dataset.demoRecord === "true") return;
+        if (openSwipeRecordId && openSwipeRecordId !== getRecordIdFromSwipeShell(shell)) closeAllOpenSwipeCards();
+        const currentOffset = shell.classList.contains("is-open") ? SWIPE_REVEAL_THRESHOLD : 0;
+        activeSwipeState = {
+          shell: shell,
+          card: shell.querySelector(".record-card-modern"),
+          recordId: getRecordIdFromSwipeShell(shell),
+          pointerId: event.pointerId,
+          startX: event.clientX,
+          startY: event.clientY,
+          offset: currentOffset,
+          mode: "",
+          confirmed: false,
+          thresholdVibrated: false
+        };
+        if (shell.setPointerCapture) {
+          try { shell.setPointerCapture(event.pointerId); } catch (error) {}
+        }
+        DEBUG_STATE.last_swipe_record_id = activeSwipeState.recordId || "";
+        DEBUG_STATE.last_swipe_action = "pointerdown";
+      }
+
+      function handleRecordPointerMove(event) {
+        if (!activeSwipeState || event.pointerId !== activeSwipeState.pointerId || !activeSwipeState.card) return;
+        const dx = event.clientX - activeSwipeState.startX;
+        const dy = event.clientY - activeSwipeState.startY;
+        if (!activeSwipeState.mode) {
+          if (Math.abs(dy) > 8 && Math.abs(dy) > Math.abs(dx)) {
+            activeSwipeState.mode = "scroll";
+            DEBUG_STATE.last_swipe_action = "scroll";
+            return;
+          }
+          if (Math.abs(dx) > 10 && Math.abs(dx) > Math.abs(dy) * 1.3) {
+            activeSwipeState.mode = "swipe";
+            activeSwipeState.card.classList.add("is-swiping");
+            activeSwipeState.card.classList.remove("is-open", "is-resetting");
+          }
+        }
+        if (activeSwipeState.mode !== "swipe") return;
+        event.preventDefault();
+        const nextOffset = Math.max(0, Math.min(SWIPE_MAX_DISTANCE, activeSwipeState.offset - dx));
+        setRecordSwipeOffset(activeSwipeState.shell, nextOffset);
+        DEBUG_STATE.last_swipe_dx = String(Math.round(-nextOffset));
+        DEBUG_STATE.last_swipe_action = "move";
+        if (nextOffset >= SWIPE_DELETE_THRESHOLD && !activeSwipeState.thresholdVibrated) {
+          activeSwipeState.thresholdVibrated = true;
+          if (navigator.vibrate) navigator.vibrate(8);
+        }
+      }
+
+      function handleRecordPointerUp(event) {
+        if (!activeSwipeState || event.pointerId !== activeSwipeState.pointerId) return;
+        const state = activeSwipeState;
+        const card = state.card;
+        const styleTransform = card && card.style ? card.style.transform : "";
+        const match = styleTransform.match(/-?[\d.]+/);
+        const offset = match ? Math.abs(Number(match[0])) : 0;
+        releaseSwipePointer(state, event);
+        activeSwipeState = null;
+        if (state.mode === "scroll") return;
+        if (card) card.classList.remove("is-swiping");
+        if (offset >= SWIPE_DELETE_THRESHOLD) {
+          closeRecordSwipe(state.shell);
+          confirmSwipeDelete(state.recordId);
+        } else if (offset >= SWIPE_REVEAL_THRESHOLD) {
+          openRecordSwipe(state.shell);
+        } else {
+          closeRecordSwipe(state.shell);
+        }
+      }
+
+      function handleRecordPointerCancel(event) {
+        if (!activeSwipeState || event.pointerId !== activeSwipeState.pointerId) return;
+        const state = activeSwipeState;
+        releaseSwipePointer(state, event);
+        activeSwipeState = null;
+        closeRecordSwipe(state.shell);
+      }
+
+      function releaseSwipePointer(state, event) {
+        if (!state || !state.shell || !state.shell.releasePointerCapture) return;
+        try { state.shell.releasePointerCapture(event.pointerId); } catch (error) {}
+      }
+
+      function getSwipeRecordShell(target) {
+        return target && target.closest ? target.closest(".record-swipe-shell") : null;
+      }
+
+      function getRecordIdFromSwipeShell(shell) {
+        return shell && shell.dataset ? shell.dataset.recordId : "";
+      }
+
+      function setRecordSwipeOffset(shell, offset) {
+        const card = shell ? shell.querySelector(".record-card-modern") : null;
+        if (!card) return;
+        card.style.transform = "translateX(-" + Math.round(offset) + "px)";
+      }
+
+      function openRecordSwipe(shell) {
+        const card = shell ? shell.querySelector(".record-card-modern") : null;
+        if (!shell || !card) return;
+        closeAllOpenSwipeCards(shell);
+        card.style.transform = "";
+        card.classList.remove("is-swiping", "is-resetting");
+        card.classList.add("is-open");
+        shell.classList.add("is-open");
+        openSwipeRecordId = getRecordIdFromSwipeShell(shell);
+        DEBUG_STATE.last_swipe_record_id = openSwipeRecordId || "";
+        DEBUG_STATE.last_swipe_action = "open";
+      }
+
+      function closeRecordSwipe(shell) {
+        const card = shell ? shell.querySelector(".record-card-modern") : null;
+        if (!shell || !card) return;
+        card.classList.remove("is-swiping", "is-open");
+        card.classList.add("is-resetting");
+        card.style.transform = "";
+        shell.classList.remove("is-open");
+        if (openSwipeRecordId === getRecordIdFromSwipeShell(shell)) openSwipeRecordId = null;
+        window.setTimeout(function () {
+          card.classList.remove("is-resetting");
+        }, 190);
+      }
+
+      function closeAllOpenSwipeCards(exceptShell) {
+        document.querySelectorAll(".record-swipe-shell.is-open").forEach(function (shell) {
+          if (exceptShell && shell === exceptShell) return;
+          closeRecordSwipe(shell);
+        });
+        if (!exceptShell) openSwipeRecordId = null;
+      }
+
+      function confirmSwipeDelete(recordId) {
+        const record = findRecord(recordId);
+        DEBUG_STATE.last_delete_source = "swipe";
+        if (!record) {
+          DEBUG_STATE.last_delete_result = "missing";
+          showToast("삭제할 기록을 찾을 수 없습니다.");
+          return;
+        }
+        if (isDemoRecord(record)) {
+          DEBUG_STATE.last_delete_result = "demo_blocked";
+          showToast("체험용 기록이에요. 실제 기록을 시작하면 자동으로 정리돼요.");
+          return;
+        }
+        if (!window.confirm("이 기록을 삭제할까요?\n삭제한 기록은 최근 기록과 분석에서 제외돼요.")) {
+          DEBUG_STATE.last_delete_result = "cancelled";
+          return;
+        }
+        performRecordDelete(recordId, { source: "swipe" });
+      }
+
+      function performRecordDelete(recordId, options) {
+        try {
+          DEBUG_STATE.last_delete_source = options && options.source ? options.source : "unknown";
+          deleteRecord(recordId);
+          DEBUG_STATE.last_delete_result = "ok";
+          DEBUG_STATE.last_delete_error = "";
+          showToast("기록을 삭제했어요.");
+          if (navigator.vibrate) navigator.vibrate(8);
+        } catch (error) {
+          DEBUG_STATE.last_delete_result = "failed";
+          DEBUG_STATE.last_delete_error = error && error.message ? error.message : String(error);
+          DEBUG_STATE.lastError = DEBUG_STATE.last_delete_error;
+          debugLog("swipeDelete:failed", { recordId: recordId, error: DEBUG_STATE.last_delete_error });
+          closeAllOpenSwipeCards();
+          showToast("기록 삭제 중 문제가 생겼어요. 다시 시도해 주세요.");
+        }
+      }
+
+      function isSwipeDisabledForTarget(target) {
+        return !!(target && target.closest && target.closest("button,input,select,textarea,a,.record-edit-btn,.record-delete-btn,.multi-select-checkbox,.record-checkbox,.log-select"));
+      }
+
+      function isMultiSelectModeActive() {
+        return document.querySelectorAll(".log-select:checked").length > 0;
       }
 
       function logItemHtml(record) {
@@ -24884,13 +25155,20 @@
           return;
         }
 
+        // Swipe delete background
+        const swipeDeleteButton = event.target.closest("[data-swipe-delete-id]");
+        if (swipeDeleteButton) {
+          confirmSwipeDelete(swipeDeleteButton.dataset.swipeDeleteId);
+          return;
+        }
+
         // 기록 수정 버튼
         const editButton = event.target.closest("[data-edit-id]");
-        if (editButton) { openEditSheet(editButton.dataset.editId); return; }
+        if (editButton) { closeAllOpenSwipeCards(); openEditSheet(editButton.dataset.editId); return; }
 
         // 기록 삭제 버튼 (confirm 없이 즉시 삭제, undo 제공)
         const deleteButton = event.target.closest("[data-delete-id]");
-        if (deleteButton) { deleteRecord(deleteButton.dataset.deleteId); return; }
+        if (deleteButton) { closeAllOpenSwipeCards(); deleteRecord(deleteButton.dataset.deleteId); return; }
 
         // 시트 닫기
         if (event.target.matches("[data-close-sheet]") || event.target === els.overlay) closeSheets();

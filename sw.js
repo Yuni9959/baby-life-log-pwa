@@ -1,4 +1,4 @@
-const CACHE_NAME = "baby-life-log-v6.1.1-daily-timeline";
+const CACHE_NAME = "baby-life-log-v6.1.2-swipe-delete";
 const CACHE_PREFIX = "babylog-cache-";
 const OLD_CACHE_PREFIX = "baby-life-log-";
 const PRIMARY_CACHE_NAME = CACHE_NAME;
@@ -57,7 +57,7 @@ self.addEventListener("message", function (event) {
   if (target && typeof target.postMessage === "function") {
     target.postMessage({
       type: "VERSION_INFO",
-      appVersion: "6.1.1-daily-timeline",
+      appVersion: "6.1.2-swipe-delete",
       cacheName: CACHE_NAME
     });
   }
