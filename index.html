@@ -2888,7 +2888,7 @@
   <main class="app app-shell">
     <header class="topbar">
       <div>
-        <div class="version-badge" id="versionBadge">v6.0.9-core-ui-foundation</div>
+        <div class="version-badge" id="versionBadge">v6.1.0-cry-reason</div>
         <div class="demo-mode-badge hidden" id="demoModeBadge">체험 모드</div>
         <h1 id="babyTitle">우리 아기</h1>
         <div class="baby-days" id="babyDays">생년월일을 입력해 주세요</div>
@@ -3749,7 +3749,7 @@
   <script>
     document.addEventListener("DOMContentLoaded", function () {
       if ("serviceWorker" in navigator) {
-        navigator.serviceWorker.register("./sw.js?v=6.0.9-core-ui-foundation").catch(function (error) {
+        navigator.serviceWorker.register("./sw.js?v=6.1.0-cry-reason").catch(function (error) {
           console.warn("Service worker registration failed", error);
         });
       }
@@ -3944,9 +3944,9 @@
       const PRE_REPAIR_BACKUP_KEY = "baby_life_log_app_backup_before_repair";
       const BACKUP_FORMAT_VERSION = 2;
       const APP_NAME = "baby-life-log";
-      const APP_VERSION = "6.0.9-core-ui-foundation";
+      const APP_VERSION = "6.1.0-cry-reason";
       const APP_PHASE_LABEL = "";
-      const SERVICE_WORKER_CACHE_NAME = "baby-life-log-v6.0.9-core-ui-foundation";
+      const SERVICE_WORKER_CACHE_NAME = "baby-life-log-v6.1.0-cry-reason";
       const MIN_ANALYSIS_RECORDS = 10;
       const ANALYSIS_SERVER_RECONNECT_MESSAGE = "서버 연결 후 분석을 확인할 수 있어요. 서버 재연결을 눌러 주세요.";
       const ANALYSIS_GATE_DETAIL_MESSAGE = "기록이 조금 더 쌓이면 최근 흐름을 더 안정적으로 보여드릴게요.";
@@ -4513,7 +4513,7 @@
       };
       var DEBUG_LOGS = [];
       var DEBUG_STATE = {
-        version: "v6.0.9-core-ui-foundation",
+        version: "v6.1.0-cry-reason",
         swInfo: null,
         localStorageTest: "",
         lastButtonEvent: "",
@@ -4521,7 +4521,14 @@
         lastLocalSave: "",
         lastRender: "",
         lastCloudSave: "",
-        lastError: ""
+        lastError: "",
+        cry_analysis_mode: "",
+        cry_usable_record_count: "",
+        cry_analysis_ready: "",
+        cry_missing_record_count: "",
+        cry_server_rpc_status: "",
+        cry_last_error: "",
+        cry_top_reason: ""
       };
       var debugPanelEl = null;
       var debugPanelCollapsed = false;
@@ -4703,6 +4710,13 @@
           ["last.localSave", DEBUG_STATE.lastLocalSave],
           ["last.render", DEBUG_STATE.lastRender],
           ["last.cloudSave", DEBUG_STATE.lastCloudSave],
+          ["cry.mode", DEBUG_STATE.cry_analysis_mode],
+          ["cry.usable", DEBUG_STATE.cry_usable_record_count],
+          ["cry.ready", DEBUG_STATE.cry_analysis_ready],
+          ["cry.missing", DEBUG_STATE.cry_missing_record_count],
+          ["cry.rpc", DEBUG_STATE.cry_server_rpc_status],
+          ["cry.top", DEBUG_STATE.cry_top_reason],
+          ["cry.error", DEBUG_STATE.cry_last_error],
           ["last.error", DEBUG_STATE.lastError]
         ];
         const logs = DEBUG_LOGS.slice(-12).reverse().map(function (entry) {
@@ -21289,162 +21303,470 @@
         };
       }
 
-      function normalizeCryReasons(result) {
-        const state = result && result.cryAttemptState ? result.cryAttemptState : {};
-        return (Array.isArray(state.adjustedRankedReasons) ? state.adjustedRankedReasons : []).slice(0, 4).map(function (reason, index) {
-          const percent = Number.isFinite(reason.normalizedPercent)
-            ? Math.round(reason.normalizedPercent)
-            : Math.max(0, Math.min(100, Math.round(Number(reason.adjustedScore || reason.rawScore || 0))));
-          return {
-            key: reason.reasonKey || reason.key || ("reason-" + index),
-            label: reason.label || "확인 항목",
-            percent: Math.max(0, Math.min(100, percent)),
-            icon: getCryReasonIcon(reason),
-            message: reason.message || "",
-            actionHint: reason.attempted ? "이미 확인한 항목이라 다음 확인 순서에서는 뒤로 보냈어요." : (reason.nextActionHint || reason.actionHint || ""),
-            attempted: !!reason.attempted,
-            primary: index === 0
-          };
-        });
+      function clampPercent(value) {
+        const number = Number(value);
+        if (!Number.isFinite(number)) return 0;
+        return Math.max(0, Math.min(100, Math.round(number)));
+      }
+
+      function canonicalCryReasonKey(key) {
+        const value = String(key || "").trim();
+        if (value === "hunger" || value === "feed") return "feeding";
+        if (value === "burpGas" || value === "gas") return "burp";
+        if (value === "sleepiness" || value === "sleep") return "sleepy";
+        if (value === "feeding" || value === "burp" || value === "diaper" || value === "sleepy") return value;
+        return value;
+      }
+
+      function getCryReasonMeta(key) {
+        const canonical = canonicalCryReasonKey(key);
+        const meta = {
+          feeding: { key: "feeding", label: "수유", icon: "🍼", detail: "마지막 수유 후 시간이 지났는지 함께 확인해보세요." },
+          burp: { key: "burp", label: "트림", icon: "🐔", detail: "최근 수유 후 트림 기록도 같이 확인해보세요." },
+          diaper: { key: "diaper", label: "기저귀", icon: "☁️", detail: "마지막 기저귀 기록 후 시간이 지났는지 확인해보세요." },
+          sleepy: { key: "sleepy", label: "졸림", icon: "🌙", detail: "깨어난 지 시간이 지났는지 살펴보세요." }
+        };
+        return meta[canonical] || { key: canonical || "unknown", label: "확인 항목", icon: "•", detail: "아기의 현재 신호를 함께 확인해보세요." };
       }
 
       function getCryReasonIcon(reason) {
-        const key = reason && reason.reasonKey ? reason.reasonKey : "";
-        if (key === "hunger" || key === "feeding") return "🍼";
-        if (key === "sleepiness" || key === "sleep") return "☾";
-        if (key === "diaper") return "☁";
-        if (key === "burpGas" || key === "burp" || key === "gas") return "✓";
-        if (key === "comfort") return "♡";
-        return "•";
+        return getCryReasonMeta(reason && (reason.reasonKey || reason.key)).icon;
+      }
+
+      function normalizePercentDistribution(items) {
+        const source = Array.isArray(items) ? items : [];
+        const total = source.reduce(function (sum, item) {
+          const score = Number(item && item.score);
+          const percent = Number(item && item.percent);
+          if (Number.isFinite(score) && score > 0) return sum + score;
+          if (Number.isFinite(percent) && percent > 0) return sum + percent;
+          return sum;
+        }, 0);
+        if (!source.length) return [];
+        if (total <= 0) {
+          const base = Math.floor(100 / source.length);
+          let remainder = 100 - base * source.length;
+          return source.map(function (item) {
+            const percent = base + (remainder > 0 ? 1 : 0);
+            remainder -= 1;
+            return Object.assign({}, item, { percent: percent, score: percent / 100 });
+          });
+        }
+        let running = 0;
+        const normalized = source.map(function (item, index) {
+          const score = Number(item && item.score);
+          const percent = Number(item && item.percent);
+          const weight = Number.isFinite(score) && score > 0 ? score : (Number.isFinite(percent) && percent > 0 ? percent : 0);
+          const nextPercent = index === source.length - 1 ? Math.max(0, 100 - running) : clampPercent((weight / total) * 100);
+          running += nextPercent;
+          return Object.assign({}, item, { percent: nextPercent, score: nextPercent / 100 });
+        });
+        const diff = 100 - normalized.reduce(function (sum, item) { return sum + item.percent; }, 0);
+        if (normalized.length && diff !== 0) normalized[0].percent = clampPercent(normalized[0].percent + diff);
+        return normalized;
+      }
+
+      function normalizeCryReasonPercents(reasons) {
+        return normalizePercentDistribution(reasons);
+      }
+
+      function normalizeReasonPercents(reasons) {
+        return normalizePercentDistribution(reasons);
+      }
+
+      function getAttemptedCryReasonKeys(selectedKeys) {
+        const selected = Array.isArray(selectedKeys) ? selectedKeys : [];
+        const map = {
+          fed: "feeding",
+          checked_diaper: "diaper",
+          burped: "burp",
+          tried_sleep: "sleepy"
+        };
+        return selected.map(function (key) { return map[key] || canonicalCryReasonKey(key); }).filter(Boolean);
+      }
+
+      function normalizeCryReasons(rawReasons, options) {
+        const opts = options || {};
+        const attemptedKeys = getAttemptedCryReasonKeys(opts.attemptedKeys || cryAttemptSelectedKeys);
+        const source = Array.isArray(rawReasons) ? rawReasons : [];
+        const byKey = {};
+        ["feeding", "burp", "diaper", "sleepy"].forEach(function (key) {
+          const meta = getCryReasonMeta(key);
+          byKey[key] = {
+            key: key,
+            label: meta.label,
+            icon: meta.icon,
+            percent: 0,
+            score: 0,
+            detail: meta.detail
+          };
+        });
+        source.forEach(function (reason) {
+          const key = canonicalCryReasonKey(reason && (reason.key || reason.reasonKey));
+          if (!byKey[key]) return;
+          const meta = getCryReasonMeta(key);
+          byKey[key] = Object.assign({}, byKey[key], {
+            label: reason.label || meta.label,
+            icon: reason.icon || meta.icon,
+            percent: clampPercent(reason.percent !== undefined ? reason.percent : (Number(reason.score) * 100)),
+            score: Number.isFinite(Number(reason.score)) ? Math.max(0, Number(reason.score)) : 0,
+            detail: reason.detail || reason.message || reason.actionHint || meta.detail
+          });
+        });
+        const normalized = normalizePercentDistribution(["feeding", "burp", "diaper", "sleepy"].map(function (key) {
+          return byKey[key];
+        })).map(function (reason) {
+          return Object.assign({}, reason, {
+            attempted: attemptedKeys.indexOf(reason.key) !== -1
+          });
+        }).sort(function (a, b) {
+          return b.percent - a.percent;
+        });
+        return normalized.map(function (reason, index) {
+          return Object.assign({}, reason, { primary: index === 0 });
+        });
+      }
+
+      function getCryReasonGate(recordsOrCount, serverResult) {
+        if (serverResult && typeof serverResult === "object") {
+          return normalizeServerAnalysisResult(serverResult);
+        }
+        const count = typeof recordsOrCount === "number"
+          ? normalizeAnalysisCount(recordsOrCount)
+          : getAnalysisUsableRecordCount(recordsOrCount || [], null);
+        return {
+          analysisReady: isAnalysisReady(count, MIN_ANALYSIS_RECORDS),
+          usableRecordCount: count,
+          minRequiredRecords: MIN_ANALYSIS_RECORDS,
+          missingRecordCount: getAnalysisMissingCount(count, MIN_ANALYSIS_RECORDS),
+          gateMessage: getAnalysisGateMessage(count, MIN_ANALYSIS_RECORDS)
+        };
+      }
+
+      function normalizeCryReasonResult(raw, options) {
+        const opts = options || {};
+        const source = raw && raw.data && typeof raw.data === "object" ? raw.data : (raw || {});
+        const gate = getCryReasonGate(opts.usableRecordCount !== undefined ? opts.usableRecordCount : source.usable_record_count, source);
+        const analysisReady = source.analysis_ready !== undefined ? !!source.analysis_ready && gate.missingRecordCount <= 0 : !!gate.analysisReady;
+        const reasons = analysisReady ? normalizeCryReasons(source.reasons || source.reason_candidates || source.scores || [], opts) : [];
+        const topReason = reasons[0] || null;
+        return {
+          analysis_ready: analysisReady,
+          analysisReady: analysisReady,
+          usable_record_count: gate.usableRecordCount,
+          usableRecordCount: gate.usableRecordCount,
+          min_required_records: gate.minRequiredRecords,
+          minRequiredRecords: gate.minRequiredRecords,
+          missing_record_count: gate.missingRecordCount,
+          missingRecordCount: gate.missingRecordCount,
+          mode: source.mode || opts.mode || "local_fallback",
+          generated_at: source.generated_at || source.generatedAt || nowIso(),
+          summary: source.summary || opts.summary || "최근 기록을 바탕으로 추측했어요.",
+          reasons: reasons,
+          topReason: topReason,
+          gateMessage: gate.gateMessage,
+          disclaimer: source.disclaimer || opts.disclaimer || "참고용 안내예요. 아기의 상태가 평소와 다르면 전문가와 상의해 주세요.",
+          raw: raw || null
+        };
+      }
+
+      function updateCryDebugState(result, extra) {
+        const source = result || {};
+        const details = extra || {};
+        DEBUG_STATE.cry_analysis_mode = source.mode || details.mode || "";
+        DEBUG_STATE.cry_usable_record_count = String(source.usable_record_count !== undefined ? source.usable_record_count : (source.usableRecordCount || ""));
+        DEBUG_STATE.cry_analysis_ready = String(source.analysis_ready !== undefined ? source.analysis_ready : (source.analysisReady || false));
+        DEBUG_STATE.cry_missing_record_count = String(source.missing_record_count !== undefined ? source.missing_record_count : (source.missingRecordCount || ""));
+        DEBUG_STATE.cry_server_rpc_status = details.rpcStatus || DEBUG_STATE.cry_server_rpc_status || "";
+        DEBUG_STATE.cry_last_error = details.error || "";
+        DEBUG_STATE.cry_top_reason = source.topReason ? source.topReason.key + ":" + source.topReason.percent + "%" : "";
+        if (details.error) DEBUG_STATE.lastError = details.error;
+        renderDebugPanel();
+      }
+
+      function getLastRecordByType(records, type) {
+        const source = Array.isArray(records) ? records : [];
+        const wanted = Array.isArray(type) ? type : [type];
+        return source.filter(function (record) {
+          return record && wanted.indexOf(record.type) !== -1 && validRecordDate(record);
+        }).sort(sortNewestFirst)[0] || null;
+      }
+
+      function minutesSinceRecord(record, baseDate) {
+        const date = validRecordDate(record);
+        if (!date) return null;
+        const base = baseDate instanceof Date ? baseDate : new Date();
+        return Math.max(0, Math.floor((base.getTime() - date.getTime()) / 60000));
+      }
+
+      function scoreByMinutes(minutes, lowAt, highAt, maxScore) {
+        if (minutes === null || minutes === undefined) return maxScore || 70;
+        const max = maxScore || 100;
+        if (minutes <= lowAt) return 10;
+        if (minutes >= highAt) return max;
+        return 10 + ((minutes - lowAt) / Math.max(1, highAt - lowAt)) * (max - 10);
+      }
+
+      function calculateCryReasonScores(records, baseDate) {
+        const source = (Array.isArray(records) ? records : []).filter(function (record) {
+          return record && !isDemoRecord(record) ? true : isDemoModeActive();
+        }).filter(isActiveRecord);
+        const base = baseDate instanceof Date ? baseDate : new Date();
+        const lastFeed = getLastRecordByType(source, "feeding");
+        const lastBurp = getLastRecordByType(source, "burp");
+        const lastDiaper = getLastRecordByType(source, "diaper");
+        const lastWake = getLastRecordByType(source, "wake");
+        const lastSleep = getLastRecordByType(source, "sleep");
+        const feedMinutes = minutesSinceRecord(lastFeed, base);
+        const diaperMinutes = minutesSinceRecord(lastDiaper, base);
+        const wakeMinutes = minutesSinceRecord(lastWake, base);
+        const burpMinutes = minutesSinceRecord(lastBurp, base);
+        const feedingAmounts = source.filter(function (record) {
+          return record.type === "feeding" && Number(record.amount) > 0;
+        }).map(function (record) { return Number(record.amount); });
+        const avgFeedAmount = feedingAmounts.length
+          ? feedingAmounts.reduce(function (sum, amount) { return sum + amount; }, 0) / feedingAmounts.length
+          : null;
+        let feedingScore = scoreByMinutes(feedMinutes, 60, 180, 100);
+        if (lastFeed && avgFeedAmount && Number(lastFeed.amount) > 0 && Number(lastFeed.amount) < avgFeedAmount * 0.8) feedingScore += 12;
+        let burpScore = 12;
+        if (lastFeed && feedMinutes !== null && feedMinutes <= 45) {
+          const burpAfterFeed = lastBurp && validRecordDate(lastBurp) && validRecordDate(lastFeed) && validRecordDate(lastBurp) > validRecordDate(lastFeed);
+          burpScore = burpAfterFeed ? 15 : 78;
+          if (Number(lastFeed.amount) >= 120) burpScore += 8;
+        } else if (burpMinutes !== null && burpMinutes > 180) {
+          burpScore = 28;
+        }
+        const diaperScore = scoreByMinutes(diaperMinutes, 60, 240, 90);
+        let sleepyScore = scoreByMinutes(wakeMinutes, 45, 150, 95);
+        if (lastSleep && lastWake && validRecordDate(lastSleep) > validRecordDate(lastWake)) sleepyScore = 12;
+        return [
+          { key: "feeding", score: feedingScore, detail: feedMinutes === null ? "수유 기록이 더 쌓이면 더 안정적으로 볼 수 있어요." : "마지막 수유 후 " + feedMinutes + "분 지났어요." },
+          { key: "burp", score: burpScore, detail: lastFeed && feedMinutes !== null && feedMinutes <= 45 ? "최근 수유 후 트림 기록을 함께 확인해보세요." : "수유 후 불편함이 있었는지 가볍게 살펴보세요." },
+          { key: "diaper", score: diaperScore, detail: diaperMinutes === null ? "기저귀 기록이 더 쌓이면 더 안정적으로 볼 수 있어요." : "마지막 기저귀 기록 후 " + diaperMinutes + "분 지났어요." },
+          { key: "sleepy", score: sleepyScore, detail: wakeMinutes === null ? "깨어남 기록이 더 쌓이면 졸림 가능성을 더 잘 볼 수 있어요." : "깨어난 지 " + wakeMinutes + "분 지났어요." }
+        ];
+      }
+
+      function buildLocalCryReasonResult(records, options) {
+        const opts = options || {};
+        const activeRecords = getAnalysisScopedRecords(records || []).filter(isActiveRecord).filter(function (record) {
+          return opts.demo ? isDemoRecord(record) : !isDemoRecord(record);
+        });
+        const gate = getCryReasonGate(activeRecords.length);
+        if (!gate.analysisReady) {
+          return normalizeCryReasonResult({
+            analysis_ready: false,
+            usable_record_count: gate.usableRecordCount,
+            min_required_records: gate.minRequiredRecords,
+            missing_record_count: gate.missingRecordCount,
+            mode: opts.demo ? "demo" : "local_fallback",
+            reasons: []
+          }, opts);
+        }
+        const reasons = calculateCryReasonScores(activeRecords, opts.baseDate || new Date());
+        return normalizeCryReasonResult({
+          analysis_ready: true,
+          usable_record_count: gate.usableRecordCount,
+          min_required_records: gate.minRequiredRecords,
+          missing_record_count: 0,
+          mode: opts.demo ? "demo" : "local_fallback",
+          generated_at: nowIso(),
+          summary: opts.demo ? "체험용 분석 결과예요." : "기기 안의 기록을 기준으로 참고용 결과를 보여드려요.",
+          reasons: reasons,
+          disclaimer: "참고용 안내예요. 아기의 상태가 평소와 다르면 전문가와 상의해 주세요."
+        }, opts);
+      }
+
+      function buildDemoCryReasonResult(records) {
+        return buildLocalCryReasonResult(records && records.length ? records : generateDemoRecords(new Date()), {
+          demo: true,
+          mode: "demo",
+          summary: "체험용 분석 결과예요."
+        });
+      }
+
+      async function fetchCryReasonFromServer(context) {
+        const ctx = context || {};
+        const result = { ok: false, data: null, error: "", status: "skipped" };
+        try {
+          if (isDemoModeActive()) {
+            result.status = "skipped_demo";
+            return result;
+          }
+          const babyId = ctx.babyId || getCurrentAnalysisBabyId();
+          if (!babyId) {
+            result.status = "skipped_missing_baby";
+            result.error = "baby_id_missing";
+            return result;
+          }
+          const config = window.BABY_APP_CLOUD_CONFIG || {};
+          if (!window.supabase || typeof window.supabase.createClient !== "function" || !config.supabaseUrl || !config.supabaseAnonKey || config.enabled === false) {
+            result.status = "skipped_not_configured";
+            result.error = "supabase_not_configured";
+            return result;
+          }
+          window.__babylogCryReasonRpcClient = window.__babylogCryReasonRpcClient || window.supabase.createClient(config.supabaseUrl, config.supabaseAnonKey, {
+            auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: false }
+          });
+          const rpcResult = await window.__babylogCryReasonRpcClient.rpc("get_cry_reason_v1", {
+            p_baby_id: babyId,
+            p_min_records: MIN_ANALYSIS_RECORDS
+          });
+          if (rpcResult.error) {
+            result.status = "failed";
+            result.error = rpcResult.error.message || String(rpcResult.error);
+            return result;
+          }
+          result.ok = true;
+          result.status = "ok";
+          result.data = rpcResult.data;
+          return result;
+        } catch (error) {
+          result.status = "failed";
+          result.error = error && error.message ? error.message : String(error);
+          return result;
+        }
+      }
+
+      async function getCryReasonResult(options) {
+        const opts = options || {};
+        const displayRecords = getActiveRecordsForDisplay();
+        const demo = isDemoModeActive();
+        const checkedItems = Array.isArray(opts.checkedItems) ? opts.checkedItems : [];
+        if (demo) {
+          const demoResult = buildDemoCryReasonResult(displayRecords);
+          updateCryDebugState(demoResult, { rpcStatus: "skipped_demo" });
+          return demoResult;
+        }
+        const realRecords = stripDemoRecords(displayRecords);
+        const gate = getLocalAnalysisGate(realRecords, null);
+        if (!gate.analysisReady) {
+          const shortage = normalizeCryReasonResult({
+            analysis_ready: false,
+            usable_record_count: gate.usableRecordCount,
+            min_required_records: gate.minRequiredRecords,
+            missing_record_count: gate.missingRecordCount,
+            mode: "unavailable",
+            reasons: []
+          }, { mode: "unavailable" });
+          updateCryDebugState(shortage, { rpcStatus: "skipped_shortage" });
+          return shortage;
+        }
+        const serverBlockMessage = getServerAnalysisBlockMessage();
+        if (serverBlockMessage) {
+          const blocked = normalizeCryReasonResult({
+            analysis_ready: false,
+            usable_record_count: gate.usableRecordCount,
+            min_required_records: gate.minRequiredRecords,
+            missing_record_count: 0,
+            mode: "server_blocked",
+            reasons: []
+          }, { mode: "server_blocked", summary: serverBlockMessage });
+          blocked.gateMessage = serverBlockMessage;
+          updateCryDebugState(blocked, { rpcStatus: "blocked_connection", error: serverBlockMessage });
+          return blocked;
+        }
+        const serverResult = await fetchCryReasonFromServer({ babyId: getCurrentAnalysisBabyId(), checkedItems: checkedItems });
+        DEBUG_STATE.cry_server_rpc_status = serverResult.status;
+        if (serverResult.ok) {
+          const normalizedServer = normalizeCryReasonResult(serverResult.data, { mode: "server", attemptedKeys: cryAttemptSelectedKeys });
+          normalizedServer.mode = "server";
+          updateCryDebugState(normalizedServer, { rpcStatus: "ok" });
+          return normalizedServer;
+        }
+        const rpcErrorText = String(serverResult.error || "").toLowerCase();
+        const looksLikeConnectionFailure = serverResult.status === "failed" && (
+          rpcErrorText.indexOf("failed to fetch") !== -1 ||
+          rpcErrorText.indexOf("network") !== -1 ||
+          rpcErrorText.indexOf("offline") !== -1 ||
+          rpcErrorText.indexOf("timeout") !== -1
+        );
+        if (looksLikeConnectionFailure) {
+          const connectionBlocked = normalizeCryReasonResult({
+            analysis_ready: false,
+            usable_record_count: gate.usableRecordCount,
+            min_required_records: gate.minRequiredRecords,
+            missing_record_count: 0,
+            mode: "server_blocked",
+            summary: ANALYSIS_SERVER_RECONNECT_MESSAGE,
+            reasons: []
+          }, { mode: "server_blocked" });
+          connectionBlocked.gateMessage = ANALYSIS_SERVER_RECONNECT_MESSAGE;
+          updateCryDebugState(connectionBlocked, { rpcStatus: serverResult.status, error: serverResult.error || ANALYSIS_SERVER_RECONNECT_MESSAGE });
+          return connectionBlocked;
+        }
+        debugLog("cryReason:serverRpcUnavailable", { status: serverResult.status, error: serverResult.error || "" });
+        const fallback = buildLocalCryReasonResult(realRecords, {
+          mode: "local_fallback",
+          attemptedKeys: cryAttemptSelectedKeys,
+          summary: "기기 안의 기록을 기준으로 참고용 결과를 보여드려요."
+        });
+        updateCryDebugState(fallback, { rpcStatus: serverResult.status, error: serverResult.error || "" });
+        return fallback;
       }
 
       function renderCryReasonUI(result, options) {
         const settings = options || {};
-        const reasons = normalizeCryReasons(result);
+        const reasons = normalizeCryReasons(result && result.reasons ? result.reasons : [], { attemptedKeys: cryAttemptSelectedKeys });
         if (!reasons.length) {
-          return '<li class="cry-result-card"><div class="cry-result-head"><span>기록 기반 참고 정보</span></div><p class="cry-result-note">' + escapeHtml(settings.emptyMessage || "현재 기록을 바탕으로 확인 순서를 계산했지만 화면에 표시할 후보가 적어요.") + '</p><p class="cry-result-action">수유, 기저귀, 트림/가스, 잠/안정 신호를 차례로 가볍게 확인해 보세요.</p></li>';
+          return '<li class="cry-result-card"><div class="cry-result-head"><span>기록 기반 참고 정보</span></div><p class="cry-result-note">' + escapeHtml(settings.emptyMessage || "현재 기록을 바탕으로 확인 순서를 계산했지만 화면에 표시할 후보가 적어요.") + '</p><p class="cry-result-action">수유, 기저귀, 트림, 졸림 신호를 차례로 가볍게 확인해 보세요.</p></li>';
         }
+        const subtitle = settings.subtitle || (result && result.summary) || "최근 기록을 바탕으로 추측했어요.";
+        const disclaimer = result && result.disclaimer ? result.disclaimer : "참고용 안내예요. 아기의 상태가 평소와 다르면 전문가와 상의해 주세요.";
         return '<li class="cry-result-card cry-result-modern-card tb-soft-card">' +
-          '<div class="cry-result-hero"><span class="cry-result-emoji" aria-hidden="true">💧</span><div><p class="cry-result-title">지금 우는 이유는?</p><p class="cry-result-subtitle">' + escapeHtml(settings.subtitle || "최근 기록을 바탕으로 추측했어요") + '</p></div></div>' +
+          '<div class="cry-result-hero"><span class="cry-result-emoji" aria-hidden="true">💧</span><div><p class="cry-result-title">지금 우는 이유는?</p><p class="cry-result-subtitle">' + escapeHtml(subtitle) + '</p></div></div>' +
           '<div class="cry-reason-list">' + reasons.map(function (reason) {
             return '<div class="cry-reason-row' + (reason.primary ? ' primary' : '') + '">' +
               '<span class="cry-reason-icon" aria-hidden="true">' + escapeHtml(reason.icon) + '</span>' +
               '<span class="cry-reason-main"><span class="cry-reason-label">' + escapeHtml(reason.label) + (reason.attempted ? ' <span class="cry-attempt-badge">이미 확인함</span>' : '') + '</span>' +
-              '<span class="cry-result-note">' + escapeHtml(reason.actionHint || reason.message || "") + '</span></span>' +
+              '<span class="cry-result-note">' + escapeHtml(reason.attempted ? "이미 확인한 항목이라 다음 확인 순서에서는 뒤로 볼 수 있어요." : (reason.detail || "")) + '</span></span>' +
               '<span class="cry-reason-percent">' + escapeHtml(reason.percent + "%") + '</span>' +
               '<span class="cry-progress-track" role="progressbar" aria-label="' + escapeHtml(reason.label + " 가능성 " + reason.percent + "%") + '" aria-valuemin="0" aria-valuemax="100" aria-valuenow="' + escapeHtml(reason.percent) + '"><span class="cry-progress-fill" style="width:' + escapeHtml(reason.percent) + '%"></span></span>' +
               '</div>';
-          }).join("") + '</div></li>';
+          }).join("") + '</div><p class="cry-result-note">' + escapeHtml(disclaimer) + '</p></li>';
       }
 
-      function renderCryReasonResult() {
+      async function renderCryReasonResult() {
         try {
-        const checkedItems = getCryCheckedItems();
-        const hasSafetyConcern = checkedItems.length > 0;
-        const serverBlockMessage = getServerAnalysisBlockMessage();
-        const displayRecords = getActiveRecordsForDisplay();
-        const gate = getLocalAnalysisGate(displayRecords, null);
-        if (serverBlockMessage || !gate.analysisReady) {
-          renderCryAnalysisBlocked(serverBlockMessage || gate.gateMessage, checkedItems, hasSafetyConcern);
-          return;
-        }
-        const summary = calculateAnalysisSummary(displayRecords);
-        const review = calculateObservationReview(displayRecords, summary);
-        const base = review && review.engine && review.engine.cryReasonSuggestion
-          ? review.engine.cryReasonSuggestion
-          : buildCryReasonSuggestion(buildGuardedAnalysisSnapshot(displayRecords, { baby_id: getCurrentAnalysisBabyId() || (isDemoModeActive() ? demoBaseBabyId() : null) }), {});
-        const result = Object.assign({}, base, {
-          safetyCheck: Object.assign({}, base.safetyCheck || {}, {
-            completed: true,
-            checkedItems: checkedItems,
-            hasSafetyConcern: hasSafetyConcern,
-            safetyMessage: hasSafetyConcern ? CRY_SAFETY_MESSAGE : ""
-          })
-        });
-        result.cryAttemptState = buildCryAttemptState(result, cryAttemptSelectedKeys, { babyId: result.babyId || getCurrentAnalysisBabyId() });
-        result.attemptedActionsForFeedback = result.cryAttemptState.attemptedActionsForFeedback;
-        result.phase513CompletionCheck = result.cryAttemptState.phase513CompletionCheck;
-        result.similarCrySituations = buildSimilarCrySituations(result, { babyId: result.babyId || getCurrentAnalysisBabyId(), nowMs: Date.now() });
-        result.similarCases = {
-          available: result.similarCrySituations.summary.available,
-          matches: result.similarCrySituations.matches.slice(),
-          topMatch: result.similarCrySituations.matches[0] || null,
-          messageKeys: result.similarCrySituations.messageKeys.slice()
-        };
-        result.phase515CompletionCheck = result.similarCrySituations.phase515CompletionCheck;
-        lastCryReasonResult = result;
-        console.debug("[Phase 5.13 Cry Attempt State]", result.cryAttemptState);
-        console.debug("[Phase 5.14 Cry Feedback Learning]", {
-          feedbackRecord: null,
-          feedbackLearningSummary: result.cryFeedbackLearningSummary
-        });
-        console.debug("[Phase 5.15 Similar Cry Situations]", result.similarCrySituations);
-        const renderRankFilter = filterCryRankedReasonsForDataLimit(
-          Array.isArray(result.cryAttemptState.adjustedRankedReasons) ? result.cryAttemptState.adjustedRankedReasons : [],
-          result,
-          {}
-        );
-        const reasons = renderRankFilter.reasons.map(function (reason, index) {
-          return Object.assign({}, reason, { adjustedRank: index + 1 });
-        });
-        result.cryAttemptState.adjustedRankedReasons = reasons;
-        result.cryAttemptState.diagnostics = Object.assign({}, result.cryAttemptState.diagnostics || {}, {
-          renderDataLimitReasonSuppressed: renderRankFilter.suppressed,
-          renderDataLimitReasonSuppressedCount: renderRankFilter.suppressedCount,
-          renderActualCareActionCandidateCount: renderRankFilter.careActionCandidateCount
-        });
-        console.debug("[Phase 5.28.1 Cry Data Limit Filter]", {
-          usableRecordCount: result.diagnostics ? result.diagnostics.usableRecordCount : null,
-          suggestionSuppressed: result.diagnostics ? result.diagnostics.dataLimitReasonSuppressed : null,
-          attemptSuppressed: result.cryAttemptState.diagnostics ? result.cryAttemptState.diagnostics.dataLimitReasonSuppressed : null,
-          renderSuppressed: renderRankFilter.suppressed,
-          actualCareActionCandidateCount: renderRankFilter.careActionCandidateCount
-        });
-        const enoughCryReasonData = hasEnoughCryReasonData(result);
-        const reliabilityMessage = result.reliabilityGuidance && result.reliabilityGuidance.message
-          ? result.reliabilityGuidance.message
-          : "";
-        if (els.crySafetyView) els.crySafetyView.classList.add("hidden");
-        if (els.cryResultView) els.cryResultView.classList.remove("hidden");
-        if (els.cryResultSafetyGuidance) {
-          els.cryResultSafetyGuidance.textContent = CRY_SAFETY_MESSAGE;
-          els.cryResultSafetyGuidance.classList.toggle("hidden", !hasSafetyConcern);
-        }
-        if (els.cryResultSummary) {
-          const summaryText = result.summary && result.summary.shortSummary
-            ? result.summary.shortSummary
-            : "기록을 바탕으로 먼저 확인해볼 순서를 정리했어요.";
-          const demoPrefix = isDemoModeActive() ? "체험용 분석 결과예요. " : "";
-          if (!reasons.length && !enoughCryReasonData) {
-            els.cryResultSummary.textContent = demoPrefix + "최근 기록이 부족해서 정확히 비교하기는 어려워요. 수유, 기저귀, 졸림 신호를 차례로 가볍게 확인해 보세요.";
-          } else {
-            els.cryResultSummary.textContent = demoPrefix + (reliabilityMessage
-              ? summaryText + " " + reliabilityMessage
-              : summaryText);
-          }
-        }
-        if (!els.cryResultList) return;
-        renderCryAttemptChips(result.cryAttemptState);
-        renderSimilarCrySituations(result.similarCrySituations);
-        renderCryFeedbackChips();
-        if (!reasons.length && !enoughCryReasonData) {
-          els.cryResultList.innerHTML = "";
-          return;
-        }
-        if (!reasons.length) {
-          els.cryResultList.innerHTML = '<li class="cry-result-card"><div class="cry-result-head"><span>기록 기반 참고 정보</span></div><p class="cry-result-note">현재 기록을 바탕으로 확인 순서를 계산했지만 화면에 표시할 후보가 적어요.</p><p class="cry-result-action">수유, 기저귀, 트림/가스, 잠/안정 신호를 차례로 가볍게 확인해 보세요.</p></li>';
-          return;
-        }
-        els.cryResultList.innerHTML = renderCryReasonUI(result, {
-          subtitle: isDemoModeActive() ? "체험용 분석 결과예요." : "최근 기록을 바탕으로 추측했어요"
-        });
-        } catch (error) {
-          recordMobileDiagnosticError("render_cry_reason_result", error, { selectedAttemptKeys: cryAttemptSelectedKeys.slice() });
+          debugLog("cryReason:click", { selectedAttemptKeys: cryAttemptSelectedKeys.slice() });
+          DEBUG_STATE.lastButtonEvent = "cryReason " + nowIso();
+          const checkedItems = getCryCheckedItems();
+          const hasSafetyConcern = checkedItems.length > 0;
+          const result = await getCryReasonResult({ checkedItems: checkedItems, attemptedKeys: cryAttemptSelectedKeys });
+          lastCryReasonResult = result;
           if (els.crySafetyView) els.crySafetyView.classList.add("hidden");
           if (els.cryResultView) els.cryResultView.classList.remove("hidden");
-          if (els.cryResultSummary) els.cryResultSummary.textContent = "울어요 확인 순서를 계산하는 중 문제가 생겨 기본 안내로 표시합니다.";
+          if (els.cryResultSafetyGuidance) {
+            els.cryResultSafetyGuidance.textContent = CRY_SAFETY_MESSAGE;
+            els.cryResultSafetyGuidance.classList.toggle("hidden", !hasSafetyConcern);
+          }
+          renderCryAttemptChips({ summary: { nextSuggestionText: "", guidanceText: "지금은 수유, 기저귀, 트림, 졸림 신호를 차례로 가볍게 확인해 보세요." } });
+          renderSimilarCrySituations({ matches: [], summary: { shortSummary: result.gateMessage || result.summary || "" } });
+          renderCryFeedbackChips();
+          if (!result.analysis_ready) {
+            renderCryAnalysisBlocked(result.gateMessage || result.summary || "울음 원인을 불러오는 중 문제가 생겼어요. 잠시 후 다시 시도해 주세요.", checkedItems, hasSafetyConcern);
+            updateCryDebugState(result, { rpcStatus: DEBUG_STATE.cry_server_rpc_status });
+            return;
+          }
+          if (els.cryResultSummary) {
+            els.cryResultSummary.textContent = result.summary || "최근 기록을 바탕으로 추측했어요.";
+          }
           if (els.cryResultList) {
-            els.cryResultList.innerHTML = '<li class="cry-result-card"><div class="cry-result-head"><span>기록 기반 참고 정보</span></div><p class="cry-result-note">수유, 기저귀, 트림/가스, 잠/안정 신호를 차례로 가볍게 확인해 보세요.</p></li>';
+            els.cryResultList.innerHTML = renderCryReasonUI(result, {
+              subtitle: result.summary || (result.mode === "demo" ? "체험용 분석 결과예요." : "최근 기록을 바탕으로 추측했어요")
+            });
+          }
+          updateCryDebugState(result, { rpcStatus: DEBUG_STATE.cry_server_rpc_status });
+        } catch (error) {
+          const message = error && error.message ? error.message : String(error);
+          recordMobileDiagnosticError("render_cry_reason_result", error, { selectedAttemptKeys: cryAttemptSelectedKeys.slice() });
+          updateCryDebugState(null, { rpcStatus: DEBUG_STATE.cry_server_rpc_status || "error", error: message });
+          if (els.crySafetyView) els.crySafetyView.classList.add("hidden");
+          if (els.cryResultView) els.cryResultView.classList.remove("hidden");
+          if (els.cryResultSummary) els.cryResultSummary.textContent = "울음 원인을 불러오는 중 문제가 생겼어요. 잠시 후 다시 시도해 주세요.";
+          if (els.cryResultList) {
+            els.cryResultList.innerHTML = '<li class="cry-result-card"><div class="cry-result-head"><span>기록 기반 참고 정보</span></div><p class="cry-result-note">울음 원인을 불러오는 중 문제가 생겼어요. 잠시 후 다시 시도해 주세요.</p></li>';
           }
         }
       }

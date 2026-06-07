@@ -1,5 +1,5 @@
-const APP_VERSION = "6.0.9-core-ui-foundation";
-const CACHE_NAME = "baby-life-log-v6.0.9-core-ui-foundation";
+const APP_VERSION = "6.1.0-cry-reason";
+const CACHE_NAME = "baby-life-log-v6.1.0-cry-reason";
 const APP_SHELL = [
   "./manifest.json",
   `./service-worker.js?v=${APP_VERSION}`,
