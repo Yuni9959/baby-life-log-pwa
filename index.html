@@ -282,6 +282,33 @@
       line-height: 1.45;
       word-break: keep-all;
     }
+    .tb-soft-card {
+      border: 1px solid rgba(221, 202, 176, 0.9);
+      border-radius: 22px;
+      background: rgba(255, 253, 248, 0.94);
+      box-shadow: 0 8px 22px rgba(95, 74, 45, 0.08);
+    }
+    .tb-green-button {
+      min-height: 46px;
+      padding: 0 14px;
+      border: 0;
+      border-radius: 16px;
+      background: #6f9366;
+      color: #fff;
+      font-weight: 900;
+    }
+    .tb-soft-pill {
+      display: inline-flex;
+      align-items: center;
+      width: fit-content;
+      min-height: 24px;
+      padding: 0 10px;
+      border-radius: 999px;
+      background: #e8f2df;
+      color: #5f8058;
+      font-size: 0.76rem;
+      font-weight: 900;
+    }
     .report-card { min-height: 92px; }
     .report-label { color: var(--muted); font-size: 0.78rem; font-weight: 850; }
     .report-title { margin-top: 5px; font-size: 1rem; font-weight: 900; line-height: 1.3; }
@@ -1017,6 +1044,144 @@
       font-size: 0.72rem;
       font-weight: 850;
     }
+    .daily-report-card {
+      display: grid;
+      gap: 12px;
+      margin-top: 10px;
+      padding: 14px;
+    }
+    .daily-report-header { display: flex; justify-content: space-between; gap: 10px; align-items: flex-start; }
+    .daily-report-title { margin: 0; color: #354b31; font-size: 1rem; font-weight: 950; }
+    .daily-report-subtitle { margin: 3px 0 0; color: var(--muted); font-size: 0.82rem; font-weight: 800; }
+    .daily-timeline { display: grid; gap: 0; }
+    .daily-timeline-row {
+      display: grid;
+      grid-template-columns: 44px 28px minmax(0, 1fr);
+      gap: 8px;
+      align-items: stretch;
+      min-width: 0;
+    }
+    .daily-timeline-time {
+      padding-top: 8px;
+      color: var(--muted);
+      font-size: 0.78rem;
+      font-weight: 900;
+      white-space: nowrap;
+    }
+    .daily-timeline-line {
+      position: relative;
+      display: flex;
+      justify-content: center;
+    }
+    .daily-timeline-line::before {
+      content: "";
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      width: 2px;
+      background: rgba(221, 202, 176, 0.9);
+    }
+    .daily-timeline-node {
+      z-index: 1;
+      display: inline-flex;
+      width: 28px;
+      height: 28px;
+      align-items: center;
+      justify-content: center;
+      margin-top: 6px;
+      border: 1px solid rgba(221, 202, 176, 0.9);
+      border-radius: 999px;
+      background: #e8f2df;
+      font-size: 0.9rem;
+    }
+    .daily-timeline-event {
+      min-width: 0;
+      margin: 0 0 10px;
+      padding: 10px 12px;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: var(--panel);
+      box-shadow: 0 1px 0 rgba(77, 61, 42, 0.04);
+    }
+    .daily-timeline-event-title { color: var(--text); font-size: 0.9rem; font-weight: 920; line-height: 1.3; }
+    .daily-timeline-event-subtitle { margin-top: 3px; color: var(--muted); font-size: 0.78rem; line-height: 1.35; word-break: keep-all; }
+    .record-card-modern {
+      position: relative;
+      overflow: hidden;
+      display: grid;
+      grid-template-columns: auto auto minmax(0, 1fr) auto;
+      gap: 10px;
+      align-items: start;
+      padding: 12px;
+      border: 1px solid rgba(221, 202, 176, 0.9);
+      border-radius: 20px;
+      background: rgba(255, 253, 248, 0.96);
+      box-shadow: 0 8px 20px rgba(95, 74, 45, 0.07);
+    }
+    .record-card-icon {
+      display: inline-flex;
+      width: 38px;
+      height: 38px;
+      align-items: center;
+      justify-content: center;
+      border-radius: 14px;
+      background: #e8f2df;
+      font-size: 1.05rem;
+      flex: 0 0 auto;
+    }
+    .record-card-content { min-width: 0; display: grid; gap: 4px; }
+    .record-card-title { color: var(--text); font-weight: 950; line-height: 1.3; overflow-wrap: anywhere; }
+    .record-card-time, .record-card-meta { color: var(--muted); font-size: 0.8rem; line-height: 1.35; overflow-wrap: anywhere; }
+    .record-card-main { display: contents; }
+    .record-card-modern .log-select { margin-top: 8px; }
+    .record-card-modern.demo-record-card { grid-template-columns: auto minmax(0, 1fr) auto; }
+    .record-card-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
+    .record-edit-btn, .record-delete-btn {
+      min-height: 38px;
+      padding: 0 11px;
+      border-radius: 14px;
+      font-size: 0.82rem;
+      font-weight: 900;
+    }
+    .record-edit-btn { background: #e8f2df; color: #4d7147; border: 1px solid rgba(111, 147, 102, 0.24); }
+    .record-delete-btn { background: #fff1ee; color: #a64b41; border: 1px solid rgba(185, 90, 81, 0.22); }
+    .record-chevron { color: var(--muted); font-weight: 950; line-height: 38px; }
+    .record-swipe-bg { display: none; }
+    .cry-result-modern-card {
+      display: grid;
+      gap: 12px;
+      padding: 14px;
+    }
+    .cry-result-hero {
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr);
+      gap: 10px;
+      align-items: center;
+      padding: 12px;
+      border-radius: 18px;
+      background: #e8f2df;
+    }
+    .cry-result-emoji { font-size: 1.6rem; }
+    .cry-result-title { margin: 0; color: #354b31; font-size: 1rem; font-weight: 950; }
+    .cry-result-subtitle { margin: 3px 0 0; color: #5f8058; font-size: 0.8rem; font-weight: 800; }
+    .cry-reason-list { display: grid; gap: 10px; }
+    .cry-reason-row {
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr) auto;
+      gap: 8px;
+      align-items: center;
+      padding: 10px;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: var(--panel);
+    }
+    .cry-reason-row.primary { border-color: rgba(111, 147, 102, 0.38); background: rgba(232, 242, 223, 0.44); }
+    .cry-reason-icon { display: inline-flex; width: 32px; height: 32px; align-items: center; justify-content: center; border-radius: 12px; background: #faf6ef; }
+    .cry-reason-main { min-width: 0; display: grid; gap: 5px; }
+    .cry-reason-label { font-weight: 920; color: var(--text); }
+    .cry-reason-percent { font-weight: 950; color: #354b31; }
+    .cry-progress-track { grid-column: 2 / 4; height: 8px; overflow: hidden; border-radius: 999px; background: rgba(221, 202, 176, 0.55); }
+    .cry-progress-fill { height: 100%; border-radius: 999px; background: #6f9366; }
     .empty { padding: 14px; color: var(--muted); border: 1px dashed var(--line); border-radius: var(--radius); background: var(--panel); }
 
     .data-tools { display: grid; gap: 10px; }
@@ -1051,18 +1216,67 @@
     }
     .data-item strong { display: block; margin-bottom: 2px; color: var(--muted); font-size: 0.74rem; }
     .data-detail { display: block; margin-top: 4px; color: var(--muted); font-size: 0.74rem; line-height: 1.35; }
-    .family-member-list { display: grid; gap: 10px; margin-top: 10px; }
-    .family-member-card {
-      padding: 12px;
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      background: var(--panel-strong);
+    .family-share-card {
+      display: grid;
+      gap: 12px;
+      margin-top: 10px;
+      padding: 14px;
     }
-    .family-member-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
+    .family-member-list > .family-share-card { grid-column: 1 / -1; }
+    .family-share-header { display: flex; justify-content: space-between; gap: 10px; align-items: flex-start; }
+    .family-share-title { margin: 0; color: #354b31; font-size: 1rem; font-weight: 950; }
+    .family-share-subtitle { margin: 3px 0 0; color: var(--muted); font-size: 0.82rem; font-weight: 800; }
+    .family-member-list, .family-member-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(128px, 1fr)); gap: 10px; margin-top: 10px; }
+    .family-member-card {
+      min-width: 0;
+      padding: 12px;
+      border: 1px solid rgba(221, 202, 176, 0.9);
+      border-radius: 18px;
+      background: rgba(255, 253, 248, 0.96);
+      box-shadow: 0 4px 12px rgba(95, 74, 45, 0.06);
+    }
+    .family-member-avatar {
+      display: inline-flex;
+      width: 40px;
+      height: 40px;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 8px;
+      border-radius: 16px;
+      background: #e8f2df;
+      color: #5f8058;
+      font-size: 1.05rem;
+      font-weight: 950;
+    }
+    .family-member-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
     .family-member-name { min-width: 0; font-weight: 800; overflow-wrap: anywhere; }
+    .family-member-role { color: var(--muted); font-size: 0.8rem; font-weight: 850; }
     .family-member-badge { flex: 0 0 auto; padding: 3px 7px; border-radius: 999px; color: #fff; background: var(--brand); font-size: 0.72rem; font-weight: 800; }
     .family-member-meta { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; color: var(--text); font-size: 0.78rem; }
     .family-member-meta span { min-width: 0; overflow-wrap: anywhere; }
+    .family-invite-button { width: 100%; }
+    .family-activity-card {
+      padding: 10px 12px;
+      border: 1px solid rgba(111, 147, 102, 0.2);
+      border-radius: 16px;
+      background: rgba(232, 242, 223, 0.45);
+      color: #354b31;
+      font-size: 0.84rem;
+      font-weight: 850;
+      line-height: 1.4;
+    }
+    @media (max-width: 430px) {
+      .daily-timeline-row { grid-template-columns: 42px 26px minmax(0, 1fr); gap: 6px; }
+      .record-card-modern, .record-card-modern.demo-record-card { grid-template-columns: auto minmax(0, 1fr); }
+      .record-card-modern .log-select { grid-row: 1; grid-column: 1; }
+      .record-card-modern .record-card-icon { grid-row: 1; grid-column: 1; margin-top: 30px; }
+      .record-card-modern.demo-record-card .record-card-icon { margin-top: 0; }
+      .record-card-modern .record-card-content { grid-row: 1; grid-column: 2; }
+      .record-card-modern .record-card-actions { grid-column: 1 / -1; justify-content: flex-start; padding-left: 48px; }
+      .record-card-modern .record-chevron { display: none; }
+      .cry-reason-row { grid-template-columns: auto minmax(0, 1fr) auto; }
+      .family-member-list, .family-member-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
     .invite-link-box {
       padding: 10px;
       border: 1px dashed var(--line-strong);
@@ -2674,7 +2888,7 @@
   <main class="app app-shell">
     <header class="topbar">
       <div>
-        <div class="version-badge" id="versionBadge">v6.0.8-demo-data</div>
+        <div class="version-badge" id="versionBadge">v6.0.9-core-ui-foundation</div>
         <div class="demo-mode-badge hidden" id="demoModeBadge">체험 모드</div>
         <h1 id="babyTitle">우리 아기</h1>
         <div class="baby-days" id="babyDays">생년월일을 입력해 주세요</div>
@@ -2889,6 +3103,7 @@
       <div class="collapsible-body hidden" id="lifeReportBody">
         <div class="stats-grid" id="statsGrid"></div>
         <div class="report-grid" id="reportGrid"></div>
+        <div class="daily-report-card tb-soft-card" id="dailyTimelineCard"></div>
       </div>
     </section>
 
@@ -3534,7 +3749,7 @@
   <script>
     document.addEventListener("DOMContentLoaded", function () {
       if ("serviceWorker" in navigator) {
-        navigator.serviceWorker.register("./sw.js?v=6.0.5-mobile-save-fix").catch(function (error) {
+        navigator.serviceWorker.register("./sw.js?v=6.0.9-core-ui-foundation").catch(function (error) {
           console.warn("Service worker registration failed", error);
         });
       }
@@ -3729,9 +3944,9 @@
       const PRE_REPAIR_BACKUP_KEY = "baby_life_log_app_backup_before_repair";
       const BACKUP_FORMAT_VERSION = 2;
       const APP_NAME = "baby-life-log";
-      const APP_VERSION = "6.0.8-demo-data";
+      const APP_VERSION = "6.0.9-core-ui-foundation";
       const APP_PHASE_LABEL = "";
-      const SERVICE_WORKER_CACHE_NAME = "baby-life-log-v6.0.8-demo-data";
+      const SERVICE_WORKER_CACHE_NAME = "baby-life-log-v6.0.9-core-ui-foundation";
       const MIN_ANALYSIS_RECORDS = 10;
       const ANALYSIS_SERVER_RECONNECT_MESSAGE = "서버 연결 후 분석을 확인할 수 있어요. 서버 재연결을 눌러 주세요.";
       const ANALYSIS_GATE_DETAIL_MESSAGE = "기록이 조금 더 쌓이면 최근 흐름을 더 안정적으로 보여드릴게요.";
@@ -4298,7 +4513,7 @@
       };
       var DEBUG_LOGS = [];
       var DEBUG_STATE = {
-        version: "v6.0.8-demo-data",
+        version: "v6.0.9-core-ui-foundation",
         swInfo: null,
         localStorageTest: "",
         lastButtonEvent: "",
@@ -18988,6 +19203,9 @@
         const records = getAllRecords().filter(function (r) {
           return r && r.createdAt && !Number.isNaN(new Date(r.createdAt).getTime());
         });
+        renderDailyTimeline(getActiveRecordsForDisplay().filter(function (r) {
+          return r && r.createdAt && !Number.isNaN(new Date(r.createdAt).getTime());
+        }), new Date());
         if (!records.length) {
           els.reportSummary.textContent = "기록이 쌓이면 아기의 생활 패턴을 요약해드릴게요.";
           els.reportGrid.innerHTML = '<div class="report-card report-empty">수유, 기저귀, 수면 기록을 몇 번 남기면 최근 흐름을 함께 보여드릴게요.</div>';
@@ -19064,6 +19282,89 @@
             " 기저귀 기록은 " + compareToAverage(analysis.today.diaper.total, analysis.averages.diaperCount, "회")
         });
         els.reportGrid.innerHTML = cards.map(reportCardHtml).join("");
+      }
+
+      function buildDailyTimelineItems(records, baseDate) {
+        const date = baseDate ? new Date(baseDate) : new Date();
+        return (records || []).filter(function (record) {
+          return record && record.createdAt && isSameDay(record.createdAt, date);
+        }).sort(function (a, b) {
+          return new Date(a.createdAt) - new Date(b.createdAt);
+        }).slice(0, 18).map(function (record) {
+          return {
+            time: formatTimelineTime(record),
+            icon: getTimelineEventIcon(record),
+            title: getTimelineEventTitle(record),
+            subtitle: getTimelineEventSubtitle(record)
+          };
+        });
+      }
+
+      function isSameDay(value, date) {
+        const target = new Date(value);
+        return target.getFullYear() === date.getFullYear() &&
+          target.getMonth() === date.getMonth() &&
+          target.getDate() === date.getDate();
+      }
+
+      function formatTimelineTime(record) {
+        return localTimeText(new Date(record.createdAt));
+      }
+
+      function getTimelineEventIcon(record) {
+        if (record.type === "feeding") return "🍼";
+        if (record.type === "diaper") return "☁";
+        if (record.type === "sleep") return "☾";
+        if (record.type === "wake") return "☀";
+        if (record.type === "burp") return "✓";
+        return "•";
+      }
+
+      function getTimelineEventTitle(record) {
+        if (record.type === "feeding") return "수유" + (record.amount ? " " + record.amount + "ml" : "");
+        if (record.type === "diaper") return "기저귀" + (record.subtype ? " · " + (subtypeLabels[record.subtype] || record.subtype) : "");
+        if (record.type === "sleep") return "낮잠 시작";
+        if (record.type === "wake") return "깨어남";
+        if (record.type === "burp") return "트림";
+        return typeLabels[record.type] || "기록";
+      }
+
+      function getTimelineEventSubtitle(record) {
+        const details = [];
+        if (record.type === "feeding") {
+          details.push(subtypeLabels[record.subtype || "formula"] || "수유");
+          if (record.memo) details.push(record.memo);
+        } else if (record.type === "sleep" || record.type === "wake") {
+          details.push(elapsedText(record.createdAt));
+          if (record.memo) details.push(record.memo);
+        } else {
+          if (record.memo) details.push(record.memo);
+          details.push(elapsedText(record.createdAt));
+        }
+        if (isDemoRecord(record)) details.push("체험 기록");
+        return details.filter(Boolean).join(" · ");
+      }
+
+      function renderDailyTimeline(records, baseDate) {
+        const card = document.getElementById("dailyTimelineCard");
+        if (!card) return;
+        const items = buildDailyTimelineItems(records, baseDate);
+        const date = baseDate ? new Date(baseDate) : new Date();
+        const subtitle = (date.getMonth() + 1) + "월 " + date.getDate() + "일 · 오늘 하루";
+        if (!items.length) {
+          card.innerHTML = '<div class="daily-report-header"><div><h3 class="daily-report-title">오늘 하루 흐름</h3><p class="daily-report-subtitle">' + escapeHtml(subtitle) + '</p></div></div>' +
+            '<div class="empty">오늘 기록이 쌓이면 하루 흐름을 정리해드릴게요.</div>';
+          return;
+        }
+        card.innerHTML = '<div class="daily-report-header"><div><h3 class="daily-report-title">오늘 하루 흐름</h3><p class="daily-report-subtitle">' + escapeHtml(subtitle) + '</p></div><span class="tb-soft-pill">' + items.length + '개</span></div>' +
+          '<div class="daily-timeline">' + items.map(function (item) {
+            return '<div class="daily-timeline-row">' +
+              '<div class="daily-timeline-time">' + escapeHtml(item.time) + '</div>' +
+              '<div class="daily-timeline-line"><span class="daily-timeline-node" aria-hidden="true">' + escapeHtml(item.icon) + '</span></div>' +
+              '<div class="daily-timeline-event"><div class="daily-timeline-event-title">' + escapeHtml(item.title) + '</div>' +
+              '<div class="daily-timeline-event-subtitle">' + escapeHtml(item.subtitle || "") + '</div></div>' +
+              '</div>';
+          }).join("") + '</div>';
       }
 
       function feedingPatternInsight(records) {
@@ -20516,32 +20817,56 @@
           return;
         }
 
-        const items = limited.map(function (record) {
-          const demo = isDemoRecord(record);
-          return '<li class="log-item">' +
-            (demo ? '<span class="demo-record-badge">체험 기록</span>' : '<input class="log-select" type="checkbox" aria-label="기록 선택" value="' + escapeHtml(record.id) + '">') +
-            '<span class="log-text">' + logItemHtml(record) + '</span>' +
-            (demo ? '' : '<button type="button" class="edit-record" data-edit-id="' + escapeHtml(record.id) + '">수정</button>' +
-            '<button type="button" class="delete-record" data-delete-id="' + escapeHtml(record.id) + '">삭제</button>') +
-            '</li>';
-        }).join("");
+        const items = limited.map(renderModernRecordCard).join("");
 
         els.logs.innerHTML = '<ul class="log-list">' + items + '</ul>';
         updateSelectionState();
       }
 
+      function renderModernRecordCard(record) {
+        const demo = isDemoRecord(record);
+        const id = escapeHtml(record.id);
+        const actions = demo
+          ? '<span class="demo-record-badge record-demo-badge">체험 기록</span>'
+          : '<button type="button" class="edit-record record-edit-btn" data-edit-id="' + id + '" aria-label="기록 수정">수정</button>' +
+            '<button type="button" class="delete-record record-delete-btn" data-delete-id="' + id + '" aria-label="기록 삭제">삭제</button>';
+        return '<li class="log-item record-card-modern' + (demo ? ' demo-record-card' : '') + '">' +
+          '<span class="record-swipe-bg" aria-hidden="true"></span>' +
+          (demo ? '' : '<input class="log-select" type="checkbox" aria-label="기록 선택" value="' + id + '">') +
+          '<span class="record-card-icon" aria-hidden="true">' + escapeHtml(getRecordDisplayIcon(record)) + '</span>' +
+          '<span class="log-text record-card-content">' + logItemHtml(record) + '</span>' +
+          '<span class="record-card-actions">' + actions + '<span class="record-chevron" aria-hidden="true">›</span></span>' +
+          '</li>';
+      }
+
       function logItemHtml(record) {
-        const type = typeLabels[record.type] || record.type;
-        const value = recordValueText(record);
-        const when = isToday(record.createdAt) ? localTimeText(new Date(record.createdAt)) : fullDateTimeText(record.createdAt);
+        const value = getRecordDisplayTitle(record);
+        const when = getRecordDisplayTime(record);
         const memo = record.memo ? '<span class="log-memo">메모: ' + escapeHtml(record.memo) + '</span>' : "";
         const cloudStatus = getRecordCloudStatus(record);
         const cloud = isDemoRecord(record)
           ? '<span class="sync-badge local">서버 제외</span>'
           : '<span class="sync-badge ' + escapeHtml(cloudStatus.tone) + '">' + escapeHtml(recordCloudLabel(record)) + '</span>';
-        return '<span class="log-main"><span class="type-pill type-' + escapeHtml(record.type) + '">' + escapeHtml(type) +
-          '</span><span>' + escapeHtml(value) + '</span></span><span class="log-meta">' +
-          escapeHtml(when + " · " + elapsedText(record.createdAt)) + '</span>' + memo + cloud;
+        return '<span class="log-main record-card-title"><span class="type-pill type-' + escapeHtml(record.type) + '">' + escapeHtml(typeLabels[record.type] || record.type) +
+          '</span><span>' + escapeHtml(value) + '</span></span><span class="log-meta record-card-time">' +
+          escapeHtml(when + " · " + elapsedText(record.createdAt)) + '</span><span class="record-card-meta">' + cloud + '</span>' + memo;
+      }
+
+      function getRecordDisplayTitle(record) {
+        return recordValueText(record);
+      }
+
+      function getRecordDisplayTime(record) {
+        return isToday(record.createdAt) ? localTimeText(new Date(record.createdAt)) : fullDateTimeText(record.createdAt);
+      }
+
+      function getRecordDisplayIcon(record) {
+        if (record.type === "feeding") return "🍼";
+        if (record.type === "diaper") return "☁";
+        if (record.type === "sleep") return "☾";
+        if (record.type === "wake") return "☀";
+        if (record.type === "burp") return "✓";
+        return "•";
       }
 
       function getRecordCloudStatus(record) {
@@ -20964,6 +21289,54 @@
         };
       }
 
+      function normalizeCryReasons(result) {
+        const state = result && result.cryAttemptState ? result.cryAttemptState : {};
+        return (Array.isArray(state.adjustedRankedReasons) ? state.adjustedRankedReasons : []).slice(0, 4).map(function (reason, index) {
+          const percent = Number.isFinite(reason.normalizedPercent)
+            ? Math.round(reason.normalizedPercent)
+            : Math.max(0, Math.min(100, Math.round(Number(reason.adjustedScore || reason.rawScore || 0))));
+          return {
+            key: reason.reasonKey || reason.key || ("reason-" + index),
+            label: reason.label || "확인 항목",
+            percent: Math.max(0, Math.min(100, percent)),
+            icon: getCryReasonIcon(reason),
+            message: reason.message || "",
+            actionHint: reason.attempted ? "이미 확인한 항목이라 다음 확인 순서에서는 뒤로 보냈어요." : (reason.nextActionHint || reason.actionHint || ""),
+            attempted: !!reason.attempted,
+            primary: index === 0
+          };
+        });
+      }
+
+      function getCryReasonIcon(reason) {
+        const key = reason && reason.reasonKey ? reason.reasonKey : "";
+        if (key === "hunger" || key === "feeding") return "🍼";
+        if (key === "sleepiness" || key === "sleep") return "☾";
+        if (key === "diaper") return "☁";
+        if (key === "burpGas" || key === "burp" || key === "gas") return "✓";
+        if (key === "comfort") return "♡";
+        return "•";
+      }
+
+      function renderCryReasonUI(result, options) {
+        const settings = options || {};
+        const reasons = normalizeCryReasons(result);
+        if (!reasons.length) {
+          return '<li class="cry-result-card"><div class="cry-result-head"><span>기록 기반 참고 정보</span></div><p class="cry-result-note">' + escapeHtml(settings.emptyMessage || "현재 기록을 바탕으로 확인 순서를 계산했지만 화면에 표시할 후보가 적어요.") + '</p><p class="cry-result-action">수유, 기저귀, 트림/가스, 잠/안정 신호를 차례로 가볍게 확인해 보세요.</p></li>';
+        }
+        return '<li class="cry-result-card cry-result-modern-card tb-soft-card">' +
+          '<div class="cry-result-hero"><span class="cry-result-emoji" aria-hidden="true">💧</span><div><p class="cry-result-title">지금 우는 이유는?</p><p class="cry-result-subtitle">' + escapeHtml(settings.subtitle || "최근 기록을 바탕으로 추측했어요") + '</p></div></div>' +
+          '<div class="cry-reason-list">' + reasons.map(function (reason) {
+            return '<div class="cry-reason-row' + (reason.primary ? ' primary' : '') + '">' +
+              '<span class="cry-reason-icon" aria-hidden="true">' + escapeHtml(reason.icon) + '</span>' +
+              '<span class="cry-reason-main"><span class="cry-reason-label">' + escapeHtml(reason.label) + (reason.attempted ? ' <span class="cry-attempt-badge">이미 확인함</span>' : '') + '</span>' +
+              '<span class="cry-result-note">' + escapeHtml(reason.actionHint || reason.message || "") + '</span></span>' +
+              '<span class="cry-reason-percent">' + escapeHtml(reason.percent + "%") + '</span>' +
+              '<span class="cry-progress-track" role="progressbar" aria-label="' + escapeHtml(reason.label + " 가능성 " + reason.percent + "%") + '" aria-valuemin="0" aria-valuemax="100" aria-valuenow="' + escapeHtml(reason.percent) + '"><span class="cry-progress-fill" style="width:' + escapeHtml(reason.percent) + '%"></span></span>' +
+              '</div>';
+          }).join("") + '</div></li>';
+      }
+
       function renderCryReasonResult() {
         try {
         const checkedItems = getCryCheckedItems();
@@ -21062,19 +21435,9 @@
           els.cryResultList.innerHTML = '<li class="cry-result-card"><div class="cry-result-head"><span>기록 기반 참고 정보</span></div><p class="cry-result-note">현재 기록을 바탕으로 확인 순서를 계산했지만 화면에 표시할 후보가 적어요.</p><p class="cry-result-action">수유, 기저귀, 트림/가스, 잠/안정 신호를 차례로 가볍게 확인해 보세요.</p></li>';
           return;
         }
-        els.cryResultList.innerHTML = reasons.map(function (reason) {
-          const evidence = Array.isArray(reason.evidence) && reason.evidence.length
-            ? reason.evidence.slice(0, 2).join(" ")
-            : reason.message;
-          const attemptedBadge = reason.attempted ? '<span class="cry-attempt-badge">이미 확인함</span>' : '';
-          const actionText = reason.attempted ? "이미 확인한 항목이라 다음 확인 순서에서는 뒤로 보냈어요." : (reason.nextActionHint || reason.actionHint || "");
-          return '<li class="cry-result-card">' +
-            '<div class="cry-result-head"><span>' + escapeHtml(reason.adjustedRank + "순위  " + reason.label) + '</span>' + attemptedBadge + '<span class="cry-result-rank">' + escapeHtml((Number.isFinite(reason.normalizedPercent) ? reason.normalizedPercent : Math.round(reason.adjustedScore)) + "%") + '</span></div>' +
-            '<p class="cry-result-note">' + escapeHtml(reason.message || "") + '</p>' +
-            '<p class="cry-result-evidence">' + escapeHtml(evidence || "") + '</p>' +
-            '<p class="cry-result-action">' + escapeHtml(actionText || "") + '</p>' +
-            '</li>';
-        }).join("");
+        els.cryResultList.innerHTML = renderCryReasonUI(result, {
+          subtitle: isDemoModeActive() ? "체험용 분석 결과예요." : "최근 기록을 바탕으로 추측했어요"
+        });
         } catch (error) {
           recordMobileDiagnosticError("render_cry_reason_result", error, { selectedAttemptKeys: cryAttemptSelectedKeys.slice() });
           if (els.crySafetyView) els.crySafetyView.classList.add("hidden");
@@ -22860,6 +23223,59 @@
         return member.display_name || member.email || member.account_code || ("보호자 " + shortUserId(member.user_id || ""));
       }
 
+      function getFamilyMembersForDisplay(state) {
+        if (state && Array.isArray(state.members) && state.members.length) return state.members;
+        if (isDemoModeActive()) {
+          return [
+            { display_name: "엄마", role: "관리자", status: "active", is_demo_member: true },
+            { display_name: "아빠", role: "함께 기록", status: "active", is_demo_member: true },
+            { display_name: "할머니", role: "함께 기록", status: "active", is_demo_member: true }
+          ];
+        }
+        return [];
+      }
+
+      function getFamilyActivityForDisplay(members) {
+        const latest = getActiveRecordsForDisplay().find(function (record) { return record && !isDemoRecord(record); });
+        if (latest) {
+          return "가족이 최근 " + getRecordDisplayTitle(latest) + " 기록을 남겼어요.";
+        }
+        if (isDemoModeActive() && members && members.length) return "아빠가 방금 수유 100ml를 기록했어요.";
+        return "가족을 초대하면 같은 아기의 기록을 함께 볼 수 있어요.";
+      }
+
+      function familyMemberRoleLabel(member) {
+        if (!member) return "함께 기록";
+        if (member.role === "owner" || member.role === "admin") return "관리자";
+        if (member.role === "caregiver") return "함께 기록";
+        return member.role || "함께 기록";
+      }
+
+      function familyMemberAvatar(member, index) {
+        const name = displayMemberName(member);
+        return name ? name.slice(0, 1) : String(index + 1);
+      }
+
+      function renderFamilyShareCard(state) {
+        const members = getFamilyMembersForDisplay(state);
+        if (!members.length) {
+          return '<div class="family-share-card tb-soft-card"><div class="family-share-header"><div><h4 class="family-share-title">우리 가족</h4><p class="family-share-subtitle">함께 기록할 보호자를 초대할 수 있어요.</p></div></div>' +
+            '<div class="empty">가족을 초대하면 같은 아기의 기록을 함께 볼 수 있어요.</div>' +
+            '<button type="button" class="family-invite-button tb-green-button" data-family-invite-action="copy">+ 가족 초대하기</button></div>';
+        }
+        return '<div class="family-share-card tb-soft-card"><div class="family-share-header"><div><h4 class="family-share-title">우리 가족 · ' + members.length + '명이 함께 기록 중</h4><p class="family-share-subtitle">같은 아기의 하루 기록을 함께 볼 수 있어요.</p></div>' + (isDemoModeActive() ? '<span class="tb-soft-pill">체험 모드</span>' : '') + '</div>' +
+          '<div class="family-member-grid">' + members.map(function (member, index) {
+            return '<article class="family-member-card">' +
+              '<span class="family-member-avatar" aria-hidden="true">' + escapeHtml(familyMemberAvatar(member, index)) + '</span>' +
+              '<div class="family-member-head"><div><div class="family-member-name">' + escapeHtml(displayMemberName(member)) + '</div><div class="family-member-role">' + escapeHtml(familyMemberRoleLabel(member)) + '</div></div>' +
+              (member.is_current_user ? '<span class="family-member-badge">현재 사용자</span>' : '') + '</div>' +
+              '<div class="family-member-meta"><span><strong>상태</strong> ' + escapeHtml(member.status || "active") + '</span><span><strong>로그인</strong> ' + escapeHtml(member.provider || "-") + '</span></div>' +
+              '</article>';
+          }).join("") + '</div>' +
+          '<button type="button" class="family-invite-button tb-green-button" data-family-invite-action="copy">+ 가족 초대하기</button>' +
+          '<div class="family-activity-card">' + escapeHtml(getFamilyActivityForDisplay(members)) + '</div></div>';
+      }
+
       function renderFamilyMembers() {
         if (!els.familyMembersList) return;
         const state = familyMembersState;
@@ -22874,26 +23290,11 @@
           return;
         }
         if (!state.members.length) {
-          els.familyMembersList.innerHTML = "";
-          if (els.familyMembersMessage) els.familyMembersMessage.textContent = "가족 구성원 정보를 아직 불러오지 않았습니다.";
+          els.familyMembersList.innerHTML = renderFamilyShareCard(state);
+          if (els.familyMembersMessage) els.familyMembersMessage.textContent = isDemoModeActive() ? "체험용 가족 구성원을 표시합니다." : "가족 구성원 정보를 아직 불러오지 않았습니다.";
           return;
         }
-        els.familyMembersList.innerHTML = state.members.map(function (member) {
-          const linked = Array.isArray(member.linked_providers) && member.linked_providers.length ? member.linked_providers.join(", ") : "-";
-          return '<article class="family-member-card">' +
-            '<div class="family-member-head"><div class="family-member-name">' + escapeHtml(displayMemberName(member)) + '</div>' +
-            (member.is_current_user ? '<span class="family-member-badge">현재 사용자</span>' : '') + '</div>' +
-            '<div class="family-member-meta">' +
-            '<span><strong>역할</strong> ' + escapeHtml(member.role || "-") + '</span>' +
-            '<span><strong>상태</strong> ' + escapeHtml(member.status || "-") + '</span>' +
-            '<span><strong>로그인</strong> ' + escapeHtml(member.provider || "-") + '</span>' +
-            '<span><strong>linked</strong> ' + escapeHtml(linked) + '</span>' +
-            '<span><strong>계정 코드</strong> ' + escapeHtml(member.account_code || "-") + '</span>' +
-            '<span><strong>email</strong> ' + escapeHtml(member.email || "-") + '</span>' +
-            '<span><strong>user_id</strong> ' + escapeHtml(shortUserId(member.user_id || "")) + '</span>' +
-            '<span><strong>마지막 접속</strong> ' + escapeHtml(formatCloudCheckedAt(member.last_seen_at)) + '</span>' +
-            '</div></article>';
-        }).join("");
+        els.familyMembersList.innerHTML = renderFamilyShareCard(state);
         if (els.familyMembersMessage) {
           els.familyMembersMessage.textContent = "가족 구성원 정보를 불러왔습니다." + (state.profilesOk === false ? " 일부 profile 정보는 RLS 제한으로 생략되었습니다." : "");
         }
@@ -24402,6 +24803,13 @@
       }
       if (els.shareFamilyInviteLinkButton) {
         els.shareFamilyInviteLinkButton.addEventListener("click", shareFamilyInviteLink);
+      }
+      if (els.familyMembersList) {
+        els.familyMembersList.addEventListener("click", function (event) {
+          const inviteButton = event.target.closest("[data-family-invite-action]");
+          if (!inviteButton) return;
+          copyFamilyInviteLink();
+        });
       }
       if (els.refreshFamilyMembersButton) {
         els.refreshFamilyMembersButton.addEventListener("click", loadFamilyMembers);
