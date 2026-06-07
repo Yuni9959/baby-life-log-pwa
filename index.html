@@ -1049,10 +1049,59 @@
       gap: 12px;
       margin-top: 10px;
       padding: 14px;
+      border-radius: 22px;
+      background: rgba(255, 253, 248, 0.96);
     }
     .daily-report-header { display: flex; justify-content: space-between; gap: 10px; align-items: flex-start; }
     .daily-report-title { margin: 0; color: #354b31; font-size: 1rem; font-weight: 950; }
     .daily-report-subtitle { margin: 3px 0 0; color: var(--muted); font-size: 0.82rem; font-weight: 800; }
+    .daily-report-counts {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      color: #5d4f40;
+      font-size: 0.82rem;
+      font-weight: 850;
+      line-height: 1.4;
+    }
+    .daily-report-message {
+      padding: 11px 12px;
+      border-radius: 16px;
+      border: 1px solid rgba(221, 202, 176, 0.82);
+      background: rgba(255, 250, 241, 0.86);
+      color: #4b4035;
+      font-size: 0.86rem;
+      font-weight: 780;
+      line-height: 1.45;
+      word-break: keep-all;
+      overflow-wrap: anywhere;
+    }
+    .daily-report-message.is-demo {
+      border-color: rgba(124, 58, 237, 0.18);
+      background: rgba(245, 243, 255, 0.78);
+      color: #5b21b6;
+    }
+    .daily-report-empty {
+      display: grid;
+      gap: 5px;
+      padding: 14px;
+      border-radius: 18px;
+      border: 1px dashed rgba(221, 202, 176, 0.95);
+      background: rgba(255, 250, 241, 0.7);
+      color: #594b3d;
+      font-weight: 850;
+      line-height: 1.45;
+    }
+    .daily-report-empty small {
+      color: var(--muted);
+      font-size: 0.8rem;
+      font-weight: 760;
+    }
+    .daily-report-analysis-gate {
+      color: var(--muted);
+      font-size: 0.78rem;
+      font-weight: 820;
+    }
     .daily-timeline { display: grid; gap: 0; }
     .daily-timeline-row {
       display: grid;
@@ -1094,6 +1143,12 @@
       background: #e8f2df;
       font-size: 0.9rem;
     }
+    .daily-timeline-node.color-feeding { background: #fff2cc; border-color: #f4cf74; }
+    .daily-timeline-node.color-diaper { background: #e0f2fe; border-color: #93c5fd; }
+    .daily-timeline-node.color-burp { background: #dcfce7; border-color: #86efac; }
+    .daily-timeline-node.color-sleep { background: #ede9fe; border-color: #c4b5fd; }
+    .daily-timeline-node.color-wake { background: #dbeafe; border-color: #93c5fd; }
+    .daily-timeline-node.color-other { background: #f5efe4; border-color: #ddcab0; }
     .daily-timeline-event {
       min-width: 0;
       margin: 0 0 10px;
@@ -1102,6 +1157,7 @@
       border-radius: 18px;
       background: var(--panel);
       box-shadow: 0 1px 0 rgba(77, 61, 42, 0.04);
+      overflow-wrap: anywhere;
     }
     .daily-timeline-event-title { color: var(--text); font-size: 0.9rem; font-weight: 920; line-height: 1.3; }
     .daily-timeline-event-subtitle { margin-top: 3px; color: var(--muted); font-size: 0.78rem; line-height: 1.35; word-break: keep-all; }
@@ -2888,7 +2944,7 @@
   <main class="app app-shell">
     <header class="topbar">
       <div>
-        <div class="version-badge" id="versionBadge">v6.1.0-cry-reason</div>
+        <div class="version-badge" id="versionBadge">v6.1.1-daily-timeline</div>
         <div class="demo-mode-badge hidden" id="demoModeBadge">체험 모드</div>
         <h1 id="babyTitle">우리 아기</h1>
         <div class="baby-days" id="babyDays">생년월일을 입력해 주세요</div>
@@ -3749,7 +3805,7 @@
   <script>
     document.addEventListener("DOMContentLoaded", function () {
       if ("serviceWorker" in navigator) {
-        navigator.serviceWorker.register("./sw.js?v=6.1.0-cry-reason").catch(function (error) {
+        navigator.serviceWorker.register("./sw.js?v=6.1.1-daily-timeline").catch(function (error) {
           console.warn("Service worker registration failed", error);
         });
       }
@@ -3944,9 +4000,9 @@
       const PRE_REPAIR_BACKUP_KEY = "baby_life_log_app_backup_before_repair";
       const BACKUP_FORMAT_VERSION = 2;
       const APP_NAME = "baby-life-log";
-      const APP_VERSION = "6.1.0-cry-reason";
+      const APP_VERSION = "6.1.1-daily-timeline";
       const APP_PHASE_LABEL = "";
-      const SERVICE_WORKER_CACHE_NAME = "baby-life-log-v6.1.0-cry-reason";
+      const SERVICE_WORKER_CACHE_NAME = "baby-life-log-v6.1.1-daily-timeline";
       const MIN_ANALYSIS_RECORDS = 10;
       const ANALYSIS_SERVER_RECONNECT_MESSAGE = "서버 연결 후 분석을 확인할 수 있어요. 서버 재연결을 눌러 주세요.";
       const ANALYSIS_GATE_DETAIL_MESSAGE = "기록이 조금 더 쌓이면 최근 흐름을 더 안정적으로 보여드릴게요.";
@@ -4513,7 +4569,7 @@
       };
       var DEBUG_LOGS = [];
       var DEBUG_STATE = {
-        version: "v6.1.0-cry-reason",
+        version: "v6.1.1-daily-timeline",
         swInfo: null,
         localStorageTest: "",
         lastButtonEvent: "",
@@ -4528,7 +4584,13 @@
         cry_missing_record_count: "",
         cry_server_rpc_status: "",
         cry_last_error: "",
-        cry_top_reason: ""
+        cry_top_reason: "",
+        daily_timeline_item_count: "",
+        daily_report_date_key: "",
+        daily_sleep_pair_count: "",
+        daily_report_error: "",
+        daily_report_uses_demo: "",
+        daily_report_rendered_at: ""
       };
       var debugPanelEl = null;
       var debugPanelCollapsed = false;
@@ -4717,6 +4779,12 @@
           ["cry.rpc", DEBUG_STATE.cry_server_rpc_status],
           ["cry.top", DEBUG_STATE.cry_top_reason],
           ["cry.error", DEBUG_STATE.cry_last_error],
+          ["daily.date", DEBUG_STATE.daily_report_date_key],
+          ["daily.items", DEBUG_STATE.daily_timeline_item_count],
+          ["daily.sleepPairs", DEBUG_STATE.daily_sleep_pair_count],
+          ["daily.demo", DEBUG_STATE.daily_report_uses_demo],
+          ["daily.rendered", DEBUG_STATE.daily_report_rendered_at],
+          ["daily.error", DEBUG_STATE.daily_report_error],
           ["last.error", DEBUG_STATE.lastError]
         ];
         const logs = DEBUG_LOGS.slice(-12).reverse().map(function (entry) {
@@ -19215,17 +19283,17 @@
 
       function renderPatternReport(todayReport) {
         const records = getAllRecords().filter(function (r) {
-          return r && r.createdAt && !Number.isNaN(new Date(r.createdAt).getTime());
+          return !!getRecordDate(r);
         });
         renderDailyTimeline(getActiveRecordsForDisplay().filter(function (r) {
-          return r && r.createdAt && !Number.isNaN(new Date(r.createdAt).getTime());
+          return !!getRecordDate(r);
         }), new Date());
         if (!records.length) {
           els.reportSummary.textContent = "기록이 쌓이면 아기의 생활 패턴을 요약해드릴게요.";
           els.reportGrid.innerHTML = '<div class="report-card report-empty">수유, 기저귀, 수면 기록을 몇 번 남기면 최근 흐름을 함께 보여드릴게요.</div>';
           return;
         }
-        const todayCount = records.filter(function (r) { return isToday(r.createdAt); }).length;
+        const todayCount = records.filter(function (r) { return isTodayRecord(r, new Date()); }).length;
         const recent = records.slice(0, 12);
         const recentTypes = recent.reduce(function (counts, r) {
           counts[r.type] = (counts[r.type] || 0) + 1;
@@ -19298,87 +19366,347 @@
         els.reportGrid.innerHTML = cards.map(reportCardHtml).join("");
       }
 
-      function buildDailyTimelineItems(records, baseDate) {
+      function toLocalDateKey(date) {
+        const target = date instanceof Date ? date : new Date(date);
+        if (Number.isNaN(target.getTime())) return "";
+        const month = String(target.getMonth() + 1).padStart(2, "0");
+        const day = String(target.getDate()).padStart(2, "0");
+        return target.getFullYear() + "-" + month + "-" + day;
+      }
+
+      function getRecordDate(record) {
+        return validRecordDate(record);
+      }
+
+      function getRecordDateKey(record) {
+        const date = getRecordDate(record);
+        return date ? toLocalDateKey(date) : "";
+      }
+
+      function isTodayRecord(record, baseDate) {
         const date = baseDate ? new Date(baseDate) : new Date();
-        return (records || []).filter(function (record) {
-          return record && record.createdAt && isSameDay(record.createdAt, date);
-        }).sort(function (a, b) {
-          return new Date(a.createdAt) - new Date(b.createdAt);
-        }).slice(0, 18).map(function (record) {
-          return {
-            time: formatTimelineTime(record),
-            icon: getTimelineEventIcon(record),
-            title: getTimelineEventTitle(record),
-            subtitle: getTimelineEventSubtitle(record)
-          };
+        return !!record && getRecordDateKey(record) === toLocalDateKey(date);
+      }
+
+      function getRecordsForDate(records, baseDate) {
+        return (Array.isArray(records) ? records : []).filter(function (record) {
+          return isActiveRecord(record) && isTodayRecord(record, baseDate);
         });
       }
 
       function isSameDay(value, date) {
         const target = new Date(value);
-        return target.getFullYear() === date.getFullYear() &&
-          target.getMonth() === date.getMonth() &&
-          target.getDate() === date.getDate();
+        if (Number.isNaN(target.getTime())) return false;
+        return toLocalDateKey(target) === toLocalDateKey(date || new Date());
       }
 
-      function formatTimelineTime(record) {
-        return localTimeText(new Date(record.createdAt));
+      function getRecordTime(record) {
+        const date = getRecordDate(record);
+        return date ? date.getTime() : 0;
+      }
+
+      function isSleepStartRecord(record) {
+        const type = String(record && (record.type || record.kind || record.category) || "");
+        const subtype = String(record && record.subtype || "");
+        return type === "sleep" || type === "sleep_start" || subtype === "sleep_start";
+      }
+
+      function isSleepEndRecord(record) {
+        const type = String(record && (record.type || record.kind || record.category) || "");
+        const subtype = String(record && record.subtype || "");
+        return type === "wake" || type === "wakeup" || type === "awake" || type === "sleep_end" || subtype === "sleep_end";
+      }
+
+      function getTimelineRecordId(record, index) {
+        return String(record && record.id ? record.id : "timeline_record_" + index);
+      }
+
+      function pairSleepRecords(records) {
+        const sorted = (Array.isArray(records) ? records : []).filter(function (record) {
+          return isActiveRecord(record) && getRecordDate(record) && (isSleepStartRecord(record) || isSleepEndRecord(record));
+        }).sort(function (a, b) {
+          return getRecordTime(a) - getRecordTime(b);
+        });
+        const pendingStarts = [];
+        const pairs = [];
+        sorted.forEach(function (record, index) {
+          if (isSleepStartRecord(record)) {
+            pendingStarts.push({ record: record, id: getTimelineRecordId(record, index) });
+            return;
+          }
+          if (!isSleepEndRecord(record)) return;
+          let matched = null;
+          while (pendingStarts.length && !matched) {
+            const candidate = pendingStarts.pop();
+            if (getRecordTime(candidate.record) < getRecordTime(record)) matched = candidate;
+          }
+          if (!matched) {
+            pairs.push({
+              startRecord: null,
+              endRecord: record,
+              startId: "",
+              endId: getTimelineRecordId(record, index),
+              durationMinutes: null,
+              complete: false
+            });
+            return;
+          }
+          const minutes = Math.max(0, Math.round((getRecordTime(record) - getRecordTime(matched.record)) / 60000));
+          pairs.push({
+            startRecord: matched.record,
+            endRecord: record,
+            startId: matched.id,
+            endId: getTimelineRecordId(record, index),
+            durationMinutes: minutes,
+            complete: true
+          });
+        });
+        pendingStarts.forEach(function (pending) {
+          pairs.push({
+            startRecord: pending.record,
+            endRecord: null,
+            startId: pending.id,
+            endId: "",
+            durationMinutes: null,
+            complete: false
+          });
+        });
+        return pairs;
+      }
+
+      function findSleepDurationForRecord(record, sleepPairs) {
+        const id = getTimelineRecordId(record, 0);
+        return (sleepPairs || []).find(function (pair) {
+          return (pair.startRecord === record || pair.endRecord === record || pair.startId === id || pair.endId === id);
+        }) || null;
+      }
+
+      function formatDurationMinutes(minutes) {
+        if (!Number.isFinite(Number(minutes))) return "";
+        return durationText(Number(minutes));
+      }
+
+      function formatTimelineTime(recordOrDate) {
+        const date = recordOrDate instanceof Date ? recordOrDate : getRecordDate(recordOrDate);
+        return date ? localTimeText(date) : "--:--";
+      }
+
+      function getFeedingAmount(record) {
+        const amount = safeNumber(record && (record.amount !== undefined ? record.amount : (record.amount_ml !== undefined ? record.amount_ml : (record.ml !== undefined ? record.ml : record.volume))));
+        return amount > 0 ? Math.round(amount) : 0;
+      }
+
+      function getDiaperLabel(record) {
+        const subtype = String(record && record.subtype || "").toLowerCase();
+        if (subtype === "pee_poop" || subtype === "both" || subtype === "mixed") return "소변+대변";
+        if (subtype === "pee" || subtype === "wet" || subtype === "urine") return "소변";
+        if (subtype === "poop" || subtype === "dirty" || subtype === "stool") return "대변";
+        return subtypeLabels[subtype] || "교체";
       }
 
       function getTimelineEventIcon(record) {
         if (record.type === "feeding") return "🍼";
         if (record.type === "diaper") return "☁";
-        if (record.type === "sleep") return "☾";
-        if (record.type === "wake") return "☀";
+        if (isSleepStartRecord(record)) return "☾";
+        if (isSleepEndRecord(record)) return "☀";
         if (record.type === "burp") return "✓";
         return "•";
       }
 
-      function getTimelineEventTitle(record) {
-        if (record.type === "feeding") return "수유" + (record.amount ? " " + record.amount + "ml" : "");
-        if (record.type === "diaper") return "기저귀" + (record.subtype ? " · " + (subtypeLabels[record.subtype] || record.subtype) : "");
-        if (record.type === "sleep") return "낮잠 시작";
-        if (record.type === "wake") return "깨어남";
+      function getTimelineEventColor(record) {
+        if (record.type === "feeding") return "feeding";
+        if (record.type === "diaper") return "diaper";
+        if (record.type === "burp") return "burp";
+        if (isSleepStartRecord(record)) return "sleep";
+        if (isSleepEndRecord(record)) return "wake";
+        return "other";
+      }
+
+      function getTimelineEventTitle(record, context) {
+        const pair = context && context.sleepPair;
+        if (record.type === "feeding") {
+          const amount = getFeedingAmount(record);
+          const subtype = subtypeLabels[record.subtype || "formula"] || "수유";
+          return subtype + (amount ? " " + amount + "ml" : "");
+        }
+        if (record.type === "diaper") return "기저귀 · " + getDiaperLabel(record);
+        if (isSleepStartRecord(record)) {
+          return pair && pair.durationMinutes >= 300 ? "밤잠 시작" : "낮잠 시작";
+        }
+        if (isSleepEndRecord(record)) {
+          return pair && pair.durationMinutes >= 300 ? "밤잠 종료" : (pair && pair.durationMinutes ? "낮잠 종료" : "깨어남");
+        }
         if (record.type === "burp") return "트림";
         return typeLabels[record.type] || "기록";
       }
 
-      function getTimelineEventSubtitle(record) {
+      function getTimelineEventSubtitle(record, context) {
         const details = [];
+        const pair = context && context.sleepPair;
         if (record.type === "feeding") {
-          details.push(subtypeLabels[record.subtype || "formula"] || "수유");
+          const subtype = subtypeLabels[record.subtype || "formula"] || "수유";
+          if (getFeedingAmount(record)) details.push(subtype);
+          if (record.durationMinutes || record.duration_min) details.push(formatDurationMinutes(safeNumber(record.durationMinutes || record.duration_min)) + "간");
           if (record.memo) details.push(record.memo);
-        } else if (record.type === "sleep" || record.type === "wake") {
-          details.push(elapsedText(record.createdAt));
+        } else if (record.type === "diaper") {
+          if (record.memo) details.push(record.memo);
+        } else if (isSleepStartRecord(record)) {
+          if (pair && pair.durationMinutes !== null) details.push(formatDurationMinutes(pair.durationMinutes));
+          else details.push("이후 깨어남 기록 필요");
+          if (record.memo) details.push(record.memo);
+        } else if (isSleepEndRecord(record)) {
+          if (pair && pair.durationMinutes !== null) details.push("수면 " + formatDurationMinutes(pair.durationMinutes));
+          else details.push("잠에서 깨어남");
           if (record.memo) details.push(record.memo);
         } else {
           if (record.memo) details.push(record.memo);
-          details.push(elapsedText(record.createdAt));
+          details.push(elapsedText(getRecordDate(record)));
         }
         if (isDemoRecord(record)) details.push("체험 기록");
         return details.filter(Boolean).join(" · ");
       }
 
-      function renderDailyTimeline(records, baseDate) {
-        const card = document.getElementById("dailyTimelineCard");
-        if (!card) return;
-        const items = buildDailyTimelineItems(records, baseDate);
-        const date = baseDate ? new Date(baseDate) : new Date();
-        const subtitle = (date.getMonth() + 1) + "월 " + date.getDate() + "일 · 오늘 하루";
-        if (!items.length) {
-          card.innerHTML = '<div class="daily-report-header"><div><h3 class="daily-report-title">오늘 하루 흐름</h3><p class="daily-report-subtitle">' + escapeHtml(subtitle) + '</p></div></div>' +
-            '<div class="empty">오늘 기록이 쌓이면 하루 흐름을 정리해드릴게요.</div>';
-          return;
+      function sortTimelineItems(items) {
+        return (items || []).sort(function (a, b) {
+          return a.timestamp - b.timestamp;
+        });
+      }
+
+      function buildDailyTimelineItems(records, baseDate) {
+        const sleepPairs = pairSleepRecords(records);
+        const todayRecords = getRecordsForDate(records, baseDate);
+        return sortTimelineItems(todayRecords.map(function (record, index) {
+          const date = getRecordDate(record);
+          const pair = findSleepDurationForRecord(record, sleepPairs);
+          return {
+            id: getTimelineRecordId(record, index),
+            type: record.type || "record",
+            subtype: record.subtype || "",
+            time: date,
+            timestamp: date ? date.getTime() : 0,
+            timeText: formatTimelineTime(date),
+            icon: getTimelineEventIcon(record),
+            color: getTimelineEventColor(record),
+            title: getTimelineEventTitle(record, { sleepPair: pair }),
+            subtitle: getTimelineEventSubtitle(record, { sleepPair: pair }),
+            sourceRecord: record,
+            isDemo: isDemoRecord(record),
+            sleepPair: pair
+          };
+        }));
+      }
+
+      function buildDailyReportSummary(records, baseDate) {
+        const todayRecords = getRecordsForDate(records, baseDate);
+        const sleepPairs = pairSleepRecords(records);
+        const todayKey = toLocalDateKey(baseDate ? new Date(baseDate) : new Date());
+        const feedings = todayRecords.filter(function (record) { return record.type === "feeding"; });
+        const diapers = todayRecords.filter(function (record) { return record.type === "diaper"; });
+        const sleepSections = sleepPairs.filter(function (pair) {
+          const startToday = pair.startRecord && getRecordDateKey(pair.startRecord) === todayKey;
+          const endToday = pair.endRecord && getRecordDateKey(pair.endRecord) === todayKey;
+          return startToday || endToday;
+        });
+        const totalSleepMinutes = sleepSections.reduce(function (sum, pair) {
+          return sum + (Number.isFinite(pair.durationMinutes) ? pair.durationMinutes : 0);
+        }, 0);
+        const totalFeedingAmount = feedings.reduce(function (sum, record) {
+          return sum + getFeedingAmount(record);
+        }, 0);
+        const peeCount = diapers.filter(function (record) {
+          const label = getDiaperLabel(record);
+          return label.indexOf("소변") >= 0;
+        }).length;
+        const poopCount = diapers.filter(function (record) {
+          const label = getDiaperLabel(record);
+          return label.indexOf("대변") >= 0;
+        }).length;
+        const lastRecord = todayRecords.slice().sort(function (a, b) { return getRecordTime(b) - getRecordTime(a); })[0] || null;
+        const countParts = [
+          "오늘 기록 " + todayRecords.length + "개",
+          "수유 " + feedings.length + "회",
+          "기저귀 " + diapers.length + "회",
+          "수면 " + sleepSections.length + "회"
+        ];
+        if (totalFeedingAmount > 0) countParts.push("수유량 " + totalFeedingAmount + "ml");
+        if (totalSleepMinutes > 0) countParts.push("수면 " + formatDurationMinutes(totalSleepMinutes));
+        let handoff = "오늘 기록이 아직 많지 않아요. 수유, 기저귀, 수면 기록이 쌓이면 하루 흐름을 더 자세히 정리해드릴게요.";
+        if (todayRecords.length >= 3) {
+          handoff = "오늘은 수유와 기저귀, 수면 기록을 시간순으로 확인할 수 있어요. 보호자가 바뀔 때 아래 흐름을 그대로 인수인계해도 좋아요.";
         }
-        card.innerHTML = '<div class="daily-report-header"><div><h3 class="daily-report-title">오늘 하루 흐름</h3><p class="daily-report-subtitle">' + escapeHtml(subtitle) + '</p></div><span class="tb-soft-pill">' + items.length + '개</span></div>' +
+        if (feedings.length && diapers.length) {
+          handoff = "오늘은 수유와 기저귀 기록이 고르게 남아 있어요. 아래 흐름을 보면 보호자가 바뀌어도 하루 상태를 빠르게 확인할 수 있어요.";
+        }
+        return {
+          totalCount: todayRecords.length,
+          feedingCount: feedings.length,
+          feedingAmount: totalFeedingAmount,
+          diaperCount: diapers.length,
+          peeCount: peeCount,
+          poopCount: poopCount,
+          sleepCount: sleepSections.length,
+          sleepMinutes: totalSleepMinutes,
+          lastRecordTimeText: lastRecord ? formatTimelineTime(lastRecord) : "",
+          countText: countParts.join(" · "),
+          handoffText: handoff,
+          analysisGateText: isAnalysisReady(todayRecords.length) ? "" : getAnalysisGateMessage(todayRecords.length)
+        };
+      }
+
+      function renderDailyReportEmpty(subtitle, isDemo) {
+        return '<div class="daily-report-header"><div><h3 class="daily-report-title">오늘 하루 흐름</h3><p class="daily-report-subtitle">' + escapeHtml(subtitle) + '</p></div></div>' +
+          (isDemo ? '<div class="daily-report-message is-demo">체험용 기록으로 오늘 하루 흐름을 보여드리고 있어요.</div>' : '') +
+          '<div class="daily-report-empty"><div>오늘 기록이 쌓이면 하루 흐름을 정리해드릴게요.</div><small>수유, 기저귀, 잠듦 버튼을 누르면 이곳에 시간순으로 표시돼요.</small></div>';
+      }
+
+      function renderDailyReportError(err) {
+        if (DEBUG_STATE) {
+          DEBUG_STATE.daily_report_error = err && err.message ? err.message : String(err || "unknown");
+          DEBUG_STATE.lastError = DEBUG_STATE.daily_report_error;
+        }
+        debugLog("dailyReport:renderFailed", { message: DEBUG_STATE.daily_report_error });
+        return '<div class="daily-report-header"><div><h3 class="daily-report-title">오늘 하루 흐름</h3><p class="daily-report-subtitle">생활 리포트</p></div></div>' +
+          '<div class="daily-report-empty"><div>생활 리포트를 불러오는 중 문제가 생겼어요. 잠시 후 다시 확인해 주세요.</div></div>';
+      }
+
+      function renderDailyReportTimeline(records, baseDate) {
+        const items = buildDailyTimelineItems(records, baseDate);
+        const summary = buildDailyReportSummary(records, baseDate);
+        const date = baseDate ? new Date(baseDate) : new Date();
+        const dateKey = toLocalDateKey(date);
+        const subtitle = (date.getMonth() + 1) + "월 " + date.getDate() + "일 · 오늘 하루";
+        const sleepPairCount = pairSleepRecords(records).filter(function (pair) { return pair.complete; }).length;
+        const usesDemo = items.some(function (item) { return item.isDemo; });
+        DEBUG_STATE.daily_timeline_item_count = String(items.length);
+        DEBUG_STATE.daily_report_date_key = dateKey;
+        DEBUG_STATE.daily_sleep_pair_count = String(sleepPairCount);
+        DEBUG_STATE.daily_report_error = "";
+        DEBUG_STATE.daily_report_uses_demo = usesDemo ? "true" : "false";
+        DEBUG_STATE.daily_report_rendered_at = new Date().toISOString();
+        if (!items.length) return renderDailyReportEmpty(subtitle, usesDemo);
+        return '<div class="daily-report-header"><div><h3 class="daily-report-title">오늘 하루 흐름</h3><p class="daily-report-subtitle">' + escapeHtml(subtitle) + '</p></div><span class="tb-soft-pill">' + items.length + '개</span></div>' +
+          '<div class="daily-report-counts">' + escapeHtml(summary.countText) + '</div>' +
+          (usesDemo ? '<div class="daily-report-message is-demo">체험용 기록으로 오늘 하루 흐름을 보여드리고 있어요.</div>' : '') +
+          '<div class="daily-report-message">' + escapeHtml(summary.handoffText) + '</div>' +
+          (summary.analysisGateText ? '<div class="daily-report-analysis-gate">' + escapeHtml(summary.analysisGateText) + '</div>' : '') +
           '<div class="daily-timeline">' + items.map(function (item) {
             return '<div class="daily-timeline-row">' +
-              '<div class="daily-timeline-time">' + escapeHtml(item.time) + '</div>' +
-              '<div class="daily-timeline-line"><span class="daily-timeline-node" aria-hidden="true">' + escapeHtml(item.icon) + '</span></div>' +
+              '<div class="daily-timeline-time">' + escapeHtml(item.timeText) + '</div>' +
+              '<div class="daily-timeline-line"><span class="daily-timeline-node color-' + escapeHtml(item.color) + '" aria-hidden="true">' + escapeHtml(item.icon) + '</span></div>' +
               '<div class="daily-timeline-event"><div class="daily-timeline-event-title">' + escapeHtml(item.title) + '</div>' +
               '<div class="daily-timeline-event-subtitle">' + escapeHtml(item.subtitle || "") + '</div></div>' +
               '</div>';
           }).join("") + '</div>';
+      }
+
+      function renderDailyTimeline(records, baseDate) {
+        const card = document.getElementById("dailyTimelineCard");
+        if (!card) return;
+        try {
+          card.innerHTML = renderDailyReportTimeline(records, baseDate);
+        } catch (err) {
+          card.innerHTML = renderDailyReportError(err);
+        }
       }
 
       function feedingPatternInsight(records) {
