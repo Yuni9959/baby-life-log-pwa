@@ -1936,15 +1936,16 @@
       pointer-events: auto;
     }
     .onboarding-panel {
-      width: min(100%, 390px);
-      max-height: min(92vh, 760px);
+      width: min(100%, 430px);
+      max-height: calc(100vh - 24px);
       overflow: auto;
       border-radius: 26px;
       background: #fffaf2;
       border: 1px solid rgba(221, 202, 176, 0.9);
       box-shadow: 0 18px 48px rgba(95, 74, 45, 0.22);
-      padding: 18px;
+      padding: 12px;
       position: relative;
+      -webkit-overflow-scrolling: touch;
     }
     .onboarding-close {
       position: absolute;
@@ -1959,70 +1960,111 @@
       font-size: 22px;
       line-height: 1;
     }
-    .onboarding-header { padding-right: 42px; }
+    .onboarding-header {
+      min-height: 34px;
+      padding-right: 42px;
+    }
     .onboarding-kicker {
-      font-size: 12px;
-      color: #7da37f;
-      font-weight: 800;
-      margin: 0 0 4px;
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      margin: -1px;
+      padding: 0;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+      border: 0;
     }
     .onboarding-header h2 {
-      font-size: 22px;
-      line-height: 1.25;
-      margin: 0;
-      color: #2d2923;
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      margin: -1px;
+      padding: 0;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+      border: 0;
     }
     .onboarding-subtitle {
-      margin: 6px 0 0;
-      font-size: 13px;
-      color: #8c7f70;
-      line-height: 1.5;
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      margin: -1px;
+      padding: 0;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+      border: 0;
     }
     .onboarding-card {
-      min-height: 260px;
+      min-height: 0;
       border-radius: 22px;
-      padding: 18px;
-      background: #ffffff;
+      padding: 0;
+      background: transparent;
       border: 1px solid rgba(221, 202, 176, 0.9);
       box-shadow: 0 8px 22px rgba(95, 74, 45, 0.08);
-      margin-top: 16px;
+      margin-top: 6px;
+      overflow: hidden;
     }
-    .onboarding-image-placeholder {
-      height: 120px;
-      border-radius: 18px;
-      margin-bottom: 14px;
-      background: linear-gradient(135deg, #fff1e8, #eef5e8);
-      border: 1px dashed rgba(207, 129, 85, 0.35);
+    .onboarding-image-stage {
+      width: 100%;
       display: flex;
       align-items: center;
       justify-content: center;
-      color: #aa927d;
-      font-size: 13px;
-      font-weight: 700;
+      overflow: hidden;
+      border-radius: 22px;
+      background: #faf6ef;
     }
-    .onboarding-image {
+    .onboarding-image-placeholder {
       width: 100%;
-      height: 120px;
-      object-fit: cover;
+      min-height: 260px;
       border-radius: 18px;
-      margin-bottom: 14px;
+      margin: 0;
+      padding: 22px;
+      background: linear-gradient(135deg, #fff1e8, #eef5e8);
+      border: 1px dashed rgba(207, 129, 85, 0.35);
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      align-items: center;
+      justify-content: center;
+      color: #6f6256;
+      font-size: 14px;
+      font-weight: 760;
+      line-height: 1.55;
+      text-align: center;
+      word-break: keep-all;
+    }
+    .onboarding-fallback-title {
+      margin: 0;
+      color: #2d2923;
+      font-size: 18px;
+      font-weight: 900;
+    }
+    .onboarding-fallback-text {
+      margin: 0;
+      max-width: 320px;
+    }
+    .onboarding-slide-image {
       display: block;
+      width: 100%;
+      max-width: 420px;
+      height: auto;
+      border-radius: 18px;
+      object-fit: contain;
+      box-shadow: 0 8px 22px rgba(95, 74, 45, 0.10);
     }
     .onboarding-card-label {
-      display: inline-flex;
-      align-items: center;
-      border-radius: 999px;
-      padding: 6px 10px;
-      font-size: 12px;
-      font-weight: 800;
-      background: #eef5e8;
-      color: #6f9366;
-    }
-    .onboarding-card h3 {
-      margin: 14px 0 8px;
-      font-size: 20px;
-      line-height: 1.3;
-      color: #2d2923;
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      margin: -1px;
+      padding: 0;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+      border: 0;
     }
     .onboarding-card p {
       margin: 0;
@@ -3018,6 +3060,13 @@
       .slot-3 { left: -12%; }
       .slot-4 { right: -12%; }
       .slot-7, .slot-8 { display: none; }
+      .onboarding-overlay { padding: 10px; }
+      .onboarding-panel {
+        width: min(100%, 430px);
+        max-height: calc(100vh - 20px);
+        padding: 10px;
+      }
+      .onboarding-slide-image { max-width: 100%; }
     }
 
     @media (max-width: 390px) {
@@ -3048,7 +3097,7 @@
   <main class="app app-shell">
     <header class="topbar">
       <div>
-        <div class="version-badge" id="versionBadge">v6.1.3-family-share</div>
+        <div class="version-badge" id="versionBadge">v6.1.4-image-onboarding</div>
         <div class="demo-mode-badge hidden" id="demoModeBadge">체험 모드</div>
         <h1 id="babyTitle">우리 아기</h1>
         <div class="baby-days" id="babyDays">생년월일을 입력해 주세요</div>
@@ -3909,7 +3958,7 @@
   <script>
     document.addEventListener("DOMContentLoaded", function () {
       if ("serviceWorker" in navigator) {
-        navigator.serviceWorker.register("./sw.js?v=6.1.3-family-share").catch(function (error) {
+        navigator.serviceWorker.register("./sw.js?v=6.1.4-image-onboarding").catch(function (error) {
           console.warn("Service worker registration failed", error);
         });
       }
@@ -4104,57 +4153,57 @@
       const PRE_REPAIR_BACKUP_KEY = "baby_life_log_app_backup_before_repair";
       const BACKUP_FORMAT_VERSION = 2;
       const APP_NAME = "baby-life-log";
-      const APP_VERSION = "6.1.3-family-share";
+      const APP_VERSION = "6.1.4-image-onboarding";
       const APP_PHASE_LABEL = "";
-      const SERVICE_WORKER_CACHE_NAME = "baby-life-log-v6.1.3-family-share";
+      const SERVICE_WORKER_CACHE_NAME = "baby-life-log-v6.1.4-image-onboarding";
       const MIN_ANALYSIS_RECORDS = 10;
       const ANALYSIS_SERVER_RECONNECT_MESSAGE = "서버 연결 후 분석을 확인할 수 있어요. 서버 재연결을 눌러 주세요.";
       const ANALYSIS_GATE_DETAIL_MESSAGE = "기록이 조금 더 쌓이면 최근 흐름을 더 안정적으로 보여드릴게요.";
       const ONBOARDING_STORAGE_KEY = "touchbebe_onboarding_v1_dismissed";
       const DEMO_DATA_DISMISSED_KEY = "touchbebe_demo_data_dismissed_v1";
       const DEMO_RECORDS_KEY = "touchbebe_demo_records_v1";
-      const ONBOARDING_CARDS = [
+      const ONBOARDING_IMAGE_SLIDES = [
         {
-          id: "quick-record",
+          id: "button-record",
           title: "버튼 안내",
-          headline: "누르기만 하면 기록돼요!",
-          body: "수유, 기저귀, 트림, 잠듦, 깨어남 버튼을 누르기만 하면 시간이 자동으로 기록돼요. 한 손으로도 빠르게 남길 수 있게 만들었어요.",
-          image: ""
+          image: "imgs/01_button-record.png",
+          alt: "수유, 기저귀, 트림, 잠듦, 깨어남 버튼을 누르기만 하면 시간이 자동으로 기록된다는 안내",
+          fallbackText: "수유, 기저귀, 트림, 잠듦, 깨어남 버튼을 누르기만 하면 시간이 자동으로 기록돼요."
         },
         {
-          id: "seven-day-analysis",
+          id: "weekly-trend",
           title: "7일 분석",
-          headline: "기록이 쌓이면 일주일 흐름을 보여줘요",
-          body: "수유량, 수면, 기저귀 기록이 쌓이면 최근 7일 흐름을 부드러운 그래프로 정리해줘요. 오늘 상태와 최근 평균을 함께 볼 수 있어요.",
-          image: ""
+          image: "imgs/02_weekly-trend.png",
+          alt: "기록이 쌓이면 수유량, 수면, 기저귀 흐름을 최근 7일 그래프로 보여준다는 안내",
+          fallbackText: "기록이 쌓이면 수유량, 수면, 기저귀 흐름을 최근 7일 그래프로 보여줘요."
         },
         {
-          id: "crying-helper",
+          id: "cry-reason",
           title: "울어요 버튼",
-          headline: "지금 우는 이유를 함께 추측해요",
-          body: "아기가 울 때 최근 기록을 바탕으로 수유, 트림, 기저귀, 잠 같은 원인을 확률별로 알려줘요. 기록이 쌓일수록 더 도움이 되는 안내가 가능해져요.",
-          image: ""
+          image: "imgs/03_cry-reason.png",
+          alt: "최근 기록을 바탕으로 지금 우는 이유를 수유, 트림, 기저귀, 졸림 확률로 추측하는 기능 안내",
+          fallbackText: "최근 기록을 바탕으로 지금 우는 이유를 수유, 트림, 기저귀, 졸림 확률로 추측해요."
         },
         {
           id: "daily-report",
           title: "생활 리포트",
-          headline: "오늘 하루 흐름을 한눈에 정리해요",
-          body: "오늘의 수유, 기저귀, 수면 흐름을 요약해줘요. 보호자가 바뀌거나 육아 인수인계를 해야 할 때 특히 유용해요.",
-          image: ""
+          image: "imgs/04_daily-report.png",
+          alt: "오늘 하루의 수유, 기저귀, 수면 흐름을 타임라인으로 정리하는 생활 리포트 안내",
+          fallbackText: "오늘 하루의 수유, 기저귀, 수면 흐름을 타임라인으로 정리해요."
         },
         {
-          id: "delete-record",
+          id: "easy-delete",
           title: "기록 삭제",
-          headline: "잘못 기록해도 괜찮아요",
-          body: "실수로 남긴 기록은 최근 기록 목록에서 터치 한 번으로 삭제할 수 있어요. 필요한 경우 수정 기능으로 시간이나 내용을 바로잡을 수도 있어요.",
-          image: ""
+          image: "imgs/05_easy-delete.png",
+          alt: "잘못 남긴 기록을 수정하거나 옆으로 밀어 삭제할 수 있다는 안내",
+          fallbackText: "잘못 남긴 기록을 수정하거나 옆으로 밀어 삭제할 수 있어요."
         },
         {
-          id: "family-invite",
+          id: "family-share",
           title: "가족 초대",
-          headline: "가족과 함께 기록을 공유해요",
-          body: "가족 초대 기능을 사용하면 같은 아기의 생활 기록을 함께 확인할 수 있어요. 수유, 수면, 기저귀 흐름을 가족이 같이 볼 수 있어요.",
-          image: ""
+          image: "imgs/06_family-share.png",
+          alt: "가족 초대 기능으로 같은 아기의 기록을 가족과 함께 공유할 수 있다는 안내",
+          fallbackText: "가족 초대 기능으로 같은 아기의 기록을 가족과 함께 공유할 수 있어요."
         }
       ];
       let onboardingIndex = 0;
@@ -4673,7 +4722,7 @@
       };
       var DEBUG_LOGS = [];
       var DEBUG_STATE = {
-        version: "v6.1.3-family-share",
+        version: "v6.1.4-image-onboarding",
         swInfo: null,
         localStorageTest: "",
         lastButtonEvent: "",
@@ -4709,7 +4758,13 @@
         family_share_mode: "",
         family_share_error: "",
         family_id_present: "",
-        baby_id_present: ""
+        baby_id_present: "",
+        onboarding_mode: "image",
+        onboarding_slide_count: String(ONBOARDING_IMAGE_SLIDES.length),
+        onboarding_current_index: "0",
+        onboarding_last_image_error: "",
+        onboarding_dismissed: "",
+        onboarding_manual_open: "false"
       };
       var debugPanelEl = null;
       var debugPanelCollapsed = false;
@@ -4919,6 +4974,12 @@
           ["familyShare.error", DEBUG_STATE.family_share_error],
           ["familyShare.familyId", DEBUG_STATE.family_id_present],
           ["familyShare.babyId", DEBUG_STATE.baby_id_present],
+          ["onboarding.mode", DEBUG_STATE.onboarding_mode],
+          ["onboarding.count", DEBUG_STATE.onboarding_slide_count],
+          ["onboarding.index", DEBUG_STATE.onboarding_current_index],
+          ["onboarding.dismissed", DEBUG_STATE.onboarding_dismissed],
+          ["onboarding.manual", DEBUG_STATE.onboarding_manual_open],
+          ["onboarding.imageError", DEBUG_STATE.onboarding_last_image_error],
           ["last.error", DEBUG_STATE.lastError]
         ];
         const logs = DEBUG_LOGS.slice(-12).reverse().map(function (entry) {
@@ -24687,6 +24748,34 @@
         if (shouldShowOnboardingGuide()) showOnboardingGuide();
       }
 
+      function preloadOnboardingImages() {
+        ONBOARDING_IMAGE_SLIDES.forEach(function (slide) {
+          if (!slide || !slide.image) return;
+          const img = new Image();
+          img.src = slide.image;
+        });
+      }
+
+      function showOnboardingImageFallback(cardWrap, slide, source) {
+        if (!cardWrap || !slide) return;
+        if (typeof debugLog === "function") {
+          debugLog("onboarding:imageLoadFailed", { id: slide.id, image: source || slide.image });
+        }
+        if (typeof DEBUG_STATE !== "undefined") {
+          DEBUG_STATE.onboarding_last_image_error = source || slide.image || "";
+        }
+        console.warn("[onboarding] image load failed:", source || slide.image);
+        cardWrap.innerHTML = '<article class="onboarding-card" data-onboarding-card="' + escapeHtml(slide.id) + '">' +
+          '<div class="onboarding-image-stage">' +
+          '<div class="onboarding-image-placeholder" role="note">' +
+          '<p class="onboarding-fallback-title">안내 이미지를 불러오지 못했어요.</p>' +
+          '<p class="onboarding-fallback-text">' + escapeHtml(slide.fallbackText || slide.alt || slide.title) + '</p>' +
+          '</div>' +
+          '</div>' +
+          '<span class="onboarding-card-label">' + escapeHtml(slide.title) + '</span>' +
+          '</article>';
+      }
+
       function renderOnboardingCard() {
         const overlay = document.getElementById("onboarding-overlay");
         if (!overlay) return;
@@ -24695,27 +24784,35 @@
         const prevButton = overlay.querySelector(".onboarding-prev");
         const nextButton = overlay.querySelector(".onboarding-next");
         const doneButton = overlay.querySelector(".onboarding-done");
-        const card = ONBOARDING_CARDS[onboardingIndex] || ONBOARDING_CARDS[0];
-        if (!card || !cardWrap || !dots) return;
-        const imageHtml = card.image ?
-          '<img class="onboarding-image" src="' + escapeHtml(card.image) + '" alt="' + escapeHtml(card.title) + '">' :
-          '<div class="onboarding-image-placeholder">이미지 준비 중</div>';
-        cardWrap.innerHTML = '<article class="onboarding-card" data-onboarding-card="' + escapeHtml(card.id) + '">' +
-          imageHtml +
-          '<span class="onboarding-card-label">' + escapeHtml(card.title) + '</span>' +
-          '<h3>' + escapeHtml(card.headline) + '</h3>' +
-          '<p>' + escapeHtml(card.body) + '</p>' +
+        const slide = ONBOARDING_IMAGE_SLIDES[onboardingIndex] || ONBOARDING_IMAGE_SLIDES[0];
+        if (!slide || !cardWrap || !dots) return;
+        if (typeof DEBUG_STATE !== "undefined") {
+          DEBUG_STATE.onboarding_mode = "image";
+          DEBUG_STATE.onboarding_slide_count = String(ONBOARDING_IMAGE_SLIDES.length);
+          DEBUG_STATE.onboarding_current_index = String(onboardingIndex);
+        }
+        cardWrap.innerHTML = '<article class="onboarding-card" data-onboarding-card="' + escapeHtml(slide.id) + '">' +
+          '<div class="onboarding-image-stage">' +
+          '<img class="onboarding-slide-image" src="' + escapeHtml(slide.image) + '" alt="' + escapeHtml(slide.alt) + '" data-onboarding-slide-image="' + escapeHtml(slide.image) + '">' +
+          '</div>' +
+          '<span class="onboarding-card-label">' + escapeHtml(slide.title) + '</span>' +
           '</article>';
-        dots.innerHTML = ONBOARDING_CARDS.map(function (item, index) {
-          return '<span class="onboarding-dot' + (index === onboardingIndex ? ' active' : '') + '"></span>';
+        const slideImage = cardWrap.querySelector("[data-onboarding-slide-image]");
+        if (slideImage) {
+          slideImage.onerror = function () {
+            showOnboardingImageFallback(cardWrap, slide, slideImage.getAttribute("src"));
+          };
+        }
+        dots.innerHTML = ONBOARDING_IMAGE_SLIDES.map(function (item, index) {
+          return '<span class="onboarding-dot' + (index === onboardingIndex ? ' active' : '') + '" aria-hidden="true"></span>';
         }).join("");
         if (prevButton) prevButton.disabled = onboardingIndex === 0;
-        if (nextButton) nextButton.textContent = onboardingIndex === ONBOARDING_CARDS.length - 1 ? "완료" : "다음";
+        if (nextButton) nextButton.textContent = onboardingIndex === ONBOARDING_IMAGE_SLIDES.length - 1 ? "완료" : "다음";
         if (doneButton) doneButton.textContent = "닫음";
       }
 
       function setOnboardingIndex(nextIndex) {
-        const maxIndex = ONBOARDING_CARDS.length - 1;
+        const maxIndex = ONBOARDING_IMAGE_SLIDES.length - 1;
         onboardingIndex = Math.max(0, Math.min(maxIndex, Number(nextIndex) || 0));
         renderOnboardingCard();
       }
@@ -24725,11 +24822,14 @@
         try {
           if (dontShow && dontShow.checked) {
             localStorage.setItem(ONBOARDING_STORAGE_KEY, "true");
+            if (typeof DEBUG_STATE !== "undefined") DEBUG_STATE.onboarding_dismissed = "true";
           } else {
             onboardingDismissedThisSession = true;
+            if (typeof DEBUG_STATE !== "undefined") DEBUG_STATE.onboarding_dismissed = "session";
           }
         } catch (error) {
           onboardingDismissedThisSession = true;
+          if (typeof DEBUG_STATE !== "undefined") DEBUG_STATE.onboarding_dismissed = "storage-error-session";
           console.warn("[onboarding] storage update failed:", error);
         }
 
@@ -24754,7 +24854,7 @@
         }
         if (nextButton) {
           nextButton.addEventListener("click", function () {
-            if (onboardingIndex >= ONBOARDING_CARDS.length - 1) {
+            if (onboardingIndex >= ONBOARDING_IMAGE_SLIDES.length - 1) {
               closeOnboardingGuide();
               return;
             }
@@ -24772,6 +24872,8 @@
         if (!settings.manual && !shouldShowOnboardingGuide()) return;
         const overlay = document.getElementById("onboarding-overlay");
         if (!overlay) return;
+        preloadOnboardingImages();
+        if (typeof DEBUG_STATE !== "undefined") DEBUG_STATE.onboarding_manual_open = settings.manual ? "true" : "false";
         const dontShow = document.getElementById("onboarding-dont-show");
         if (dontShow) dontShow.checked = false;
         bindOnboardingGuideEvents();
