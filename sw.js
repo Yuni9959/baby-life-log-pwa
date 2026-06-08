@@ -1,5 +1,5 @@
-const APP_VERSION = "6.1.10-family-connection";
-const CACHE_NAME = "baby-life-log-v6.1.10-family-connection";
+const APP_VERSION = "6.1.11-management-cleanup";
+const CACHE_NAME = "baby-life-log-v6.1.11-management-cleanup";
 const CACHE_PREFIX = "babylog-cache-";
 const OLD_CACHE_PREFIX = "baby-life-log-";
 const PRIMARY_CACHE_NAME = CACHE_NAME;

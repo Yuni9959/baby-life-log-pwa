@@ -1402,12 +1402,13 @@
     .collapsible-body.hidden { display: none; }
 
     .management-tabs {
-      display: grid;
-      grid-template-columns: repeat(3, minmax(0, 1fr));
+      display: flex;
+      flex-wrap: wrap;
       gap: 8px;
       margin-bottom: 12px;
     }
     .management-tab {
+      flex: 1 1 112px;
       min-height: 42px;
       border-radius: var(--radius);
       border: 1px solid var(--line);
@@ -1425,6 +1426,50 @@
     .management-panel-content > .section {
       margin-bottom: 0;
       box-shadow: none;
+    }
+    .management-panel-content .management-user-card {
+      display: grid;
+      gap: 10px;
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--panel);
+    }
+    .management-user-card h3 {
+      margin: 0;
+      font-size: 1rem;
+    }
+    .management-user-card p {
+      margin: 0;
+      color: var(--muted);
+      font-size: .86rem;
+      line-height: 1.45;
+    }
+    .management-user-card .data-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    .developer-diagnostics-head {
+      display: grid;
+      gap: 8px;
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--panel);
+    }
+    .developer-diagnostics-head h3 {
+      margin: 0;
+      font-size: 1rem;
+    }
+    .developer-diagnostics-head p {
+      margin: 0;
+      color: var(--muted);
+      font-size: .86rem;
+      line-height: 1.45;
+    }
+    .management-panel-content details.data-subsection > summary {
+      cursor: pointer;
+      color: var(--text);
+      font-weight: 900;
     }
 
     .overlay {
@@ -2852,7 +2897,7 @@
   <main class="app app-shell">
     <header class="topbar">
       <div>
-        <div class="version-badge" id="versionBadge">v6.1.10-family-connection</div>
+        <div class="version-badge" id="versionBadge">v6.1.11-management-cleanup</div>
         <h1 id="babyTitle">우리 아기</h1>
         <div class="baby-days" id="babyDays">생년월일을 입력해 주세요</div>
         <div class="today-line" id="todayLine"></div>
@@ -3143,7 +3188,7 @@
       <div class="logs" id="logs"></div>
     </section>
 
-    <section class="section" aria-labelledby="dataToolsTitle">
+    <section class="section hidden" aria-labelledby="dataToolsTitle" data-management-legacy-section="true" hidden>
       <div class="section-head">
         <h2 id="dataToolsTitle">데이터 관리</h2>
       </div>
@@ -3398,13 +3443,15 @@
       <button type="button" class="sheet-close" data-close-sheet aria-label="닫기">×</button>
     </div>
     <div class="management-tabs" role="tablist" aria-label="관리 탭">
-      <button type="button" class="management-tab active" data-management-tab="profile" role="tab">프로필</button>
-      <button type="button" class="management-tab" data-management-tab="settings" role="tab">설정</button>
-      <button type="button" class="management-tab" data-management-tab="csv" role="tab">데이터</button>
+      <button type="button" class="management-tab active" data-management-tab="baby" role="tab">우리 아기</button>
+      <button type="button" class="management-tab" data-management-tab="family" role="tab">가족 공유</button>
+      <button type="button" class="management-tab" data-management-tab="backup" role="tab">데이터 백업</button>
+      <button type="button" class="management-tab hidden" data-management-tab="developer" role="tab">개발자 진단</button>
     </div>
-    <div class="management-panel-content" id="managementProfilePanel"></div>
-    <div class="management-panel-content hidden" id="managementSettingsPanel"></div>
-    <div class="management-panel-content hidden" id="managementCsvPanel"></div>
+    <div class="management-panel-content" id="managementBabyPanel"></div>
+    <div class="management-panel-content hidden" id="managementFamilyPanel"></div>
+    <div class="management-panel-content hidden" id="managementBackupPanel"></div>
+    <div class="management-panel-content hidden" id="managementDeveloperPanel"></div>
   </section>
 
   <section class="bottom-sheet family-connection-sheet" id="familyConnectionSheet" role="dialog" aria-modal="true" aria-labelledby="familyConnectionSheetTitle">
@@ -3715,7 +3762,7 @@
   <script>
     document.addEventListener("DOMContentLoaded", function () {
       if ("serviceWorker" in navigator) {
-        navigator.serviceWorker.register("./sw.js?v=6.1.10-family-connection").catch(function (error) {
+        navigator.serviceWorker.register("./sw.js?v=6.1.11-management-cleanup").catch(function (error) {
           console.warn("Service worker registration failed", error);
         });
       }
@@ -3910,9 +3957,9 @@
       const PRE_REPAIR_BACKUP_KEY = "baby_life_log_app_backup_before_repair";
       const BACKUP_FORMAT_VERSION = 2;
       const APP_NAME = "baby-life-log";
-      const APP_VERSION = "6.1.10-family-connection";
+      const APP_VERSION = "6.1.11-management-cleanup";
       const APP_PHASE_LABEL = "";
-      const SERVICE_WORKER_CACHE_NAME = "baby-life-log-v6.1.10-family-connection";
+      const SERVICE_WORKER_CACHE_NAME = "baby-life-log-v6.1.11-management-cleanup";
       const APP_INIT_TIME = new Date().toISOString();
       const ANALYSIS_API_ENDPOINT = "";
       const SERVER_OVERWRITE_BACKUP_KEY = "babylog_records_backup_before_server_overwrite";
@@ -4074,7 +4121,7 @@
         recordEditing: { featureKey: "recordEditing", label: "수정/삭제", tier: "free", phase: "1.0", group: "free", description: "기존 기록의 수정, 삭제, 선택 삭제 흐름은 그대로 사용할 수 있어요.", actionLabel: "사용 가능", action: null },
         csvExport: { featureKey: "csvExport", label: "CSV 내보내기", tier: "free", phase: "1.0", group: "free", description: "기록 데이터를 CSV로 내보낼 수 있어요.", actionLabel: "사용 가능", action: null },
         cloudSync: { featureKey: "cloudSync", label: "클라우드 동기화", tier: "free", phase: "4.0", group: "free", description: "Supabase 연결과 가족 workspace 흐름은 계속 유지돼요.", actionLabel: "사용 가능", action: null },
-        familyWorkspace: { featureKey: "familyWorkspace", label: "가족 workspace", tier: "free", phase: "4.0", group: "free", description: "family_id, baby_id, family_code 기반 가족 사용 흐름을 계속 사용할 수 있어요.", actionLabel: "사용 가능", action: null },
+        familyWorkspace: { featureKey: "familyWorkspace", label: "가족 공유", tier: "free", phase: "4.0", group: "free", description: "가족 연결 코드로 같은 아기 기록을 함께 사용할 수 있어요.", actionLabel: "사용 가능", action: null },
         reportHub: { featureKey: "reportHub", label: "통합 리포트 허브", tier: "premium_candidate", phase: "5.21", group: "premiumCandidate", description: "수면, 수유, 기저귀, 울어요, 다음 예상 정보를 한곳에서 볼 수 있어요.", actionLabel: "열기", action: "reportHub" },
         rhythmScore: { featureKey: "rhythmScore", label: "리듬 참고 지표", tier: "premium_candidate", phase: "5.7", group: "premiumCandidate", description: "기록을 바탕으로 하루 리듬의 흔들림 정도를 참고할 수 있어요. 기록 기반 참고 지표예요.", actionLabel: "리포트 허브에서 보기", action: "reportHub" },
         parentReports: { featureKey: "parentReports", label: "부모 리포트", tier: "premium_candidate", phase: "5.8", group: "premiumCandidate", description: "오늘, 최근 7일, 최근 30일 흐름을 부모가 읽기 쉬운 문장으로 정리해요.", actionLabel: "리포트 허브에서 보기", action: "reportHub" },
@@ -4170,9 +4217,10 @@
         todayLine: document.getElementById("todayLine"),
         managementButton: document.getElementById("managementButton"),
         managementSheet: document.getElementById("managementSheet"),
-        managementProfilePanel: document.getElementById("managementProfilePanel"),
-        managementSettingsPanel: document.getElementById("managementSettingsPanel"),
-        managementCsvPanel: document.getElementById("managementCsvPanel"),
+        managementBabyPanel: document.getElementById("managementBabyPanel"),
+        managementFamilyPanel: document.getElementById("managementFamilyPanel"),
+        managementBackupPanel: document.getElementById("managementBackupPanel"),
+        managementDeveloperPanel: document.getElementById("managementDeveloperPanel"),
         profileDetails: document.getElementById("profileDetails"),
         settingsDetails: document.getElementById("settingsDetails"),
         babyNameInput: document.getElementById("babyNameInput"),
@@ -4391,14 +4439,24 @@
         undoMessage: document.getElementById("undoMessage"),
         undoButton: document.getElementById("undoButton"),
         customDateInput: document.getElementById("customDateInput"),
-        searchInput: document.getElementById("searchInput")
+        searchInput: document.getElementById("searchInput"),
+        managementRecordButton: null,
+        managementBabyStatusGrid: null,
+        familyShareSummary: null,
+        familyShareMembers: null,
+        familyShareInviteCode: null,
+        familyShareActivityText: null,
+        backupSummaryGrid: null,
+        backupSyncGrid: null,
+        developerModeOffButton: null
       };
 
       let appData = loadAppData();
       let suppressNextClick = false;
       let selectedFeedingSubtype = "formula";
       let selectedDiaperSubtype = "urine";
-      let activeManagementTab = "profile";
+      let activeManagementTab = "baby";
+      let versionTapCount = 0;
       let lifeReportExpanded = !!(appData.settings && appData.settings.ui && appData.settings.ui.lifeReportExpandedByDefault);
       let analysisExpanded = !!(appData.settings && appData.settings.ui && appData.settings.ui.analysisExpandedByDefault);
       let cloudFetchedRows = [];
@@ -17942,37 +18000,267 @@
         const profileSection = document.querySelector('[aria-labelledby="profileTitle"]');
         const settingsSection = document.querySelector('[aria-labelledby="settingsTitle"]');
         const dataSection = document.querySelector('[aria-labelledby="dataToolsTitle"]');
-        if (profileSection && els.managementProfilePanel) {
-          els.managementProfilePanel.appendChild(profileSection);
+        try {
+        if (els.managementBabyPanel) {
+          els.managementBabyPanel.insertAdjacentHTML("beforeend",
+            '<section class="management-user-card" aria-label="우리 아기 요약">' +
+            '<h3>우리 아기</h3>' +
+            '<p>아기 프로필과 기본 상태를 확인할 수 있어요.</p>' +
+            '<div class="data-grid" id="managementBabyStatusGrid"></div>' +
+            '<button type="button" class="small-action" id="managementRecordButton">우리 아이 기록하기</button>' +
+            '</section>'
+          );
+          els.managementBabyStatusGrid = document.getElementById("managementBabyStatusGrid");
+          els.managementRecordButton = document.getElementById("managementRecordButton");
+          if (els.managementRecordButton) {
+            els.managementRecordButton.addEventListener("click", function () {
+              closeSheets();
+              window.setTimeout(function () {
+                const feedingButton = document.querySelector('[data-record-type="feeding"][data-record-direct="true"]');
+                if (feedingButton && typeof feedingButton.focus === "function") feedingButton.focus();
+              }, 0);
+            });
+          }
+          if (profileSection) els.managementBabyPanel.appendChild(profileSection);
+          if (settingsSection) els.managementBabyPanel.appendChild(settingsSection);
           if (els.profileDetails) els.profileDetails.open = true;
+          if (els.settingsDetails) els.settingsDetails.open = false;
         }
-        if (settingsSection && els.managementSettingsPanel) {
-          els.managementSettingsPanel.appendChild(settingsSection);
-          if (els.settingsDetails) els.settingsDetails.open = true;
+        if (els.managementFamilyPanel) {
+          els.managementFamilyPanel.insertAdjacentHTML("beforeend",
+            '<section class="management-user-card" aria-label="가족 공유 요약">' +
+            '<h3>가족 공유</h3>' +
+            '<p>가족과 함께 같은 아기의 기록을 확인할 수 있어요.</p>' +
+            '<div id="familyShareSummary"></div>' +
+            '<div id="familyShareMembers"></div>' +
+            '<div class="data-tool-actions" id="familySharePrimaryActions"></div>' +
+            '</section>' +
+            '<section class="management-user-card" aria-label="가족 초대">' +
+            '<h3>가족 초대 코드</h3>' +
+            '<p id="familyShareInviteCode">가족 연결 코드가 준비되면 표시됩니다.</p>' +
+            '<div class="data-tool-actions" id="familyShareInviteActions"></div>' +
+            '</section>' +
+            '<section class="management-user-card" aria-label="가족 연결">' +
+            '<h3>가족 연결하기</h3>' +
+            '<p>초대 코드를 받은 경우 아래에 입력해 연결할 수 있어요.</p>' +
+            '<div id="familyShareJoinArea"></div>' +
+            '</section>' +
+            '<section class="management-user-card" aria-label="최근 가족 활동">' +
+            '<h3>최근 가족 활동</h3>' +
+            '<p id="familyShareActivityText">가족이 기록을 남기면 이곳에 최근 활동이 보여요.</p>' +
+            '</section>'
+          );
+          els.familyShareSummary = document.getElementById("familyShareSummary");
+          els.familyShareMembers = document.getElementById("familyShareMembers");
+          els.familyShareInviteCode = document.getElementById("familyShareInviteCode");
+          els.familyShareActivityText = document.getElementById("familyShareActivityText");
+          const familyPrimaryActions = document.getElementById("familySharePrimaryActions");
+          const familyInviteActions = document.getElementById("familyShareInviteActions");
+          const familyJoinArea = document.getElementById("familyShareJoinArea");
+          [els.familyConnectionButton, els.refreshFamilyIdentityButton].forEach(function (button) {
+            if (button && familyPrimaryActions) familyPrimaryActions.appendChild(button);
+          });
+          if (els.familyConnectionButton) els.familyConnectionButton.textContent = "가족 연결 확인";
+          if (els.refreshFamilyIdentityButton) els.refreshFamilyIdentityButton.textContent = "가족 연결 새로고침";
+          if (familyPrimaryActions && els.cloudEnsureFamilyButton) {
+            const reconnectButton = document.createElement("button");
+            reconnectButton.type = "button";
+            reconnectButton.className = "small-action";
+            reconnectButton.textContent = "서버 재연결";
+            reconnectButton.addEventListener("click", function () {
+              els.cloudEnsureFamilyButton.click();
+            });
+            familyPrimaryActions.appendChild(reconnectButton);
+          }
+          [els.copyFamilyCodeButton, els.copyFamilyInviteLinkButton, els.shareFamilyInviteLinkButton].forEach(function (button) {
+            if (button && familyInviteActions) familyInviteActions.appendChild(button);
+          });
+          if (els.copyFamilyCodeButton) els.copyFamilyCodeButton.textContent = "초대 코드 복사";
+          if (els.copyFamilyInviteLinkButton) els.copyFamilyInviteLinkButton.textContent = "초대 링크 복사";
+          if (els.shareFamilyInviteLinkButton) els.shareFamilyInviteLinkButton.textContent = "초대 링크 공유";
+          if (familyInviteActions) {
+            const familyInviteButton = document.createElement("button");
+            familyInviteButton.type = "button";
+            familyInviteButton.className = "small-action";
+            familyInviteButton.textContent = "+ 가족 초대하기";
+            familyInviteButton.addEventListener("click", handleFamilyConnectionInvite);
+            familyInviteActions.appendChild(familyInviteButton);
+          }
+          const familyCodeField = els.familyAccessCodeInput ? els.familyAccessCodeInput.closest(".form-field") : null;
+          [familyCodeField, els.inviteJoinPrompt, els.joinFamilyButton].forEach(function (node) {
+            if (node && familyJoinArea) familyJoinArea.appendChild(node);
+          });
         }
-        if (dataSection && els.managementCsvPanel) {
-          els.managementCsvPanel.appendChild(dataSection);
+        if (els.managementBackupPanel) {
+          els.managementBackupPanel.insertAdjacentHTML("beforeend",
+            '<section class="management-user-card" aria-label="백업과 내보내기">' +
+            '<h3>백업과 내보내기</h3>' +
+            '<p>기록을 파일로 저장하거나, 필요한 경우 다시 불러올 수 있어요.</p>' +
+            '<div class="data-tool-actions" id="backupFileActions"></div>' +
+            '</section>' +
+            '<section class="management-user-card" aria-label="서버 기록">' +
+            '<h3>서버 기록</h3>' +
+            '<p>서버에 저장된 최신 기록을 이 기기로 가져올 수 있어요.</p>' +
+            '<div class="data-tool-actions" id="backupServerActions"></div>' +
+            '<div class="data-grid" id="backupSyncGrid"></div>' +
+            '</section>' +
+            '<section class="management-user-card" aria-label="데이터 요약">' +
+            '<h3>데이터 요약</h3>' +
+            '<div class="data-grid" id="backupSummaryGrid"></div>' +
+            '</section>'
+          );
+          els.backupSummaryGrid = document.getElementById("backupSummaryGrid");
+          els.backupSyncGrid = document.getElementById("backupSyncGrid");
+          const backupFileActions = document.getElementById("backupFileActions");
+          const backupServerActions = document.getElementById("backupServerActions");
+          [els.jsonBackupButton, els.jsonImportButton, els.csvDataButton, els.jsonImportInput].forEach(function (node) {
+            if (node && backupFileActions) backupFileActions.appendChild(node);
+          });
+          if (els.jsonBackupButton) els.jsonBackupButton.textContent = "JSON 백업하기";
+          if (els.jsonImportButton) els.jsonImportButton.textContent = "JSON 가져오기";
+          if (els.csvDataButton) els.csvDataButton.textContent = "CSV 내보내기";
+          if (els.cloudFetchRecordsButton && backupServerActions) {
+            els.cloudFetchRecordsButton.textContent = "서버에서 최신 기록 가져오기";
+            backupServerActions.appendChild(els.cloudFetchRecordsButton);
+          }
+        }
+        if (els.managementDeveloperPanel) {
+          els.managementDeveloperPanel.insertAdjacentHTML("beforeend",
+            '<section class="developer-diagnostics-head" aria-label="개발자 진단 안내">' +
+            '<h3>개발자 진단</h3>' +
+            '<p>저장소, 서버 동기화, 계정/가족 구조, 분석 상태와 복구 도구를 확인합니다.</p>' +
+            '<button type="button" class="ghost-action" id="developerModeOffButton">개발자 모드 끄기</button>' +
+            '</section>'
+          );
+          els.developerModeOffButton = document.getElementById("developerModeOffButton");
+          if (els.developerModeOffButton) {
+            els.developerModeOffButton.addEventListener("click", turnOffDeveloperMode);
+          }
+          if (dataSection) {
+            dataSection.hidden = false;
+            dataSection.classList.remove("hidden");
+            dataSection.setAttribute("data-management-legacy-section", "developer");
+            const dataTitle = dataSection.querySelector("#dataToolsTitle");
+            if (dataTitle) dataTitle.textContent = "개발자 진단";
+            const dataNote = dataSection.querySelector(".data-note");
+            if (dataNote) dataNote.textContent = "일반 사용자 화면에서 숨긴 내부 상태와 복구 도구를 모아 둔 개발자용 화면입니다.";
+            els.managementDeveloperPanel.appendChild(dataSection);
+            organizeDeveloperDiagnostics(dataSection);
+          }
+        }
+        } catch (err) {
+          console.error("management:renderFailed", err);
+          if (typeof debugLog === "function") {
+            debugLog("management:renderFailed", { message: err && err.message ? err.message : String(err) });
+          }
+          if (dataSection) {
+            dataSection.hidden = true;
+            dataSection.classList.add("hidden");
+            dataSection.setAttribute("aria-hidden", "true");
+          }
+          if (els.managementBabyPanel) {
+            els.managementBabyPanel.innerHTML = '<section class="management-user-card"><p>관리 화면을 불러오는 중 문제가 생겼어요. 잠시 후 다시 확인해 주세요.</p></section>';
+          }
         }
       }
 
+      function organizeDeveloperDiagnostics(dataSection) {
+        const dataTools = dataSection ? dataSection.querySelector(".data-tools") : null;
+        if (!dataTools) return;
+        [
+          "diagnosticsTitle", "storageStatusTitle", "phase3Title", "typeSyncVerificationTitle",
+          "cloudBackupTitle", "authFamilyStatusTitle", "familyBabyStructureTitle",
+          "familyIdentityTitle", "familyMembersTitle", "providerTransitionTitle", "sampleToolsTitle"
+        ].forEach(function (titleId) {
+          const title = document.getElementById(titleId);
+          const section = title ? title.closest(".data-subsection") : null;
+          if (section && section.tagName.toLowerCase() !== "details") {
+            section.setAttribute("data-developer-diagnostic-section", "true");
+          }
+        });
+        const recoveryDetails = document.createElement("details");
+        recoveryDetails.className = "data-subsection";
+        recoveryDetails.id = "advancedRecoveryTools";
+        recoveryDetails.innerHTML = '<summary>고급 복구 도구</summary><div class="data-tool-actions" id="advancedRecoveryActions"></div><p class="cloud-message">실행 전 확인이 필요한 도구입니다. 기존 confirm 보호 장치는 유지됩니다.</p>';
+        dataTools.appendChild(recoveryDetails);
+        const recoveryActions = document.getElementById("advancedRecoveryActions");
+        [
+          els.cloudEnsureFamilyButton, els.cloudRefreshSyncButton, els.cloudRepairLocalContextButton,
+          els.cloudRepairServerRecordsButton, els.cloudProfilePreviewButton, els.cloudTestSaveButton,
+          els.cloudTestFetchButton, els.cloudRetryPendingButton, els.cloudRetryErrorButton,
+          els.toggleAutoFamilySyncButton, els.overwriteFromServerButton, els.cloudPreviewMergeButton,
+          els.cloudMergeRecordsButton, els.cloudBackupUploadButton, els.createSampleButton, els.deleteSampleButton
+        ].forEach(function (button) {
+          if (button && recoveryActions) recoveryActions.appendChild(button);
+        });
+        if (recoveryActions) {
+          const developerFetchButton = document.createElement("button");
+          developerFetchButton.type = "button";
+          developerFetchButton.className = "small-action";
+          developerFetchButton.textContent = "최신 기록 가져오기";
+          developerFetchButton.addEventListener("click", runManualFamilySync);
+          recoveryActions.appendChild(developerFetchButton);
+        }
+        const sampleTitle = document.getElementById("sampleToolsTitle");
+        const sampleSection = sampleTitle ? sampleTitle.closest(".data-subsection") : null;
+        if (sampleSection) sampleSection.remove();
+      }
+
       function renderManagementTabs() {
+        const developerMode = isDeveloperModeEnabled();
+        if (!developerMode && activeManagementTab === "developer") activeManagementTab = "baby";
         document.querySelectorAll("[data-management-tab]").forEach(function (button) {
+          if (button.dataset.managementTab === "developer") {
+            button.classList.toggle("hidden", !developerMode);
+          }
           const active = button.dataset.managementTab === activeManagementTab;
           button.classList.toggle("active", active);
           button.setAttribute("aria-selected", active ? "true" : "false");
         });
         [
-          { key: "profile", panel: els.managementProfilePanel },
-          { key: "settings", panel: els.managementSettingsPanel },
-          { key: "csv", panel: els.managementCsvPanel }
+          { key: "baby", panel: els.managementBabyPanel },
+          { key: "family", panel: els.managementFamilyPanel },
+          { key: "backup", panel: els.managementBackupPanel },
+          { key: "developer", panel: els.managementDeveloperPanel }
         ].forEach(function (item) {
           if (item.panel) item.panel.classList.toggle("hidden", item.key !== activeManagementTab);
         });
       }
 
       function setManagementTab(tab) {
-        activeManagementTab = ["profile", "settings", "csv"].includes(tab) ? tab : "profile";
+        const allowed = ["baby", "family", "backup"];
+        if (isDeveloperModeEnabled()) allowed.push("developer");
+        activeManagementTab = allowed.includes(tab) ? tab : "baby";
         renderManagementTabs();
+      }
+
+      function isDeveloperModeEnabled() {
+        const hasDebugQuery = (location.search || "").indexOf("debug=1") >= 0;
+        try {
+          return hasDebugQuery || localStorage.getItem("touchbebe_debug") === "true";
+        } catch (err) {
+          return hasDebugQuery;
+        }
+      }
+
+      function handleVersionBadgeTap() {
+        versionTapCount += 1;
+        if (versionTapCount < 5) return;
+        versionTapCount = 0;
+        try {
+          localStorage.setItem("touchbebe_debug", "true");
+        } catch (err) {}
+        showToast("개발자 진단이 열렸어요.");
+        renderManagementTabs();
+      }
+
+      function turnOffDeveloperMode() {
+        try {
+          localStorage.removeItem("touchbebe_debug");
+        } catch (err) {}
+        activeManagementTab = "baby";
+        renderManagementTabs();
+        showToast((location.search || "").indexOf("debug=1") >= 0 ? "URL debug 조건이 켜져 있어 개발자 진단이 계속 표시돼요." : "개발자 모드를 껐어요.");
       }
 
       function renderCollapsibleSections() {
@@ -17997,6 +18285,29 @@
           ? appData.profile.birthDate + (days ? " · 생후 " + days + "일" : "")
           : "생년월일을 입력해 주세요";
         els.todayLine.textContent = fullDateTimeText(nowIso());
+        renderBabyManagementStatus();
+      }
+
+      function genderLabel(value) {
+        if (value === "boy") return "남아";
+        if (value === "girl") return "여아";
+        return "미입력";
+      }
+
+      function renderBabyManagementStatus() {
+        if (!els.managementBabyStatusGrid) return;
+        const days = daysSinceBirth(appData.profile.birthDate);
+        const status = getCloudSafeStatus();
+        const sampleCount = (appData.records || []).filter(isSampleRecord).length;
+        const realCount = (appData.records || []).filter(function (record) { return !isSampleRecord(record); }).length;
+        els.managementBabyStatusGrid.innerHTML = dataItemsHtml([
+          { label: "아기 이름", value: appData.profile.babyName || "우리 아기" },
+          { label: "생년월일", value: appData.profile.birthDate || "미입력" },
+          { label: "성별", value: genderLabel(appData.profile.gender) },
+          { label: "생후 일수", value: appData.profile.birthDate && days ? "생후 " + days + "일" : "생년월일을 입력해 주세요" },
+          { label: "체험 모드", value: sampleCount > 0 && realCount === 0 ? "체험 기록 사용 중" : "일반 기록 사용 중" },
+          { label: "서버 연결", value: cloudStatusLabel(status.status) }
+        ]);
       }
 
       function renderSettings() {
@@ -21388,6 +21699,31 @@
         renderCloudStatus();
         renderFullConnectionDiagnosticStatus();
         renderAnalysisApiReadiness();
+        renderDataBackupSummary(diagnostics);
+        renderFamilyShareSummary();
+      }
+
+      function renderDataBackupSummary(diagnostics) {
+        const summary = diagnostics || diagnoseAppData(appData);
+        const sync = getFamilySyncState();
+        const storage = getLocalStorageStatus();
+        const safeStatus = getCloudSafeStatus();
+        if (els.backupSummaryGrid) {
+          els.backupSummaryGrid.innerHTML = dataItemsHtml([
+            { label: "전체 기록", value: summary.totalRecords + "개" },
+            { label: "기록 기간", value: summary.firstRecordDate + " ~ " + summary.lastRecordDate },
+            { label: "수유", value: summary.feedingCount + "개" },
+            { label: "기저귀", value: summary.diaperCount + "개" },
+            { label: "수면 관련", value: summary.sleepRelatedCount + "개" },
+            { label: "이 기기에 저장됨", value: storage.hasCurrentData ? "저장됨" : "아직 저장 전" }
+          ]);
+        }
+        if (els.backupSyncGrid) {
+          els.backupSyncGrid.innerHTML = dataItemsHtml([
+            { label: "서버 동기화", value: sync.autoSyncEnabled === false ? "꺼짐" : cloudStatusLabel(safeStatus.status) },
+            { label: "마지막 동기화", value: formatCloudCheckedAt(sync.lastSyncedAt || safeStatus.lastSavedAt || safeStatus.lastCheckedAt) }
+          ]);
+        }
       }
 
       function formatBytes(bytes) {
@@ -22103,6 +22439,37 @@
         return (actor || "가족") + "이 방금 " + label + "을 남겼어요.";
       }
 
+      function renderFamilyShareSummary() {
+        if (!els.familyShareSummary && !els.familyShareMembers && !els.familyShareInviteCode && !els.familyShareActivityText) return;
+        const status = getCloudSafeStatus();
+        const inviteCode = getFamilyConnectionInviteCode(status);
+        const context = getCurrentCloudContext();
+        let members = normalizeFamilyConnectionMembers(familyMembersState.members || [], { currentUserId: context.currentUserId || status.userId || "" });
+        const mode = getFamilyConnectionMode(status, members, inviteCode);
+        if (mode === "demo") members = getDemoFamilyConnectionMembers();
+        if (mode === "offline") members = [];
+        const copy = getFamilyConnectionStatusCopy(mode, members);
+        if (els.familyShareSummary) {
+          els.familyShareSummary.innerHTML =
+            '<section class="family-connection-status-card' + (mode === "offline" ? ' family-connection-error' : '') + '">' +
+            '<div class="family-connection-status-head"><h3 class="family-connection-status-title">' + escapeHtml(copy.title) + '</h3>' +
+            '<span class="family-connection-mode-badge">' + escapeHtml(copy.badge) + '</span></div>' +
+            '<p class="family-connection-status-text">' + escapeHtml(copy.text) + '</p>' +
+            '</section>';
+        }
+        if (els.familyShareMembers) {
+          els.familyShareMembers.innerHTML = familyConnectionMemberCardsHtml(members, mode);
+        }
+        if (els.familyShareInviteCode) {
+          els.familyShareInviteCode.textContent = mode === "offline"
+            ? "서버 연결 후 초대 코드를 확인할 수 있어요."
+            : (inviteCode || "가족 연결 코드가 준비되면 표시됩니다.");
+        }
+        if (els.familyShareActivityText) {
+          els.familyShareActivityText.textContent = buildFamilyConnectionActivity(appData.records || [], members, mode);
+        }
+      }
+
       async function copyFamilyConnectionText(text) {
         if (!text) {
           showToast("복사할 값이 없습니다.");
@@ -22363,6 +22730,7 @@
         renderFamilyInviteLink(accessCode);
         renderInviteJoinPrompt();
         renderFamilyMembers();
+        renderFamilyShareSummary();
         renderProviderTransitionDiagnostics();
       }
 
@@ -22518,16 +22886,19 @@
         if (state.status === "loading") {
           els.familyMembersList.innerHTML = "";
           if (els.familyMembersMessage) els.familyMembersMessage.textContent = "가족 구성원 정보를 불러오는 중입니다.";
+          renderFamilyShareSummary();
           return;
         }
         if (state.status === "error") {
           els.familyMembersList.innerHTML = "";
           if (els.familyMembersMessage) els.familyMembersMessage.textContent = "가족 구성원 정보를 불러오지 못했습니다. " + (state.error || "");
+          renderFamilyShareSummary();
           return;
         }
         if (!state.members.length) {
           els.familyMembersList.innerHTML = "";
           if (els.familyMembersMessage) els.familyMembersMessage.textContent = "가족 구성원 정보를 아직 불러오지 않았습니다.";
+          renderFamilyShareSummary();
           return;
         }
         els.familyMembersList.innerHTML = state.members.map(function (member) {
@@ -22549,6 +22920,7 @@
         if (els.familyMembersMessage) {
           els.familyMembersMessage.textContent = "가족 구성원 정보를 불러왔습니다." + (state.profilesOk === false ? " 일부 profile 정보는 RLS 제한으로 생략되었습니다." : "");
         }
+        renderFamilyShareSummary();
       }
 
       function loadFamilyMembers() {
@@ -23488,9 +23860,24 @@
         els.predictiveBrowserAlertInput.addEventListener("change", handlePredictiveBrowserAlertToggle);
       }
       els.managementButton.addEventListener("click", function () {
-        setManagementTab("profile");
+        setManagementTab("baby");
         openSheet("management");
       });
+      if (els.versionBadge) {
+        els.versionBadge.addEventListener("click", handleVersionBadgeTap);
+      }
+      if (els.managementRecordButton) {
+        els.managementRecordButton.addEventListener("click", function () {
+          closeSheets();
+          window.setTimeout(function () {
+            const feedingButton = document.querySelector('[data-record-type="feeding"][data-record-direct="true"]');
+            if (feedingButton && typeof feedingButton.focus === "function") feedingButton.focus();
+          }, 0);
+        });
+      }
+      if (els.developerModeOffButton) {
+        els.developerModeOffButton.addEventListener("click", turnOffDeveloperMode);
+      }
       document.querySelectorAll("[data-management-tab]").forEach(function (button) {
         button.addEventListener("click", function () {
           setManagementTab(button.dataset.managementTab);
