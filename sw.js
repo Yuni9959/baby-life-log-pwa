@@ -1,4 +1,5 @@
-const CACHE_NAME = "baby-life-log-v6.1.7-record-badge-icon";
+const APP_VERSION = "6.1.8-quick-button-icons";
+const CACHE_NAME = `baby-life-log-v${APP_VERSION}`;
 const CACHE_PREFIX = "babylog-cache-";
 const OLD_CACHE_PREFIX = "baby-life-log-";
 const PRIMARY_CACHE_NAME = CACHE_NAME;
@@ -63,7 +64,7 @@ self.addEventListener("message", function (event) {
   if (target && typeof target.postMessage === "function") {
     target.postMessage({
       type: "VERSION_INFO",
-      appVersion: "6.1.7-record-badge-icon",
+      appVersion: APP_VERSION,
       cacheName: CACHE_NAME
     });
   }
