@@ -9,7 +9,7 @@
   <meta name="apple-mobile-web-app-title" content="터치베베">
   <link rel="manifest" href="./manifest.json">
   <link rel="apple-touch-icon" href="./icons/icon-192.png">
-  <title>터치베베</title>
+  <title>아기 생활 기록</title>
   <style>
     @import url("https://fonts.googleapis.com/css2?family=Gaegu:wght@400;700&display=swap");
     @import url("https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css");
@@ -1171,6 +1171,157 @@
     .family-member-badge { flex: 0 0 auto; padding: 3px 7px; border-radius: 999px; color: #fff; background: var(--brand); font-size: 0.72rem; font-weight: 800; }
     .family-member-meta { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; color: var(--text); font-size: 0.78rem; }
     .family-member-meta span { min-width: 0; overflow-wrap: anywhere; }
+    .family-connection-sheet { background: #fff8ec; color: var(--tx-1); }
+    .family-connection-body { display: grid; gap: 14px; padding-bottom: 8px; }
+    .family-connection-status-card,
+    .family-connection-code-card,
+    .family-connection-activity-card,
+    .family-connection-empty-card {
+      border: 1px solid rgba(125, 151, 110, .18);
+      border-radius: 18px;
+      background: rgba(255, 255, 255, .92);
+      box-shadow: 0 10px 24px rgba(91, 67, 35, .08);
+      padding: 14px;
+    }
+    .family-connection-status-card { background: linear-gradient(135deg, #fffdf8, #eef7e9); }
+    .family-connection-status-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 10px;
+      margin-bottom: 8px;
+    }
+    .family-connection-status-title {
+      margin: 0;
+      color: #3e4e37;
+      font-size: 1.08rem;
+      font-weight: 900;
+      line-height: 1.25;
+      overflow-wrap: anywhere;
+    }
+    .family-connection-status-text,
+    .family-connection-code-note,
+    .family-connection-activity-text,
+    .family-connection-empty-card p {
+      margin: 0;
+      color: #6d604d;
+      font-size: .9rem;
+      font-weight: 650;
+      line-height: 1.45;
+    }
+    .family-connection-mode-badge,
+    .family-connection-current-badge {
+      flex: 0 0 auto;
+      border-radius: 999px;
+      background: rgba(134, 169, 124, .16);
+      color: #58794c;
+      padding: 4px 8px;
+      font-size: .72rem;
+      font-weight: 900;
+      white-space: nowrap;
+    }
+    .family-connection-member-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px;
+    }
+    .family-connection-member-card {
+      min-width: 0;
+      border: 1px solid rgba(125, 151, 110, .16);
+      border-radius: 16px;
+      background: rgba(255, 255, 255, .94);
+      box-shadow: 0 8px 18px rgba(91, 67, 35, .06);
+      padding: 12px 8px;
+      text-align: center;
+    }
+    .family-connection-avatar {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 42px;
+      height: 42px;
+      margin-bottom: 8px;
+      border-radius: 999px;
+      background: #eef7e9;
+      font-size: 1.25rem;
+    }
+    .family-connection-name {
+      color: #3e4e37;
+      font-size: .92rem;
+      font-weight: 900;
+      line-height: 1.2;
+      overflow-wrap: anywhere;
+    }
+    .family-connection-role {
+      margin-top: 3px;
+      color: #776b58;
+      font-size: .78rem;
+      font-weight: 800;
+      line-height: 1.25;
+      overflow-wrap: anywhere;
+    }
+    .family-connection-invite-button {
+      min-height: 50px;
+      width: 100%;
+      border: 0;
+      border-radius: 16px;
+      background: #7fa06f;
+      color: #fff;
+      font-weight: 900;
+      box-shadow: 0 10px 20px rgba(88, 121, 76, .18);
+      cursor: pointer;
+    }
+    .family-connection-invite-button:disabled { cursor: not-allowed; opacity: .58; }
+    .family-connection-code-head,
+    .family-connection-activity-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+    .family-connection-code-label {
+      margin: 0;
+      color: #4b5d42;
+      font-size: .82rem;
+      font-weight: 900;
+    }
+    .family-connection-code-value {
+      margin: 7px 0 0;
+      color: #3f4d36;
+      font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
+      font-size: 1.12rem;
+      font-weight: 900;
+      letter-spacing: 0;
+      overflow-wrap: anywhere;
+      user-select: text;
+    }
+    .family-connection-copy-button {
+      flex: 0 0 auto;
+      min-height: 38px;
+      border: 1px solid rgba(127, 160, 111, .38);
+      border-radius: 12px;
+      background: #fff;
+      color: #58794c;
+      font-weight: 900;
+      cursor: pointer;
+    }
+    .family-connection-activity-card { background: #eef7e9; }
+    .family-connection-activity-avatar {
+      flex: 0 0 auto;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 34px;
+      height: 34px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, .82);
+      font-size: 1rem;
+    }
+    .family-connection-error {
+      border-color: rgba(185, 91, 75, .28);
+      background: #fff6f2;
+      color: #9b4e3f;
+    }
     .invite-link-box {
       padding: 10px;
       border: 1px dashed var(--line-strong);
@@ -2650,6 +2801,13 @@
     }
 
     @media (max-width: 430px) {
+      .family-connection-member-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .family-connection-status-head,
+      .family-connection-code-head {
+        align-items: stretch;
+        flex-direction: column;
+      }
+      .family-connection-copy-button { width: 100%; }
       .app-shell { padding-inline: 12px; }
       .status-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
       .quick-feeding-card { padding: 12px; }
@@ -2694,7 +2852,7 @@
   <main class="app app-shell">
     <header class="topbar">
       <div>
-        <div class="version-badge" id="versionBadge">v6.1.9-report-timeline</div>
+        <div class="version-badge" id="versionBadge">v6.1.10-family-connection</div>
         <h1 id="babyTitle">우리 아기</h1>
         <div class="baby-days" id="babyDays">생년월일을 입력해 주세요</div>
         <div class="today-line" id="todayLine"></div>
@@ -3135,7 +3293,8 @@
             <h3 id="familyIdentityTitle">가족 연결</h3>
             <p class="cloud-message">가족 연결 코드를 사용하면 다른 보호자 계정이나 새 기기에서 같은 family workspace에 연결하고 서버 기록을 이 기기에 복원할 수 있어요. 계정 코드는 가족 공유에 사용하지 않습니다.</p>
             <div class="data-grid" id="familyIdentityGrid"></div>
-            <div class="data-tool-actions">
+          <div class="data-tool-actions">
+              <button type="button" class="small-action" id="familyConnectionButton">가족 연결 확인</button>
               <button type="button" class="small-action" id="copyFamilyCodeButton">가족 연결 코드 복사</button>
               <button type="button" class="small-action" id="refreshFamilyIdentityButton">가족 연결 새로고침</button>
             </div>
@@ -3246,6 +3405,22 @@
     <div class="management-panel-content" id="managementProfilePanel"></div>
     <div class="management-panel-content hidden" id="managementSettingsPanel"></div>
     <div class="management-panel-content hidden" id="managementCsvPanel"></div>
+  </section>
+
+  <section class="bottom-sheet family-connection-sheet" id="familyConnectionSheet" role="dialog" aria-modal="true" aria-labelledby="familyConnectionSheetTitle">
+    <div class="sheet-head family-connection-header">
+      <h2 class="sheet-title family-connection-title" id="familyConnectionSheetTitle">가족 연결 확인</h2>
+      <button type="button" class="sheet-close family-connection-close" data-close-sheet aria-label="가족 연결 확인 닫기">×</button>
+    </div>
+    <div class="family-connection-body" id="familyConnectionContent">
+      <section class="family-connection-status-card">
+        <div class="family-connection-status-head">
+          <h3 class="family-connection-status-title">가족 연결 정보를 확인하는 중이에요.</h3>
+          <span class="family-connection-mode-badge">확인 중</span>
+        </div>
+        <p class="family-connection-status-text">잠시 후 다시 확인해 주세요.</p>
+      </section>
+    </div>
   </section>
 
   <!-- 수유 시트 -->
@@ -3540,7 +3715,7 @@
   <script>
     document.addEventListener("DOMContentLoaded", function () {
       if ("serviceWorker" in navigator) {
-        navigator.serviceWorker.register("./sw.js?v=6.1.9-report-timeline").catch(function (error) {
+        navigator.serviceWorker.register("./sw.js?v=6.1.10-family-connection").catch(function (error) {
           console.warn("Service worker registration failed", error);
         });
       }
@@ -3735,9 +3910,9 @@
       const PRE_REPAIR_BACKUP_KEY = "baby_life_log_app_backup_before_repair";
       const BACKUP_FORMAT_VERSION = 2;
       const APP_NAME = "baby-life-log";
-      const APP_VERSION = "6.1.9-report-timeline";
+      const APP_VERSION = "6.1.10-family-connection";
       const APP_PHASE_LABEL = "";
-      const SERVICE_WORKER_CACHE_NAME = "baby-life-log-v6.1.9-report-timeline";
+      const SERVICE_WORKER_CACHE_NAME = "baby-life-log-v6.1.10-family-connection";
       const APP_INIT_TIME = new Date().toISOString();
       const ANALYSIS_API_ENDPOINT = "";
       const SERVER_OVERWRITE_BACKUP_KEY = "babylog_records_backup_before_server_overwrite";
@@ -4039,6 +4214,9 @@
         copyCaregiverHandoffButton: document.getElementById("copyCaregiverHandoffButton"),
         caregiverHandoffFallbackText: document.getElementById("caregiverHandoffFallbackText"),
         familyShareButton: document.getElementById("familyShareButton"),
+        familyConnectionButton: document.getElementById("familyConnectionButton"),
+        familyConnectionSheet: document.getElementById("familyConnectionSheet"),
+        familyConnectionContent: document.getElementById("familyConnectionContent"),
         familyShareSheet: document.getElementById("familyShareSheet"),
         familyShareOptionChips: document.getElementById("familyShareOptionChips"),
         familyShareContent: document.getElementById("familyShareContent"),
@@ -4242,6 +4420,7 @@
       let phase4FinalDiagnosticState = null;
       let currentCaregiverHandoffSummary = null;
       let currentFamilyShareReport = null;
+      let familyConnectionOpenedFromManagement = false;
       let currentReportHubState = null;
       let currentPremiumAccessState = null;
       let currentPremiumPreviewState = null;
@@ -17809,7 +17988,7 @@
         const name = appData.profile.babyName || "우리 아기";
         if (els.versionBadge) els.versionBadge.textContent = APP_PHASE_LABEL ? ("v" + APP_VERSION + " · " + APP_PHASE_LABEL) : ("v" + APP_VERSION);
         els.babyTitle.textContent = name;
-        document.title = name + " 터치베베";
+        document.title = name + " 생활 기록";
         els.babyNameInput.value = appData.profile.babyName || "";
         els.birthDateInput.value = appData.profile.birthDate || "";
         els.genderInput.value = appData.profile.gender || "";
@@ -19594,6 +19773,15 @@
         return !!(els.reportHubSheet && els.reportHubSheet.classList.contains("active"));
       }
 
+      function openFamilyConnectionFromNavState() {
+        showHomeScreen();
+        if (!familyConnectionOpenedFromManagement) closeSheets(false);
+        if (els.overlay) els.overlay.classList.add("active");
+        renderFamilyConnectionScreen({ members: familyMembersState.members || [] });
+        if (els.familyConnectionSheet) els.familyConnectionSheet.classList.add("active");
+        refreshFamilyConnectionMembers();
+      }
+
       function openReportHubFromNavState() {
         showHomeScreen();
         closeSheets(false);
@@ -19609,9 +19797,17 @@
             openReportHubFromNavState();
             return;
           }
+          if (isAppNavState(state) && state.view === "sheet" && state.sheet === "familyConnection") {
+            openFamilyConnectionFromNavState();
+            return;
+          }
           if (isAppNavState(state) && state.view === "analysis") {
             closeSheets();
             showAnalysisScreen({ syncHistory: false });
+            return;
+          }
+          if (isFamilyConnectionSheetOpen() && familyConnectionOpenedFromManagement) {
+            closeFamilyConnectionLayerOnly(true);
             return;
           }
           closeSheets();
@@ -19636,8 +19832,13 @@
       function closeActiveLayerFromUser() {
         const state = window.history ? window.history.state : null;
         if ((isReportHubSheetOpen() && isAppNavState(state) && state.view === "sheet" && state.sheet === "reportHub") ||
+          (isFamilyConnectionSheetOpen() && isAppNavState(state) && state.view === "sheet" && state.sheet === "familyConnection") ||
           (isAnalysisScreenOpen() && isAppNavState(state) && state.view === "analysis")) {
           window.history.back();
+          return;
+        }
+        if (isFamilyConnectionSheetOpen()) {
+          closeFamilyConnectionLayerOnly(!!(els.managementSheet && els.managementSheet.classList.contains("active")));
           return;
         }
         if (isAnalysisScreenOpen()) {
@@ -19924,7 +20125,13 @@
         if (name === "reportHub" && opts.syncHistory !== false && !appNavigationRestoring) {
           pushAppNavState("sheet", { sheet: "reportHub" });
         }
+        if (name === "familyConnection" && opts.syncHistory !== false && !appNavigationRestoring) {
+          pushAppNavState("sheet", { sheet: "familyConnection" });
+        }
+        const keepManagementBehind = name === "familyConnection" && els.managementSheet && els.managementSheet.classList.contains("active");
+        familyConnectionOpenedFromManagement = keepManagementBehind;
         closeSheets(false);
+        if (keepManagementBehind && els.managementSheet) els.managementSheet.classList.add("active");
         els.overlay.classList.add("active");
         if (name === "feeding") {
           els.feedingMemoInput.value = "";
@@ -19966,6 +20173,11 @@
           renderFamilyShareReport();
           els.familyShareSheet.classList.add("active");
         }
+        if (name === "familyConnection") {
+          renderFamilyConnectionScreen({ members: familyMembersState.members || [] });
+          if (els.familyConnectionSheet) els.familyConnectionSheet.classList.add("active");
+          refreshFamilyConnectionMembers();
+        }
         if (name === "shareImagePreview") {
           renderShareImagePreview();
           if (els.shareImagePreviewSheet) els.shareImagePreviewSheet.classList.add("active");
@@ -19987,9 +20199,11 @@
         if (els.premiumPreviewSheet) els.premiumPreviewSheet.classList.remove("active");
         if (els.caregiverHandoffSheet) els.caregiverHandoffSheet.classList.remove("active");
         if (els.familyShareSheet) els.familyShareSheet.classList.remove("active");
+        if (els.familyConnectionSheet) els.familyConnectionSheet.classList.remove("active");
         if (els.shareImagePreviewSheet) els.shareImagePreviewSheet.classList.remove("active");
         if (els.printableReportSheet) els.printableReportSheet.classList.remove("active");
         if (clearOverlay !== false) els.overlay.classList.remove("active");
+        if (clearOverlay !== false) familyConnectionOpenedFromManagement = false;
       }
 
       function getCryCheckedItems() {
@@ -20299,7 +20513,7 @@
         return {
           backupFormatVersion: BACKUP_FORMAT_VERSION,
           appName: APP_NAME,
-          appDisplayName: "터치베베",
+          appDisplayName: "아기 생활 기록",
           appVersion: "phase-" + APP_VERSION,
           exportedAt: nowIso(),
           schemaVersion: data.schemaVersion,
@@ -20375,7 +20589,7 @@
           if (invalidRecord) throw new Error("invalid record");
           return { ok: true, data: data };
         } catch (error) {
-          return { ok: false, message: "복원할 수 없는 백업 파일입니다.\n올바른 터치베베 백업 파일을 선택해 주세요." };
+          return { ok: false, message: "복원할 수 없는 백업 파일입니다.\n올바른 아기 생활 기록 백업 파일을 선택해 주세요." };
         }
       }
 
@@ -21708,6 +21922,322 @@
         };
       }
 
+      function isFamilyConnectionSheetOpen() {
+        return !!(els.familyConnectionSheet && els.familyConnectionSheet.classList.contains("active"));
+      }
+
+      function closeFamilyConnectionLayerOnly(keepManagement) {
+        if (els.familyConnectionSheet) els.familyConnectionSheet.classList.remove("active");
+        if (!keepManagement && els.overlay) els.overlay.classList.remove("active");
+        if (keepManagement && els.managementSheet && els.managementSheet.classList.contains("active") && els.overlay) {
+          els.overlay.classList.add("active");
+        }
+        familyConnectionOpenedFromManagement = false;
+      }
+
+      function getFamilyRoleLabel(role) {
+        const key = String(role || "unknown").toLowerCase();
+        if (key === "owner" || key === "admin") return "관리자";
+        if (key === "viewer" || key === "readonly" || key === "read_only") return "보기 전용";
+        return "함께 기록";
+      }
+
+      function familyConnectionNameFallback(member, index) {
+        const email = member && member.email ? String(member.email) : "";
+        const role = member && member.role ? String(member.role).toLowerCase() : "";
+        return (member && (member.display_name || member.displayName || member.nickname || member.name || member.relationship)) ||
+          (email ? email.split("@")[0] : "") ||
+          (role === "owner" || role === "admin" ? "관리자" : "") ||
+          ("가족 구성원 " + (index + 1));
+      }
+
+      function normalizeFamilyConnectionMembers(rawMembers, options) {
+        const opts = options || {};
+        const currentUserId = opts.currentUserId ? String(opts.currentUserId) : "";
+        const avatars = ["🐰", "🐮", "🐑", "🧸", "🌿", "🍼"];
+        return (Array.isArray(rawMembers) ? rawMembers : []).filter(Boolean).map(function (member, index) {
+          const userId = member.user_id || member.userId || member.auth_user_id || member.id || "";
+          const role = member.role || member.member_role || "member";
+          const isCurrent = member.is_current_user === true || member.isCurrentUser === true ||
+            (!!currentUserId && String(userId) === currentUserId);
+          return {
+            id: String(member.id || userId || ("member-" + index)),
+            userId: String(userId || ""),
+            displayName: String(familyConnectionNameFallback(member, index)).slice(0, 24),
+            role: String(role || "member"),
+            roleLabel: getFamilyRoleLabel(role),
+            avatar: member.avatar || avatars[index % avatars.length],
+            status: member.status || "active",
+            isCurrentUser: isCurrent,
+            isDemo: member.isDemo === true
+          };
+        });
+      }
+
+      function getDemoFamilyConnectionMembers() {
+        return normalizeFamilyConnectionMembers([
+          { display_name: "엄마", role: "admin", avatar: "🐰", isDemo: true },
+          { display_name: "아빠", role: "member", avatar: "🐮", isDemo: true },
+          { display_name: "할머니", role: "caregiver", avatar: "🐑", isDemo: true }
+        ], {});
+      }
+
+      function getFamilyConnectionInviteCode(status) {
+        const safeStatus = status || getCloudSafeStatus();
+        const context = window.BabyCloud && typeof window.BabyCloud.getCloudContext === "function" ? window.BabyCloud.getCloudContext() : {};
+        const diagnostic = readFamilyIdentityDiagnostic() || {};
+        const appCloud = appData && appData.cloud ? appData.cloud : {};
+        return diagnostic.familyCode || diagnostic.familyAccessCode ||
+          appCloud.familyCode || appCloud.inviteCode || appCloud.accountCode || appCloud.shareCode ||
+          context.familyCode || context.familyAccessCode || context.inviteCode || context.accountCode || context.shareCode ||
+          safeStatus.familyCode || safeStatus.familyAccessCode || safeStatus.inviteCode || safeStatus.accountCode || safeStatus.shareCode ||
+          getLocalValue("babylog_family_code") || getLocalValue("babylog_account_code") || "";
+      }
+
+      function isFamilyConnectionReconnectRequired(status) {
+        const safeStatus = status || getCloudSafeStatus();
+        const statusName = String((safeStatus && safeStatus.status) || "").toLowerCase();
+        if (typeof navigator !== "undefined" && navigator.onLine === false) return true;
+        if (!statusName) return false;
+        if (["offline", "disconnected", "error", "auth_missing", "login_required", "session_missing", "unauthenticated", "not_authenticated"].includes(statusName)) return true;
+        if (statusName.indexOf("error") !== -1 || statusName.indexOf("failed") !== -1) return true;
+        if (statusName.indexOf("auth") !== -1 && (statusName.indexOf("missing") !== -1 || statusName.indexOf("required") !== -1)) return true;
+        return false;
+      }
+
+      function getFamilyConnectionMode(status, members, inviteCode) {
+        const safeStatus = status || getCloudSafeStatus();
+        const records = Array.isArray(appData.records) ? appData.records : [];
+        const sampleCount = records.filter(isSampleRecord).length;
+        const realCount = records.filter(function (record) { return !isSampleRecord(record); }).length;
+        const context = getCurrentCloudContext();
+        const hasActualFamily = !!(context.currentFamilyId || context.familyMembership || inviteCode || (members && members.length));
+        if (isFamilyConnectionReconnectRequired(safeStatus)) return "offline";
+        if (!hasActualFamily && sampleCount > 0 && realCount === 0) return "demo";
+        if (!hasActualFamily && (safeStatus.status === "not_configured" || safeStatus.status === "local_mode" || safeStatus.enabled === false)) return "local";
+        if (!hasActualFamily) return "missing";
+        return "connected";
+      }
+
+      function getFamilyConnectionStatusCopy(mode, members) {
+        const count = members.length;
+        if (mode === "demo") {
+          return {
+            title: "우리 가족 · 3명이 함께 기록 중",
+            text: "체험용 가족 공유 예시예요. 실제 기록을 시작하면 우리 가족 연결 상태를 확인할 수 있어요.",
+            badge: "체험 모드"
+          };
+        }
+        if (mode === "offline") {
+          return {
+            title: "서버 연결 후 가족 정보를 확인할 수 있어요.",
+            text: "서버 재연결을 눌러 주세요. 연결 전에는 가족 정보를 확정해서 표시하지 않아요.",
+            badge: "연결 확인 필요"
+          };
+        }
+        if (mode === "missing" || mode === "local") {
+          return {
+            title: "아직 가족 workspace가 준비되지 않았어요.",
+            text: "서버 재연결 또는 가족 초대를 확인해 주세요.",
+            badge: "준비 전"
+          };
+        }
+        return {
+          title: "우리 가족 · " + Math.max(count, 1) + "명이 함께 기록 중",
+          text: "같은 아기의 수유 · 수면 · 기저귀 흐름을 가족이 함께 확인하고 있어요.",
+          badge: "연결됨"
+        };
+      }
+
+      function familyConnectionMemberCardsHtml(members, mode) {
+        if (mode === "offline") {
+          return '<section class="family-connection-empty-card family-connection-error"><p><strong>서버 연결 후 가족 정보를 확인할 수 있어요.</strong></p><p>서버 재연결을 눌러 주세요.</p></section>';
+        }
+        if (!members.length && mode !== "demo") {
+          return '<section class="family-connection-empty-card"><p><strong>아직 함께 기록 중인 가족이 없어요.</strong></p><p>가족을 초대하면 같은 아기의 기록을 함께 볼 수 있어요.</p></section>';
+        }
+        return '<div class="family-connection-member-grid">' + members.map(function (member) {
+          return '<article class="family-connection-member-card">' +
+            '<div class="family-connection-avatar" aria-hidden="true">' + escapeHtml(member.avatar || "🌿") + '</div>' +
+            '<div class="family-connection-name">' + escapeHtml(member.displayName) + '</div>' +
+            '<div class="family-connection-role">' + escapeHtml(member.roleLabel) + '</div>' +
+            (member.isCurrentUser ? '<div class="family-connection-current-badge">나</div>' : '') +
+            '</article>';
+        }).join("") + '</div>';
+      }
+
+      function getRecordActorName(record, members) {
+        const direct = record && (record.created_by_name || record.caregiver_name || record.recorded_by_name || record.synced_by_name || record.author_name);
+        if (direct) return String(direct).slice(0, 24);
+        const actorId = record && (record.userId || record.user_id || record.created_by || record.author_id || record.recorded_by || record.synced_by);
+        if (actorId) {
+          const match = members.find(function (member) { return member.userId && String(member.userId) === String(actorId); });
+          if (match) return match.displayName;
+        }
+        return "";
+      }
+
+      function getRecordShortLabel(record) {
+        const type = record && (record.type || record.kind || record.category);
+        const meta = getRecordTypeMetaByType(type);
+        if (type === "feeding") {
+          const amount = record.amount || record.amount_ml || record.ml;
+          return meta.label + (amount ? " " + amount + "ml" : " 기록");
+        }
+        if (type === "diaper") return meta.label + " " + (subtypeLabels[record.subtype] || "기록");
+        return meta.label + " 기록";
+      }
+
+      function buildFamilyConnectionActivity(records, members, mode) {
+        if (mode === "demo") return "아빠가 방금 수유 100ml를 기록했어요.";
+        if (mode === "offline") return "서버 연결 후 최근 가족 활동을 확인할 수 있어요.";
+        const usable = (Array.isArray(records) ? records : []).filter(function (record) {
+          return record && !record.deletedAt && !record.deleted_at && !isSampleRecord(record);
+        }).sort(function (a, b) {
+          return new Date(b.createdAt || b.created_at || b.recorded_at || 0).getTime() - new Date(a.createdAt || a.created_at || a.recorded_at || 0).getTime();
+        });
+        if (!usable.length) return "가족이 기록을 남기면 이곳에 최근 활동이 보여요.";
+        const latest = usable[0];
+        const actor = getRecordActorName(latest, members);
+        const label = getRecordShortLabel(latest);
+        return (actor || "가족") + "이 방금 " + label + "을 남겼어요.";
+      }
+
+      async function copyFamilyConnectionText(text) {
+        if (!text) {
+          showToast("복사할 값이 없습니다.");
+          return false;
+        }
+        try {
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+            await navigator.clipboard.writeText(text);
+            showToast("가족 초대 코드를 복사했어요.");
+            return true;
+          }
+          throw new Error("clipboard_unavailable");
+        } catch (error) {
+          try {
+            const textarea = document.createElement("textarea");
+            textarea.value = text;
+            textarea.setAttribute("readonly", "");
+            textarea.style.position = "fixed";
+            textarea.style.left = "-9999px";
+            document.body.appendChild(textarea);
+            textarea.select();
+            const ok = document.execCommand && document.execCommand("copy");
+            document.body.removeChild(textarea);
+            if (ok) {
+              showToast("가족 초대 코드를 복사했어요.");
+              return true;
+            }
+          } catch (fallbackError) {}
+          showToast("복사에 실패했어요. 코드를 길게 눌러 복사해 주세요.");
+          return false;
+        }
+      }
+
+      function copyFamilyConnectionInviteCode() {
+        const status = getCloudSafeStatus();
+        const inviteCode = getFamilyConnectionInviteCode(status);
+        const mode = getFamilyConnectionMode(status, familyMembersState.members || [], inviteCode);
+        if (mode === "offline") {
+          showToast("서버 연결 후 가족 정보를 확인할 수 있어요. 서버 재연결을 눌러 주세요.");
+          return false;
+        }
+        if (mode === "demo" || !inviteCode) {
+          showToast("서버 연결 후 초대 코드를 확인할 수 있어요.");
+          return false;
+        }
+        return copyFamilyConnectionText(inviteCode);
+      }
+
+      function renderFamilyConnectionScreen(state) {
+        if (!els.familyConnectionContent) return;
+        try {
+          const status = getCloudSafeStatus();
+          const rawMembers = state && Array.isArray(state.members) ? state.members : (familyMembersState.members || []);
+          const inviteCode = getFamilyConnectionInviteCode(status);
+          let members = normalizeFamilyConnectionMembers(rawMembers, { currentUserId: status.userId || getCurrentCloudContext().currentUserId || "" });
+          const mode = getFamilyConnectionMode(status, members, inviteCode);
+          const visibleInviteCode = mode === "offline" || mode === "demo" ? "" : inviteCode;
+          if (mode === "demo") members = getDemoFamilyConnectionMembers();
+          if (mode === "offline") members = [];
+          const copy = getFamilyConnectionStatusCopy(mode, members);
+          const activity = buildFamilyConnectionActivity(appData.records || [], members, mode);
+          const codeHtml = visibleInviteCode
+            ? '<p class="family-connection-code-value" id="familyConnectionCodeValue">' + escapeHtml(visibleInviteCode) + '</p><p class="family-connection-code-note">가까운 보호자에게만 공유해 주세요.</p>'
+            : '<p class="family-connection-code-note">' + (mode === "offline" ? "가족 초대 코드를 불러오지 못했어요. 서버 재연결을 눌러 주세요." : "서버 연결 후 초대 코드를 확인할 수 있어요.") + '</p>';
+          els.familyConnectionContent.innerHTML =
+            '<section class="family-connection-status-card' + (mode === "offline" ? ' family-connection-error' : '') + '">' +
+              '<div class="family-connection-status-head"><h3 class="family-connection-status-title">' + escapeHtml(copy.title) + '</h3><span class="family-connection-mode-badge">' + escapeHtml(copy.badge) + '</span></div>' +
+              '<p class="family-connection-status-text">' + escapeHtml(copy.text) + '</p>' +
+            '</section>' +
+            familyConnectionMemberCardsHtml(members, mode) +
+            '<button type="button" class="family-connection-invite-button" id="familyConnectionInviteButton">+ 가족 초대하기</button>' +
+            '<section class="family-connection-code-card" id="familyConnectionCodeCard">' +
+              '<div class="family-connection-code-head"><p class="family-connection-code-label">가족 초대 코드</p><button type="button" class="family-connection-copy-button" id="familyConnectionCopyButton"' + (!visibleInviteCode ? ' disabled' : '') + '>복사하기</button></div>' +
+              codeHtml +
+            '</section>' +
+            '<section class="family-connection-activity-card"><div class="family-connection-activity-row"><span class="family-connection-activity-avatar" aria-hidden="true">🌿</span><p class="family-connection-activity-text">' + escapeHtml(activity) + '</p></div></section>';
+        } catch (error) {
+          console.warn("familyConnection:renderFailed", error);
+          els.familyConnectionContent.innerHTML = '<section class="family-connection-empty-card family-connection-error"><p>가족 연결 정보를 불러오는 중 문제가 생겼어요. 잠시 후 다시 확인해 주세요.</p></section>';
+        }
+      }
+
+      function refreshFamilyConnectionMembers() {
+        if (!window.BabyCloud || typeof window.BabyCloud.loadFamilyMembers !== "function") {
+          renderFamilyConnectionScreen({ members: familyMembersState.members || [] });
+          return Promise.resolve(familyMembersState);
+        }
+        return window.BabyCloud.loadFamilyMembers().then(function (result) {
+          if (result && result.ok) {
+            familyMembersState = {
+              status: "loaded",
+              members: result.members || [],
+              error: null,
+              fetchedAt: result.fetchedAt || nowIso(),
+              profilesOk: result.profilesOk
+            };
+            renderFamilyMembers();
+          }
+          renderFamilyConnectionScreen({ members: familyMembersState.members || [] });
+          return result;
+        }).catch(function (error) {
+          familyMembersState = { status: "error", members: familyMembersState.members || [], error: error && error.message ? error.message : String(error), fetchedAt: nowIso(), profilesOk: null };
+          renderFamilyConnectionScreen({ members: familyMembersState.members || [] });
+          return familyMembersState;
+        });
+      }
+
+      function handleFamilyConnectionInvite() {
+        const status = getCloudSafeStatus();
+        if (isFamilyConnectionReconnectRequired(status)) {
+          if (els.cloudEnsureFamilyButton && typeof els.cloudEnsureFamilyButton.click === "function") {
+            els.cloudEnsureFamilyButton.click();
+          }
+          showToast("서버 연결 후 가족 정보를 확인할 수 있어요. 서버 재연결을 눌러 주세요.");
+          return;
+        }
+        const code = getFamilyConnectionInviteCode(status);
+        if (code && typeof shareFamilyInviteLink === "function") {
+          shareFamilyInviteLink();
+          return;
+        }
+        if (code) {
+          const card = document.getElementById("familyConnectionCodeCard");
+          if (card && typeof card.scrollIntoView === "function") card.scrollIntoView({ behavior: "smooth", block: "center" });
+          showToast("가족 초대 코드를 복사해 공유해 주세요.");
+          return;
+        }
+        if (els.cloudEnsureFamilyButton && typeof els.cloudEnsureFamilyButton.click === "function") {
+          els.cloudEnsureFamilyButton.click();
+          showToast("서버 재연결 후 가족 초대 코드를 확인해 주세요.");
+        } else {
+          showToast("서버 연결 후 가족 정보를 확인할 수 있어요. 서버 재연결을 눌러 주세요.");
+        }
+      }
+
       function readSameAccountRestoreDiagnostic() {
         if (window.BabyCloud && typeof window.BabyCloud.getSameAccountRestoreDiagnostic === "function") {
           return window.BabyCloud.getSameAccountRestoreDiagnostic();
@@ -22695,6 +23225,27 @@
           event.preventDefault();
           event.stopPropagation();
           openSheet("familyShare");
+          return;
+        }
+
+        if (event.target.closest("#familyConnectionButton")) {
+          event.preventDefault();
+          event.stopPropagation();
+          openSheet("familyConnection");
+          return;
+        }
+
+        if (event.target.closest("#familyConnectionCopyButton")) {
+          event.preventDefault();
+          event.stopPropagation();
+          copyFamilyConnectionInviteCode();
+          return;
+        }
+
+        if (event.target.closest("#familyConnectionInviteButton")) {
+          event.preventDefault();
+          event.stopPropagation();
+          handleFamilyConnectionInvite();
           return;
         }
 
