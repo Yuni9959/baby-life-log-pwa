@@ -3967,7 +3967,10 @@
       const typeLabels = { feeding: "수유", burp: "트림", diaper: "기저귀", sleep: "잠듦", sleep_start: "잠듦", wake: "깨어남", awake: "깨어남", wakeup: "깨어남", sleep_end: "깨어남", cry: "울어요" };
       const subtypeLabels = {
         formula: "분유", breast: "모유", pumped: "유축",
-        urine: "소변", pee: "소변", stool: "대변", poop: "대변", both: "소변+대변", mixed: "소변+대변", change: "기저귀만 갈기"
+        urine: "소변", pee: "소변", wet: "소변",
+        stool: "대변", poop: "대변", dirty: "대변",
+        both: "소변+대변", mixed: "소변+대변", pee_poop: "소변+대변",
+        change: "기저귀만 갈기"
       };
 
       function getRecordTypeMetaByType(type) {
@@ -18836,7 +18839,7 @@
       }
 
       function reportTimelineItemHtml(item) {
-        return '<div class="report-timeline-row">' +
+        return '<div class="report-timeline-row" aria-label="' + escapeHtml(item.timeText + " " + item.title + " " + item.subtitle) + '">' +
           '<div class="report-timeline-time">' + escapeHtml(item.timeText) + '</div>' +
           '<div class="report-timeline-rail" aria-hidden="true"><div class="report-timeline-node ' + escapeHtml(item.color) + '">' + escapeHtml(item.icon) + '</div></div>' +
           '<article class="report-timeline-card">' +
