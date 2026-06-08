@@ -1,5 +1,5 @@
-const APP_VERSION = "6.1.8-quick-button-icons";
-const CACHE_NAME = `baby-life-log-v${APP_VERSION}`;
+const APP_VERSION = "6.1.9-report-timeline";
+const CACHE_NAME = "baby-life-log-v6.1.9-report-timeline";
 const CACHE_PREFIX = "babylog-cache-";
 const OLD_CACHE_PREFIX = "baby-life-log-";
 const PRIMARY_CACHE_NAME = CACHE_NAME;

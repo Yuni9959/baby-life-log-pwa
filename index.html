@@ -375,6 +375,169 @@
       line-height: 1.45;
       white-space: pre-wrap;
     }
+    .report-timeline-sheet {
+      display: grid;
+      gap: 12px;
+      padding-bottom: 8px;
+    }
+    .report-timeline-summary {
+      display: grid;
+      gap: 7px;
+      padding: 14px;
+      border: 1px solid rgba(221, 202, 176, 0.9);
+      border-radius: 16px;
+      background: #fffdf8;
+      box-shadow: 0 8px 20px rgba(95, 74, 45, 0.07);
+    }
+    .report-timeline-kicker {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      align-items: center;
+    }
+    .report-timeline-summary-title {
+      margin: 0;
+      color: var(--text);
+      font-size: 1.05rem;
+      font-weight: 950;
+      line-height: 1.35;
+      word-break: keep-all;
+    }
+    .report-timeline-summary-note {
+      margin: 0;
+      color: var(--muted);
+      font-size: 0.86rem;
+      line-height: 1.45;
+      word-break: keep-all;
+    }
+    .report-timeline-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+    }
+    .report-date-group {
+      display: grid;
+      gap: 8px;
+    }
+    .report-date-header {
+      position: sticky;
+      top: -16px;
+      z-index: 1;
+      width: fit-content;
+      max-width: 100%;
+      padding: 7px 10px;
+      border: 1px solid rgba(221, 202, 176, 0.86);
+      border-radius: 999px;
+      background: rgba(255, 253, 248, 0.96);
+      color: #756859;
+      font-size: 0.82rem;
+      font-weight: 950;
+      box-shadow: 0 4px 12px rgba(95, 74, 45, 0.06);
+    }
+    .report-timeline {
+      display: grid;
+      gap: 0;
+    }
+    .report-timeline-row {
+      display: grid;
+      grid-template-columns: 56px 34px minmax(0, 1fr);
+      column-gap: 8px;
+      align-items: start;
+      min-width: 0;
+    }
+    .report-timeline-time {
+      padding-top: 10px;
+      color: #756859;
+      font-size: 0.8rem;
+      font-weight: 900;
+      line-height: 1.2;
+      text-align: right;
+      white-space: nowrap;
+    }
+    .report-timeline-rail {
+      position: relative;
+      display: flex;
+      justify-content: center;
+      min-height: 54px;
+    }
+    .report-timeline-rail::before {
+      content: "";
+      position: absolute;
+      top: 0;
+      bottom: -18px;
+      width: 2px;
+      background: rgba(221, 202, 176, 0.9);
+    }
+    .report-timeline-row:last-child .report-timeline-rail::before {
+      bottom: 24px;
+    }
+    .report-timeline-node {
+      position: relative;
+      z-index: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 30px;
+      height: 30px;
+      border-radius: 12px;
+      box-shadow: 0 4px 10px rgba(95, 74, 45, 0.12);
+      font-size: 1rem;
+    }
+    .report-timeline-node.feeding { background: #ffe1ca; }
+    .report-timeline-node.diaper { background: #dceffd; }
+    .report-timeline-node.burp { background: #dcefd8; }
+    .report-timeline-node.sleep { background: #e7ddf8; }
+    .report-timeline-node.wake { background: #dff4ff; }
+    .report-timeline-node.default { background: #f2eadf; }
+    .report-timeline-card {
+      min-width: 0;
+      margin-bottom: 12px;
+      padding: 11px 13px;
+      border: 1px solid rgba(221, 202, 176, 0.9);
+      border-radius: 16px;
+      background: #fffdf8;
+      box-shadow: 0 6px 16px rgba(95, 74, 45, 0.06);
+    }
+    .report-timeline-title {
+      color: var(--text);
+      font-size: 0.94rem;
+      font-weight: 950;
+      line-height: 1.3;
+      overflow-wrap: anywhere;
+    }
+    .report-timeline-subtitle {
+      margin-top: 4px;
+      color: var(--muted);
+      font-size: 0.8rem;
+      font-weight: 750;
+      line-height: 1.4;
+      overflow-wrap: anywhere;
+    }
+    .report-timeline-empty {
+      display: grid;
+      gap: 6px;
+      padding: 18px 14px;
+      border: 1px dashed rgba(221, 202, 176, 0.95);
+      border-radius: 16px;
+      background: #fffdf8;
+      color: var(--muted);
+      font-size: 0.88rem;
+      line-height: 1.45;
+    }
+    @media (max-width: 380px) {
+      .report-timeline-row {
+        grid-template-columns: 48px 30px minmax(0, 1fr);
+        column-gap: 6px;
+      }
+      .report-timeline-time { font-size: 0.74rem; }
+      .report-timeline-node {
+        width: 28px;
+        height: 28px;
+        border-radius: 10px;
+      }
+      .report-timeline-card { padding: 10px 11px; }
+    }
     .premium-preview-entry {
       display: grid;
       gap: 8px;
@@ -2531,7 +2694,7 @@
   <main class="app app-shell">
     <header class="topbar">
       <div>
-        <div class="version-badge" id="versionBadge">v6.1.8-quick-button-icons</div>
+        <div class="version-badge" id="versionBadge">v6.1.9-report-timeline</div>
         <h1 id="babyTitle">우리 아기</h1>
         <div class="baby-days" id="babyDays">생년월일을 입력해 주세요</div>
         <div class="today-line" id="todayLine"></div>
@@ -3377,7 +3540,7 @@
   <script>
     document.addEventListener("DOMContentLoaded", function () {
       if ("serviceWorker" in navigator) {
-        navigator.serviceWorker.register("./sw.js?v=6.1.8-quick-button-icons").catch(function (error) {
+        navigator.serviceWorker.register("./sw.js?v=6.1.9-report-timeline").catch(function (error) {
           console.warn("Service worker registration failed", error);
         });
       }
@@ -3572,9 +3735,9 @@
       const PRE_REPAIR_BACKUP_KEY = "baby_life_log_app_backup_before_repair";
       const BACKUP_FORMAT_VERSION = 2;
       const APP_NAME = "baby-life-log";
-      const APP_VERSION = "6.1.8-quick-button-icons";
+      const APP_VERSION = "6.1.9-report-timeline";
       const APP_PHASE_LABEL = "";
-      const SERVICE_WORKER_CACHE_NAME = "baby-life-log-v6.1.8-quick-button-icons";
+      const SERVICE_WORKER_CACHE_NAME = "baby-life-log-v6.1.9-report-timeline";
       const APP_INIT_TIME = new Date().toISOString();
       const ANALYSIS_API_ENDPOINT = "";
       const SERVER_OVERWRITE_BACKUP_KEY = "babylog_records_backup_before_server_overwrite";
@@ -3584,6 +3747,7 @@
       const PENDING_SYNC_QUEUE_BACKUP_KEY = "babylog_pending_sync_queue_parse_failed_backup";
       const MAX_PENDING_AUTO_RETRIES = 5;
       const TYPES = ["feeding", "burp", "diaper", "sleep", "wake"];
+      const REPORT_TIMELINE_DAYS = 7;
       const ANALYSIS_RECORD_TYPES = ["feeding", "burp", "diaper", "sleep_start", "sleep_end", "wake"];
       const ANALYSIS_UNUSABLE_FLAGS = ["deleted_record", "other_baby", "missing_type", "unknown_type", "missing_recorded_at", "invalid_recorded_at"];
       const FEEDING_INTERVAL_MINUTES = { min: 20, max: 480 };
@@ -18469,6 +18633,256 @@
         showToast("아직 연결할 수 없어 현재는 안내만 보여드릴게요.");
       }
 
+      function isReportTimelineRecordType(record) {
+        return !!(record && ["feeding", "diaper", "burp", "sleep", "sleep_start", "wake", "awake", "wakeup", "sleep_end"].indexOf(record.type) !== -1);
+      }
+
+      function getReportTimelineDisplayRecords() {
+        const actual = getAnalysisScopedRecords(appData.records || []).filter(function (record) {
+          return record && !isSampleRecord(record) && validRecordDate(record) && isReportTimelineRecordType(record);
+        });
+        if (actual.length) return { records: actual.sort(sortNewestFirst), isDemo: false };
+        const samples = (appData.records || []).filter(function (record) {
+          return record && isSampleRecord(record) && !hasDeletedMarker(record) && validRecordDate(record) && isReportTimelineRecordType(record);
+        });
+        return { records: samples.sort(sortNewestFirst), isDemo: samples.length > 0 };
+      }
+
+      function toLocalDateKey(date) {
+        return localDateKey(date);
+      }
+
+      function getTimelineRecordDate(record) {
+        return validRecordDate(record);
+      }
+
+      function getTimelineRecordTime(record) {
+        return getTimelineRecordDate(record);
+      }
+
+      function formatTimelineTime(date) {
+        return localTimeText(date);
+      }
+
+      function formatReportDateHeader(date, baseDate) {
+        const target = startOfLocalDay(date);
+        const base = startOfLocalDay(baseDate || new Date());
+        const diffDays = Math.round((base.getTime() - target.getTime()) / 86400000);
+        const dayNames = ["일요일", "월요일", "화요일", "수요일", "목요일", "금요일", "토요일"];
+        const suffix = diffDays === 0 ? "오늘 하루" : (diffDays === 1 ? "어제" : dayNames[target.getDay()]);
+        return (target.getMonth() + 1) + "월 " + target.getDate() + "일 · " + suffix;
+      }
+
+      function isTimelineSleepStart(record) {
+        return !!(record && (record.type === "sleep" || record.type === "sleep_start"));
+      }
+
+      function isTimelineSleepEnd(record) {
+        return !!(record && (record.type === "wake" || record.type === "awake" || record.type === "wakeup" || record.type === "sleep_end"));
+      }
+
+      function pairSleepRecordsForTimeline(records) {
+        const usedEnds = new Set();
+        const starts = [];
+        const ends = [];
+        (records || []).forEach(function (record) {
+          const date = getTimelineRecordDate(record);
+          if (!date) return;
+          if (isTimelineSleepStart(record)) starts.push({ record: record, date: date });
+          if (isTimelineSleepEnd(record)) ends.push({ record: record, date: date });
+        });
+        starts.sort(function (a, b) { return a.date - b.date; });
+        ends.sort(function (a, b) { return a.date - b.date; });
+        return starts.map(function (start) {
+          const end = ends.find(function (candidate) {
+            const id = candidate.record && candidate.record.id;
+            return candidate.date > start.date && !usedEnds.has(id);
+          });
+          if (end && end.record && end.record.id) usedEnds.add(end.record.id);
+          return {
+            startId: start.record && start.record.id,
+            endId: end && end.record ? end.record.id : null,
+            durationMinutes: end ? Math.max(0, Math.round((end.date.getTime() - start.date.getTime()) / 60000)) : null
+          };
+        });
+      }
+
+      function findSleepDurationForTimelineRecord(record, sleepPairs) {
+        if (!record || !sleepPairs) return null;
+        return sleepPairs.find(function (pair) {
+          return pair.startId === record.id || pair.endId === record.id;
+        }) || null;
+      }
+
+      function getTimelineEventIcon(record) {
+        return getRecordTypeMeta(record).icon || "•";
+      }
+
+      function getTimelineEventColor(record) {
+        const type = record && record.type;
+        if (type === "feeding") return "feeding";
+        if (type === "diaper") return "diaper";
+        if (type === "burp") return "burp";
+        if (isTimelineSleepStart(record)) return "sleep";
+        if (isTimelineSleepEnd(record)) return "wake";
+        return "default";
+      }
+
+      function getTimelineEventTitle(record, context) {
+        const type = record && record.type;
+        if (type === "feeding") {
+          const amount = safeNumber(record.amount || record.amount_ml || record.ml || record.volume);
+          return "수유" + (amount > 0 ? " " + Math.round(amount) + "ml" : "");
+        }
+        if (type === "diaper") return "기저귀 · " + (subtypeLabels[record.subtype] || "교체");
+        if (type === "burp") return "트림";
+        if (isTimelineSleepStart(record)) return "낮잠 시작";
+        if (isTimelineSleepEnd(record)) return "깨어남";
+        return typeLabels[type] || "기록";
+      }
+
+      function getTimelineEventSubtitle(record, context) {
+        const type = record && record.type;
+        const sleepPair = context && context.sleepPairs ? findSleepDurationForTimelineRecord(record, context.sleepPairs) : null;
+        const memo = record && record.memo ? String(record.memo).trim() : "";
+        if (type === "feeding") {
+          const parts = [subtypeLabels[record.subtype] || "수유"];
+          if (record.durationMinutes) parts.push(durationText(record.durationMinutes));
+          if (memo && memo !== "샘플 데이터") parts.push(memo);
+          return parts.join(" · ");
+        }
+        if (type === "diaper") return memo && memo !== "샘플 데이터" ? memo : "기저귀 확인 기록";
+        if (type === "burp") return memo && memo !== "샘플 데이터" ? memo : "수유 후 기록";
+        if (isTimelineSleepStart(record)) {
+          if (sleepPair && Number.isFinite(sleepPair.durationMinutes)) return durationText(sleepPair.durationMinutes);
+          return "이후 깨어남 기록 필요";
+        }
+        if (isTimelineSleepEnd(record)) {
+          if (sleepPair && Number.isFinite(sleepPair.durationMinutes)) return "수면 " + durationText(sleepPair.durationMinutes);
+          return "잠에서 깨어남";
+        }
+        return memo || "기록";
+      }
+
+      function sortTimelineItems(items) {
+        return (items || []).sort(function (a, b) { return a.time - b.time; });
+      }
+
+      function normalizeTimelineRecord(record, context) {
+        const time = getTimelineRecordTime(record);
+        if (!time) return null;
+        return {
+          id: record.id || generateId("timeline"),
+          type: record.type || "record",
+          subtype: record.subtype || "",
+          time: time,
+          timeText: formatTimelineTime(time),
+          title: getTimelineEventTitle(record, context || {}),
+          subtitle: getTimelineEventSubtitle(record, context || {}),
+          icon: getTimelineEventIcon(record),
+          color: getTimelineEventColor(record),
+          isDemo: isSampleRecord(record),
+          sourceRecord: record
+        };
+      }
+
+      function getRecordsForDate(records, date) {
+        const key = toLocalDateKey(date);
+        return (records || []).filter(function (record) {
+          const recordDate = getTimelineRecordDate(record);
+          return recordDate && toLocalDateKey(recordDate) === key;
+        });
+      }
+
+      function buildTimelineItemsForDate(records, date, context) {
+        return sortTimelineItems(getRecordsForDate(records, date).map(function (record) {
+          return normalizeTimelineRecord(record, context || {});
+        }).filter(Boolean));
+      }
+
+      function buildReportTimelineGroups(records, baseDate, days) {
+        const base = startOfLocalDay(baseDate || new Date());
+        const sleepPairs = pairSleepRecordsForTimeline(records || []);
+        const groups = [];
+        for (let i = 0; i < (days || REPORT_TIMELINE_DAYS); i += 1) {
+          const date = new Date(base);
+          date.setDate(base.getDate() - i);
+          const items = buildTimelineItemsForDate(records || [], date, { sleepPairs: sleepPairs });
+          if (items.length) {
+            groups.push({
+              date: date,
+              dateKey: toLocalDateKey(date),
+              header: formatReportDateHeader(date, base),
+              items: items
+            });
+          }
+        }
+        return groups;
+      }
+
+      function renderReportTimelineEmpty() {
+        return '<div class="report-timeline-empty" role="status">' +
+          '<strong>오늘 기록이 쌓이면 하루 흐름을 정리해드릴게요.</strong>' +
+          '<span>수유, 기저귀, 잠듦 버튼을 누르면 시간순으로 표시돼요.</span>' +
+          '</div>';
+      }
+
+      function renderReportTimelineError(err) {
+        recordMobileDiagnosticError("reportTimeline:renderFailed", err || new Error("report_timeline_render_failed"));
+        return '<div class="report-timeline-empty" role="status">' +
+          '<strong>하루 흐름을 불러오는 중 문제가 생겼어요.</strong>' +
+          '<span>잠시 후 다시 확인해 주세요.</span>' +
+          '</div>';
+      }
+
+      function reportTimelineItemHtml(item) {
+        return '<div class="report-timeline-row">' +
+          '<div class="report-timeline-time">' + escapeHtml(item.timeText) + '</div>' +
+          '<div class="report-timeline-rail" aria-hidden="true"><div class="report-timeline-node ' + escapeHtml(item.color) + '">' + escapeHtml(item.icon) + '</div></div>' +
+          '<article class="report-timeline-card">' +
+          '<div class="report-timeline-title">' + escapeHtml(item.title) + '</div>' +
+          '<div class="report-timeline-subtitle">' + escapeHtml(item.subtitle) + '</div>' +
+          '</article></div>';
+      }
+
+      function reportTimelineGroupHtml(group) {
+        return '<section class="report-date-group" aria-label="' + escapeHtml(group.header) + '">' +
+          '<h3 class="report-date-header">' + escapeHtml(group.header) + '</h3>' +
+          '<div class="report-timeline">' + group.items.map(reportTimelineItemHtml).join("") + '</div>' +
+          '</section>';
+      }
+
+      function renderReportHubTimeline(records, options) {
+        const opts = options || {};
+        const baseDate = opts.baseDate || new Date();
+        const groups = buildReportTimelineGroups(records || [], baseDate, REPORT_TIMELINE_DAYS);
+        const todayKey = toLocalDateKey(baseDate);
+        const todayCount = (records || []).filter(function (record) {
+          const date = getTimelineRecordDate(record);
+          return date && toLocalDateKey(date) === todayKey;
+        }).length;
+        const badge = opts.isDemo ? "체험 모드" : (todayCount ? "오늘 " + todayCount + "개" : "최근 " + REPORT_TIMELINE_DAYS + "일");
+        const title = opts.isDemo ? "체험용 기록으로 하루 흐름을 보여드리고 있어요." : (todayCount ? "오늘 기록 " + todayCount + "개를 시간순으로 정리했어요." : "오늘 하루 흐름을 한눈에 정리해요");
+        const note = todayCount
+          ? "보호자가 바뀔 때 아래 흐름을 그대로 확인하면 좋아요."
+          : "수유 · 기저귀 · 수면 흐름을 시간순으로 볼 수 있어요.";
+        return '<div class="report-timeline-sheet">' +
+          '<section class="report-timeline-summary" aria-label="오늘 하루 흐름 요약">' +
+          '<div class="report-timeline-kicker"><span class="report-hub-badge">' + escapeHtml(badge) + '</span><span class="report-hub-badge">' + escapeHtml(REPORT_TIMELINE_DAYS + "일 보기") + '</span></div>' +
+          '<p class="report-timeline-summary-title">' + escapeHtml(title) + '</p>' +
+          '<p class="report-timeline-summary-note">' + escapeHtml(note) + '</p>' +
+          '</section>' +
+          (groups.length ? groups.map(reportTimelineGroupHtml).join("") : renderReportTimelineEmpty()) +
+          '<div class="report-timeline-actions">' +
+          '<button type="button" class="small-action" data-report-hub-open-analysis="recent7">최근 7일 분석 보기</button>' +
+          '<button type="button" class="small-action" data-report-hub-tool="handoff">인수인계 요약 보기</button>' +
+          '<button type="button" class="small-action" data-report-hub-tool="family">가족에게 공유하기</button>' +
+          '<button type="button" class="small-action" data-open-printable-report="report_hub_summary_pdf">PDF/인쇄</button>' +
+          '</div>' +
+          '<div class="report-hub-tool-detail" id="reportHubToolDetail">도구를 선택하면 기록 기반 참고 요약을 확인할 수 있어요.</div>' +
+          '</div>';
+      }
+
       function reportHubLineHtml(line) {
         return '<div class="report-card"><div class="report-note">' + escapeHtml(reportHubText(line, "기록이 조금 더 쌓이면 표시할 수 있어요.")) + "</div></div>";
       }
@@ -18485,38 +18899,11 @@
         try {
           const snapshot = buildAnalysisSnapshot(appData.records || [], { baby_id: getCurrentAnalysisBabyId() });
           currentReportHubState = snapshot.reportHubState || buildReportHubState(snapshot, { openedFrom: "life_report" });
-          const state = currentReportHubState;
-          const sections = state.sections || {};
-          const expanded = state.ui && state.ui.expandedSections ? state.ui.expandedSections : [];
-          const domainCards = sections.domains && sections.domains.cards ? sections.domains.cards : [];
-          els.reportHubContent.innerHTML =
-            '<div class="report-hub-summary" aria-label="리포트 허브 상단 요약">' +
-            '<div class="report-hub-kicker"><span>' + escapeHtml(state.babyName || "아기") + '</span><span>' + escapeHtml(fullDateTimeText(state.generatedAt)) + '</span><span class="report-hub-badge">' + escapeHtml(reportHubConfidenceLabel(state.summary && state.summary.confidenceLevel)) + '</span></div>' +
-            '<p class="report-hub-primary">' + escapeHtml(state.summary && state.summary.primarySummary || "기록이 조금 더 쌓이면 표시할 수 있어요.") + '</p></div>' +
-            '<div class="report-hub-section-list">' +
-            reportHubSectionHtml(sections.today, "today", expanded.indexOf("today") !== -1) +
-            reportHubSectionHtml(sections.recent7Days, "recent7Days", expanded.indexOf("recent7Days") !== -1) +
-            reportHubSectionHtml(sections.rhythm, "rhythm", expanded.indexOf("rhythm") !== -1) +
-            '<details class="report-hub-section" data-report-hub-section="domains" open><summary>수면 / 수유 / 기저귀 요약</summary><div class="report-hub-section-body"><div class="report-hub-mini-grid">' +
-            domainCards.map(function (card) {
-              return '<div class="report-card"><div class="report-label">' + escapeHtml(card.title) + '</div><div class="report-title">' + escapeHtml((card.lines || [])[0] || "기록이 조금 더 쌓이면 표시할 수 있어요.") + '</div><div class="report-note">' + escapeHtml(reportHubConfidenceLabel(card.confidenceLevel)) + "</div></div>";
-            }).join("") + '</div></div></details>' +
-            reportHubSectionHtml(sections.nextPrediction, "nextPrediction", expanded.indexOf("nextPrediction") !== -1) +
-            reportHubSectionHtml(sections.cry, "cry", expanded.indexOf("cry") !== -1) +
-            reportHubSectionHtml(sections.reliability, "reliability", expanded.indexOf("reliability") !== -1) +
-            '<details class="report-hub-section" data-report-hub-section="tools" open><summary>공유/도구 바로가기</summary><div class="report-hub-section-body"><div class="report-hub-actions">' +
-            '<button type="button" class="small-action" data-report-hub-tool="doctor">병원 상담용 요약 보기</button>' +
-            '<button type="button" class="small-action" data-report-hub-tool="handoff">인수인계 요약 보기</button>' +
-            '<button type="button" class="small-action" data-report-hub-tool="family">가족에게 공유하기</button>' +
-            '<button type="button" class="small-action" data-open-printable-report="report_hub_summary_pdf">PDF/인쇄</button>' +
-            '<button type="button" class="small-action" data-open-share-image="family_today">오늘 이미지</button>' +
-            '<button type="button" class="small-action" data-open-share-image="family_recent7">최근 7일 이미지</button>' +
-            '</div><div class="report-hub-tool-detail" id="reportHubToolDetail">도구를 선택하면 기록 기반 참고 요약을 확인할 수 있어요.</div></div></details>' +
-            '<div class="premium-preview-entry sheet-block"><p class="premium-preview-entry-title">고급 기능 미리보기</p><p class="premium-preview-entry-note">현재는 고급 기능을 미리보기로 사용할 수 있어요. 어떤 기능이 기본 기능이고, 어떤 기능이 향후 프리미엄 후보인지 볼 수 있어요.</p><button type="button" class="ghost-action" data-open-premium-preview="report_hub">기능 보기</button></div>' +
-            '</div>';
+          const timelineSource = getReportTimelineDisplayRecords();
+          els.reportHubContent.innerHTML = renderReportHubTimeline(timelineSource.records, { isDemo: timelineSource.isDemo });
         } catch (error) {
           recordMobileDiagnosticError("render_report_hub", error, { fallback: "report_hub_basic" });
-          els.reportHubContent.innerHTML = '<div class="report-card report-empty">리포트 허브를 계산하는 중 문제가 생겨 기본 안내로 표시합니다.</div>';
+          els.reportHubContent.innerHTML = renderReportTimelineError(error);
         }
       }
 
@@ -19134,8 +19521,12 @@
         }
       }
 
-      function showAnalysisScreen() {
+      function showAnalysisScreen(options) {
         if (!els.analysisDetailScreen) return;
+        const opts = options || {};
+        if (opts.syncHistory !== false && !appNavigationRestoring) {
+          pushAppNavState("analysis", { screen: "analysis" });
+        }
         renderAnalysisDetailScreen();
         els.analysisDetailScreen.hidden = false;
         document.body.classList.add("analysis-detail-open");
@@ -19146,6 +19537,111 @@
         if (!els.analysisDetailScreen) return;
         els.analysisDetailScreen.hidden = true;
         document.body.classList.remove("analysis-detail-open");
+      }
+
+      function createAppNavState(view, details) {
+        const state = {
+          app: APP_NAME,
+          version: APP_VERSION,
+          view: view || "home"
+        };
+        Object.assign(state, details || {});
+        return state;
+      }
+
+      function isAppNavState(state) {
+        return !!(state && state.app === APP_NAME);
+      }
+
+      let appNavigationReady = false;
+      let appNavigationRestoring = false;
+
+      function pushAppNavState(view, details) {
+        if (!window.history || typeof window.history.pushState !== "function") return;
+        const nextState = createAppNavState(view, details);
+        const currentState = window.history.state || {};
+        if (isAppNavState(currentState) &&
+          currentState.view === nextState.view &&
+          currentState.sheet === nextState.sheet &&
+          currentState.screen === nextState.screen &&
+          currentState.guard === nextState.guard) {
+          return;
+        }
+        try {
+          window.history.pushState(nextState, document.title, window.location.href);
+        } catch (error) {
+          console.warn("Navigation state push failed", error);
+        }
+      }
+
+      function replaceAppNavState(view, details) {
+        if (!window.history || typeof window.history.replaceState !== "function") return;
+        try {
+          window.history.replaceState(createAppNavState(view, details), document.title, window.location.href);
+        } catch (error) {
+          console.warn("Navigation state replace failed", error);
+        }
+      }
+
+      function isAnalysisScreenOpen() {
+        return !!(els.analysisDetailScreen && els.analysisDetailScreen.hidden === false);
+      }
+
+      function isReportHubSheetOpen() {
+        return !!(els.reportHubSheet && els.reportHubSheet.classList.contains("active"));
+      }
+
+      function openReportHubFromNavState() {
+        showHomeScreen();
+        closeSheets(false);
+        if (els.overlay) els.overlay.classList.add("active");
+        renderReportHub();
+        if (els.reportHubSheet) els.reportHubSheet.classList.add("active");
+      }
+
+      function applyAppNavState(state) {
+        appNavigationRestoring = true;
+        try {
+          if (isAppNavState(state) && state.view === "sheet" && state.sheet === "reportHub") {
+            openReportHubFromNavState();
+            return;
+          }
+          if (isAppNavState(state) && state.view === "analysis") {
+            closeSheets();
+            showAnalysisScreen({ syncHistory: false });
+            return;
+          }
+          closeSheets();
+          showHomeScreen();
+        } finally {
+          appNavigationRestoring = false;
+        }
+      }
+
+      function handleAppPopState(event) {
+        applyAppNavState(event.state);
+      }
+
+      function initializeAppNavigation() {
+        if (appNavigationReady) return;
+        replaceAppNavState("home");
+        pushAppNavState("home", { guard: true });
+        window.addEventListener("popstate", handleAppPopState);
+        appNavigationReady = true;
+      }
+
+      function closeActiveLayerFromUser() {
+        const state = window.history ? window.history.state : null;
+        if ((isReportHubSheetOpen() && isAppNavState(state) && state.view === "sheet" && state.sheet === "reportHub") ||
+          (isAnalysisScreenOpen() && isAppNavState(state) && state.view === "analysis")) {
+          window.history.back();
+          return;
+        }
+        if (isAnalysisScreenOpen()) {
+          showHomeScreen();
+          return;
+        }
+        closeSheets();
       }
 
       function setLastRecord(type) {
@@ -19420,7 +19916,11 @@
         if (els.printableReportSheet) els.printableReportSheet.classList.add("active");
       }
 
-      function openSheet(name) {
+      function openSheet(name, options) {
+        const opts = options || {};
+        if (name === "reportHub" && opts.syncHistory !== false && !appNavigationRestoring) {
+          pushAppNavState("sheet", { sheet: "reportHub" });
+        }
         closeSheets(false);
         els.overlay.classList.add("active");
         if (name === "feeding") {
@@ -21415,7 +21915,8 @@
           url.searchParams.delete("join");
           url.searchParams.delete("family_code");
           url.searchParams.delete("invite");
-          window.history.replaceState({}, document.title, url.pathname + (url.search ? url.search : "") + (url.hash || ""));
+          const state = isAppNavState(window.history.state) ? window.history.state : createAppNavState("home");
+          window.history.replaceState(state, document.title, url.pathname + (url.search ? url.search : "") + (url.hash || ""));
         } catch (error) {}
       }
 
@@ -22163,6 +22664,15 @@
           return;
         }
 
+        const reportHubAnalysis = event.target.closest("[data-report-hub-open-analysis]");
+        if (reportHubAnalysis) {
+          event.preventDefault();
+          event.stopPropagation();
+          closeSheets(false);
+          showAnalysisScreen();
+          return;
+        }
+
         const reportHubTool = event.target.closest("[data-report-hub-tool]");
         if (reportHubTool) {
           event.preventDefault();
@@ -22331,7 +22841,7 @@
         if (deleteButton) { deleteRecord(deleteButton.dataset.deleteId); return; }
 
         // 시트 닫기
-        if (event.target.matches("[data-close-sheet]") || event.target === els.overlay) closeSheets();
+        if (event.target.matches("[data-close-sheet]") || event.target === els.overlay) closeActiveLayerFromUser();
       });
 
       if (els.crySafetyList) {
@@ -22441,7 +22951,7 @@
       });
       if (els.analysisBackButton) {
         els.analysisBackButton.addEventListener("click", function () {
-          showHomeScreen();
+          closeActiveLayerFromUser();
         });
       }
       document.getElementById("feedSaveButton").addEventListener("click", function () { saveFeeding(currentFeedAmount()); });
@@ -23177,7 +23687,7 @@
       document.getElementById("restoreConfirmButton").addEventListener("click", confirmRestore);
 
       document.addEventListener("keydown", function (event) {
-        if (event.key === "Escape") closeSheets();
+        if (event.key === "Escape") closeActiveLayerFromUser();
       });
 
       if (window.visualViewport) {
@@ -23280,6 +23790,7 @@
       };
 
       initializeManagementPanel();
+      initializeAppNavigation();
       detectInviteFromUrl();
       saveAppData();
       renderApp();
