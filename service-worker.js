@@ -1,5 +1,5 @@
-const APP_VERSION = "6.1.4-image-onboarding";
-const CACHE_NAME = "baby-life-log-v6.1.4-image-onboarding";
+const APP_VERSION = "6.1.6-record-layout-fix";
+const CACHE_NAME = "baby-life-log-v6.1.6-record-layout-fix";
 const APP_SHELL = [
   "./manifest.json",
   `./service-worker.js?v=${APP_VERSION}`,
@@ -22,7 +22,13 @@ const APP_SHELL = [
   "./supabase_phase3_1_records.sql",
   "./PHASE3_1_SUPABASE_SETUP.md",
   "./icons/icon-192.png",
-  "./icons/icon-512.png"
+  "./icons/icon-512.png",
+  "./imgs/01_button-record.png",
+  "./imgs/02_weekly-trend.png",
+  "./imgs/03_cry-reason.png",
+  "./imgs/04_daily-report.png",
+  "./imgs/05_easy-delete.png",
+  "./imgs/06_family-share.png"
 ];
 
 self.addEventListener("install", function (event) {

@@ -1,4 +1,4 @@
-const CACHE_NAME = "baby-life-log-v6.1.4-image-onboarding";
+const CACHE_NAME = "baby-life-log-v6.1.6-record-layout-fix";
 const CACHE_PREFIX = "babylog-cache-";
 const OLD_CACHE_PREFIX = "baby-life-log-";
 const PRIMARY_CACHE_NAME = CACHE_NAME;
@@ -15,7 +15,13 @@ const ASSETS_TO_CACHE = [
   "./supabase_phase3_6_connection_diagnostics.sql",
   "./supabase_phase3_5_family_baby_hardening.sql",
   "./supabase_phase3_3_family_baby_sync.sql",
-  "./supabase_phase3_1_records.sql"
+  "./supabase_phase3_1_records.sql",
+  "./imgs/01_button-record.png",
+  "./imgs/02_weekly-trend.png",
+  "./imgs/03_cry-reason.png",
+  "./imgs/04_daily-report.png",
+  "./imgs/05_easy-delete.png",
+  "./imgs/06_family-share.png"
 ];
 
 self.addEventListener("install", function (event) {
@@ -57,7 +63,7 @@ self.addEventListener("message", function (event) {
   if (target && typeof target.postMessage === "function") {
     target.postMessage({
       type: "VERSION_INFO",
-      appVersion: "6.1.4-image-onboarding",
+      appVersion: "6.1.6-record-layout-fix",
       cacheName: CACHE_NAME
     });
   }

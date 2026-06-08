@@ -9,7 +9,7 @@
   <meta name="apple-mobile-web-app-title" content="터치베베">
   <link rel="manifest" href="./manifest.json">
   <link rel="apple-touch-icon" href="./icons/icon-192.png">
-  <title>터치베베</title>
+  <title>아기 생활 기록</title>
   <style>
     @import url("https://fonts.googleapis.com/css2?family=Gaegu:wght@400;700&display=swap");
     @import url("https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css");
@@ -1165,7 +1165,7 @@
       position: relative;
       overflow: hidden;
       margin: 0;
-      border-radius: 20px;
+      border-radius: 18px;
       touch-action: pan-y;
     }
     .record-delete-bg {
@@ -1174,13 +1174,14 @@
       display: flex;
       align-items: center;
       justify-content: flex-end;
+      gap: 4px;
       width: 100%;
       min-height: 100%;
       padding: 0 22px 0 12px;
       border: 0;
-      border-radius: 20px;
-      background: #f4b7a8;
-      color: #8f3f34;
+      border-radius: 18px;
+      background: #f7c8bb;
+      color: #a94e3f;
       font: inherit;
       font-weight: 950;
       text-align: right;
@@ -1204,14 +1205,15 @@
       z-index: 1;
       overflow: hidden;
       display: grid;
-      grid-template-columns: auto auto minmax(0, 1fr) auto;
-      gap: 10px;
-      align-items: start;
-      padding: 12px;
+      grid-template-columns: 28px 38px minmax(0, 1fr) auto 16px;
+      column-gap: 9px;
+      align-items: center;
+      min-height: 72px;
+      padding: 12px 10px;
       border: 1px solid rgba(221, 202, 176, 0.9);
-      border-radius: 20px;
+      border-radius: 18px;
       background: rgba(255, 253, 248, 0.96);
-      box-shadow: 0 8px 20px rgba(95, 74, 45, 0.07);
+      box-shadow: 0 6px 16px rgba(95, 74, 45, 0.06);
       transform: translateX(0);
       transition: transform 180ms ease;
       will-change: transform;
@@ -1221,33 +1223,164 @@
     .record-card-modern.is-resetting { transition: transform 180ms ease; }
     .record-card-icon {
       display: inline-flex;
-      width: 38px;
-      height: 38px;
+      width: 36px;
+      height: 36px;
+      min-width: 36px;
+      max-width: 36px;
       align-items: center;
       justify-content: center;
       border-radius: 14px;
       background: #e8f2df;
       font-size: 1.05rem;
-      flex: 0 0 auto;
+      flex: 0 0 36px;
+      overflow: hidden;
+      line-height: 1;
     }
-    .record-card-content { min-width: 0; display: grid; gap: 4px; }
-    .record-card-title { color: var(--text); font-weight: 950; line-height: 1.3; overflow-wrap: anywhere; }
-    .record-card-time, .record-card-meta { color: var(--muted); font-size: 0.8rem; line-height: 1.35; overflow-wrap: anywhere; }
-    .record-card-main { display: contents; }
-    .record-card-modern .log-select { margin-top: 8px; }
-    .record-card-modern.demo-record-card { grid-template-columns: auto minmax(0, 1fr) auto; }
-    .record-card-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
-    .record-edit-btn, .record-delete-btn {
-      min-height: 38px;
-      padding: 0 11px;
-      border-radius: 14px;
-      font-size: 0.82rem;
+    .record-card-icon span {
+      line-height: 1;
+      font-size: 18px;
+    }
+    .record-card-icon img,
+    .record-card-icon svg {
+      width: 22px;
+      height: 22px;
+      object-fit: contain;
+      display: block;
+      pointer-events: none;
+    }
+    .record-select-wrap {
+      width: 26px;
+      min-width: 26px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .record-card-modern .log-select,
+    .record-checkbox {
+      width: 18px;
+      height: 18px;
+      margin: 0;
+    }
+    .record-card-content {
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      align-items: flex-start;
+    }
+    .record-card-main-line {
+      display: flex;
+      flex-wrap: nowrap;
+      align-items: center;
+      gap: 6px;
+      min-width: 0;
+      max-width: 100%;
+    }
+    .record-card-title {
+      display: block;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      color: #2d2923;
+      font-size: 14px;
       font-weight: 900;
+      line-height: 1.25;
+    }
+    .record-card-time,
+    .record-card-meta,
+    .log-memo {
+      margin: 0;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.25;
+      min-width: 0;
+      max-width: 100%;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .record-card-meta {
+      display: inline-flex;
+      align-items: center;
+    }
+    .sync-badge.record-card-sync {
+      display: inline-flex;
+      align-items: center;
+      border-radius: 999px;
+      padding: 3px 7px;
+      font-size: 10px;
+      font-weight: 800;
+      line-height: 1;
+      background: #eef5e8;
+      color: #6f9366;
+    }
+    .record-type-pill {
+      flex: 0 0 auto;
+      display: inline-flex;
+      align-items: center;
+      border-radius: 999px;
+      padding: 3px 7px;
+      font-size: 11px;
+      font-weight: 800;
+      line-height: 1;
+      white-space: nowrap;
+    }
+    .record-checkbox-placeholder {
+      width: 18px;
+      height: 18px;
+      display: block;
+    }
+    .record-card-main { display: contents; }
+    .record-card-modern.demo-record-card { grid-template-columns: 28px 38px minmax(0, 1fr) auto 16px; }
+    .record-card-actions { display: flex; flex: 0 0 auto; align-items: center; justify-content: flex-end; gap: 6px; white-space: nowrap; }
+    .record-edit-btn, .record-delete-btn {
+      min-width: 42px;
+      min-height: 34px;
+      padding: 0 9px;
+      border-radius: 14px;
+      font-size: 12px;
+      font-weight: 900;
+      line-height: 1;
+      white-space: nowrap;
     }
     .record-edit-btn { background: #e8f2df; color: #4d7147; border: 1px solid rgba(111, 147, 102, 0.24); }
     .record-delete-btn { background: #fff1ee; color: #a64b41; border: 1px solid rgba(185, 90, 81, 0.22); }
-    .record-chevron { color: var(--muted); font-weight: 950; line-height: 38px; }
+    .record-chevron {
+      width: 14px;
+      min-width: 14px;
+      padding: 0;
+      border: 0;
+      background: transparent;
+      color: #b6a897;
+      font-size: 18px;
+      font-weight: 950;
+      line-height: 1;
+    }
     .record-swipe-bg { display: none; }
+    .daily-report-entry-button {
+      width: 100%;
+      min-height: 46px;
+      margin: 10px 0 12px;
+      border: 0;
+      border-radius: 16px;
+      background: #6f9366;
+      color: #fff;
+      font: inherit;
+      font-size: 0.9rem;
+      font-weight: 900;
+      box-shadow: 0 6px 16px rgba(95, 128, 88, 0.18);
+      cursor: pointer;
+    }
+    .daily-report-entry-button:active { transform: translateY(1px); }
+    .illus-layer,
+    .illus-layer *,
+    .decorative-layer,
+    .decorative-layer *,
+    .bg-illustration,
+    .bg-illustration * {
+      pointer-events: none !important;
+    }
     .cry-result-modern-card {
       display: grid;
       gap: 12px;
@@ -1427,15 +1560,19 @@
     }
     @media (max-width: 430px) {
       .daily-timeline-row { grid-template-columns: 42px 26px minmax(0, 1fr); gap: 6px; }
-      .record-card-modern, .record-card-modern.demo-record-card { grid-template-columns: auto minmax(0, 1fr); }
-      .record-card-modern .log-select { grid-row: 1; grid-column: 1; }
-      .record-card-modern .record-card-icon { grid-row: 1; grid-column: 1; margin-top: 30px; }
-      .record-card-modern.demo-record-card .record-card-icon { margin-top: 0; }
-      .record-card-modern .record-card-content { grid-row: 1; grid-column: 2; }
-      .record-card-modern .record-card-actions { grid-column: 1 / -1; justify-content: flex-start; padding-left: 48px; }
+      .record-card-modern { grid-template-columns: 26px 36px minmax(0, 1fr) auto; column-gap: 8px; padding: 10px 8px; }
+      .record-card-modern.demo-record-card { grid-template-columns: 26px 36px minmax(0, 1fr) auto; }
       .record-card-modern .record-chevron { display: none; }
+      .record-card-actions { gap: 4px; }
+      .record-edit-btn, .record-delete-btn { min-width: 38px; padding: 0 7px; font-size: 11px; }
       .cry-reason-row { grid-template-columns: auto minmax(0, 1fr) auto; }
       .family-member-list, .family-member-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+    @media (max-width: 390px) {
+      .record-card-modern { grid-template-columns: 24px 34px minmax(0, 1fr) auto; column-gap: 7px; }
+      .record-select-wrap { width: 24px; min-width: 24px; }
+      .record-card-icon { width: 34px; height: 34px; min-width: 34px; max-width: 34px; flex-basis: 34px; }
+      .record-edit-btn, .record-delete-btn { min-width: 36px; padding: 0 6px; }
     }
     .invite-link-box {
       padding: 10px;
@@ -3097,7 +3234,7 @@
   <main class="app app-shell">
     <header class="topbar">
       <div>
-        <div class="version-badge" id="versionBadge">v6.1.4-image-onboarding</div>
+        <div class="version-badge" id="versionBadge">v6.1.6-record-layout-fix</div>
         <div class="demo-mode-badge hidden" id="demoModeBadge">체험 모드</div>
         <h1 id="babyTitle">우리 아기</h1>
         <div class="baby-days" id="babyDays">생년월일을 입력해 주세요</div>
@@ -3304,6 +3441,7 @@
         <span class="collapse-mark" id="lifeReportMark">▾</span>
       </button>
       <p class="report-copy" id="reportSummary">기록이 쌓이면 아기의 생활 패턴을 요약해드릴게요.</p>
+      <button type="button" class="daily-report-entry-button" id="dailyReportEntryButton">오늘 하루 흐름 보기</button>
       <div class="form-row sheet-block">
         <button type="button" class="small-action" id="reportHubButton">전체 리포트 보기</button>
         <button type="button" class="small-action" id="caregiverHandoffButton">인수인계 요약</button>
@@ -3958,7 +4096,7 @@
   <script>
     document.addEventListener("DOMContentLoaded", function () {
       if ("serviceWorker" in navigator) {
-        navigator.serviceWorker.register("./sw.js?v=6.1.4-image-onboarding").catch(function (error) {
+        navigator.serviceWorker.register("./sw.js?v=6.1.6-record-layout-fix").catch(function (error) {
           console.warn("Service worker registration failed", error);
         });
       }
@@ -4153,9 +4291,9 @@
       const PRE_REPAIR_BACKUP_KEY = "baby_life_log_app_backup_before_repair";
       const BACKUP_FORMAT_VERSION = 2;
       const APP_NAME = "baby-life-log";
-      const APP_VERSION = "6.1.4-image-onboarding";
+      const APP_VERSION = "6.1.6-record-layout-fix";
       const APP_PHASE_LABEL = "";
-      const SERVICE_WORKER_CACHE_NAME = "baby-life-log-v6.1.4-image-onboarding";
+      const SERVICE_WORKER_CACHE_NAME = "baby-life-log-v6.1.6-record-layout-fix";
       const MIN_ANALYSIS_RECORDS = 10;
       const ANALYSIS_SERVER_RECONNECT_MESSAGE = "서버 연결 후 분석을 확인할 수 있어요. 서버 재연결을 눌러 주세요.";
       const ANALYSIS_GATE_DETAIL_MESSAGE = "기록이 조금 더 쌓이면 최근 흐름을 더 안정적으로 보여드릴게요.";
@@ -4478,6 +4616,7 @@
         lifeReportToggle: document.getElementById("lifeReportToggle"),
         lifeReportBody: document.getElementById("lifeReportBody"),
         lifeReportMark: document.getElementById("lifeReportMark"),
+        dailyReportEntryButton: document.getElementById("dailyReportEntryButton"),
         reportSummary: document.getElementById("reportSummary"),
         reportGrid: document.getElementById("reportGrid"),
         reportHubButton: document.getElementById("reportHubButton"),
@@ -4722,7 +4861,7 @@
       };
       var DEBUG_LOGS = [];
       var DEBUG_STATE = {
-        version: "v6.1.4-image-onboarding",
+        version: "v6.1.6-record-layout-fix",
         swInfo: null,
         localStorageTest: "",
         lastButtonEvent: "",
@@ -4764,7 +4903,13 @@
         onboarding_current_index: "0",
         onboarding_last_image_error: "",
         onboarding_dismissed: "",
-        onboarding_manual_open: "false"
+        onboarding_manual_open: "false",
+        nav_stack_length: "0",
+        current_app_layer: "",
+        last_back_action: "",
+        daily_report_open: "false",
+        recent_record_layout_fixed: "true",
+        last_popstate_at: ""
       };
       var debugPanelEl = null;
       var debugPanelCollapsed = false;
@@ -4959,6 +5104,15 @@
           ["daily.demo", DEBUG_STATE.daily_report_uses_demo],
           ["daily.rendered", DEBUG_STATE.daily_report_rendered_at],
           ["daily.error", DEBUG_STATE.daily_report_error],
+          ["daily.open", DEBUG_STATE.daily_report_open],
+          ["nav.stack", DEBUG_STATE.nav_stack_length],
+          ["nav.current", DEBUG_STATE.current_app_layer],
+          ["nav.topId", DEBUG_STATE.nav_top_id],
+          ["nav.topSheet", DEBUG_STATE.nav_top_sheet],
+          ["nav.cleanup", DEBUG_STATE.manual_history_cleanup],
+          ["nav.lastBack", DEBUG_STATE.last_back_action],
+          ["nav.popstate", DEBUG_STATE.last_popstate_at],
+          ["record.layoutFixed", DEBUG_STATE.recent_record_layout_fixed],
           ["swipe.enabled", DEBUG_STATE.swipe_enabled],
           ["swipe.record", DEBUG_STATE.last_swipe_record_id],
           ["swipe.dx", DEBUG_STATE.last_swipe_dx],
@@ -19274,6 +19428,327 @@
         if (els.analysisMark) els.analysisMark.textContent = "›";
       }
 
+      var APP_NAV_STACK = [];
+      var APP_BACK_STATE_KEY = "touchbebe-app-state";
+      var appBackNavigationReady = false;
+      var appHandlingPopState = false;
+      var appClosingLayerFromBack = false;
+      var appNavStateSeq = 0;
+      var appManualHistoryCleanup = null;
+
+      function syncAppNavDebug(action) {
+        if (typeof DEBUG_STATE === "undefined") return;
+        const top = APP_NAV_STACK.length ? APP_NAV_STACK[APP_NAV_STACK.length - 1] : null;
+        DEBUG_STATE.nav_stack_length = String(APP_NAV_STACK.length);
+        DEBUG_STATE.current_app_layer = top ? top.layer : "";
+        DEBUG_STATE.nav_top_id = top && top.id ? top.id : "";
+        DEBUG_STATE.nav_top_sheet = top && top.sheet ? top.sheet : "";
+        if (action) DEBUG_STATE.last_back_action = action;
+        DEBUG_STATE.daily_report_open = lifeReportExpanded ? "true" : "false";
+        DEBUG_STATE.manual_history_cleanup = appManualHistoryCleanup ? appManualHistoryCleanup.layer : "";
+        if (debugPanelEl && typeof renderDebugPanel === "function") renderDebugPanel();
+      }
+
+      function isAppLayerOpen(layerName) {
+        if (!layerName) return false;
+        return APP_NAV_STACK.some(function (item) { return item && item.layer === layerName; });
+      }
+
+      function isCurrentTopAppLayer(layerName) {
+        const top = APP_NAV_STACK.length ? APP_NAV_STACK[APP_NAV_STACK.length - 1] : null;
+        return !!(top && top.layer === layerName);
+      }
+
+      function pushAppLayer(layerName, data) {
+        if (appManualHistoryCleanup) {
+          console.warn("[nav] pushAppLayer called while manual cleanup is pending", appManualHistoryCleanup);
+          if (typeof debugLog === "function") debugLog("nav:pushWhileCleanupPending", appManualHistoryCleanup);
+          syncAppNavDebug("push-blocked-cleanup:" + (layerName || "unknown"));
+          return null;
+        }
+        if (!layerName || isAppLayerOpen(layerName)) {
+          syncAppNavDebug("skip-push:" + (layerName || "unknown"));
+          return null;
+        }
+        appNavStateSeq += 1;
+        const stateId = "app-layer-" + appNavStateSeq + "-" + Date.now();
+        const state = Object.assign({}, data || {}, { app: "touchbebe", key: APP_BACK_STATE_KEY, layer: layerName, id: stateId });
+        try {
+          history.pushState(state, "", location.href);
+          APP_NAV_STACK.push(Object.assign({}, data || {}, { layer: layerName, id: stateId, pushedAt: Date.now() }));
+          syncAppNavDebug("push:" + layerName);
+          return stateId;
+        } catch (err) {
+          console.warn("[nav] pushState failed:", err);
+          syncAppNavDebug("push-failed:" + layerName);
+          return null;
+        }
+      }
+
+      function replaceTopAppLayer(layerName, data) {
+        const top = APP_NAV_STACK.length ? APP_NAV_STACK[APP_NAV_STACK.length - 1] : null;
+        if (!top || top.layer !== layerName) {
+          return pushAppLayer(layerName, data);
+        }
+        const nextEntry = Object.assign({}, top, data || {}, { layer: layerName, id: top.id });
+        APP_NAV_STACK[APP_NAV_STACK.length - 1] = nextEntry;
+        const nextState = Object.assign({}, nextEntry, { app: "touchbebe", key: APP_BACK_STATE_KEY });
+        try {
+          history.replaceState(nextState, "", location.href);
+          syncAppNavDebug("replace:" + layerName);
+        } catch (err) {
+          console.warn("[nav] replaceTopAppLayer failed:", err);
+          syncAppNavDebug("replace-failed:" + layerName);
+        }
+        return nextEntry.id;
+      }
+
+      function popAppLayer(layerName, options) {
+        const settings = options || {};
+        if (!APP_NAV_STACK.length) {
+          syncAppNavDebug("pop-empty:" + (layerName || "unknown"));
+          return null;
+        }
+        let removed = null;
+        if (!layerName || APP_NAV_STACK[APP_NAV_STACK.length - 1].layer === layerName) {
+          removed = APP_NAV_STACK.pop();
+        } else {
+          if (settings.removeAll) {
+            for (let index = APP_NAV_STACK.length - 1; index >= 0; index -= 1) {
+              const item = APP_NAV_STACK[index];
+              if (item && item.layer === layerName && !removed) removed = item;
+            }
+            APP_NAV_STACK = APP_NAV_STACK.filter(function (item) { return item && item.layer !== layerName; });
+          } else {
+            for (let index = APP_NAV_STACK.length - 1; index >= 0; index -= 1) {
+              const item = APP_NAV_STACK[index];
+              if (item && item.layer === layerName) {
+                removed = APP_NAV_STACK.splice(index, 1)[0];
+                break;
+              }
+            }
+          }
+        }
+        syncAppNavDebug("pop:" + (layerName || "top"));
+        return removed;
+      }
+
+      function findAppLayerEntry(layerName) {
+        if (!APP_NAV_STACK.length) return null;
+        if (!layerName) return APP_NAV_STACK[APP_NAV_STACK.length - 1] || null;
+        for (let index = APP_NAV_STACK.length - 1; index >= 0; index -= 1) {
+          const item = APP_NAV_STACK[index];
+          if (item && item.layer === layerName) return item;
+        }
+        return null;
+      }
+
+      function isCurrentHistoryEntryForLayer(entry) {
+        if (!entry || !history.state) return false;
+        const state = history.state;
+        if (state.key !== APP_BACK_STATE_KEY || state.app !== "touchbebe") return false;
+        if (entry.id && state.id) return state.id === entry.id;
+        return state.layer === entry.layer;
+      }
+
+      function getCurrentOpenAppLayers() {
+        const layers = [];
+        if (hasActiveSheet()) layers.push("sheet");
+        if (isOnboardingOpen()) layers.push("onboarding");
+        if (isAnalysisScreenOpen()) layers.push("analysis");
+        if (isDailyReportOpen()) layers.push("daily-report");
+        return layers;
+      }
+
+      function reconcileAppNavStack(reason) {
+        const openLayers = getCurrentOpenAppLayers();
+        if (!APP_NAV_STACK.length) {
+          syncAppNavDebug("reconcile-empty:" + (reason || "unknown"));
+          return;
+        }
+        APP_NAV_STACK = APP_NAV_STACK.filter(function (item) {
+          return item && openLayers.indexOf(item.layer) !== -1;
+        });
+        syncAppNavDebug("reconcile:" + (reason || "unknown"));
+      }
+
+      function replaceCurrentAppHistoryState(reason) {
+        const top = APP_NAV_STACK.length ? APP_NAV_STACK[APP_NAV_STACK.length - 1] : null;
+        const state = top
+          ? Object.assign({}, top, { app: "touchbebe", key: APP_BACK_STATE_KEY, reconciled: reason || "manual-close" })
+          : { app: "touchbebe", key: APP_BACK_STATE_KEY, layer: "home", reconciled: reason || "manual-close" };
+        try {
+          history.replaceState(state, "", location.href);
+        } catch (err) {
+          console.warn("[nav] replaceState failed:", err);
+        }
+      }
+
+      function syncManualAppLayerClose(layerName, reason) {
+        if (appHandlingPopState || appClosingLayerFromBack) return;
+        const cleanupReason = reason || ("manual-close:" + (layerName || "unknown"));
+        const targetEntry = findAppLayerEntry(layerName);
+        if (!targetEntry) {
+          reconcileAppNavStack(cleanupReason);
+          syncAppNavDebug("manual-cleanup-skip:" + (layerName || "unknown"));
+          return;
+        }
+        const shouldConsumeHistory = isCurrentHistoryEntryForLayer(targetEntry);
+        popAppLayer(targetEntry.layer);
+        reconcileAppNavStack(cleanupReason);
+        if (shouldConsumeHistory) {
+          appManualHistoryCleanup = {
+            layer: targetEntry.layer,
+            id: targetEntry.id || "",
+            reason: cleanupReason,
+            startedAt: Date.now()
+          };
+          syncAppNavDebug("manual-cleanup-back:" + targetEntry.layer);
+          try {
+            history.back();
+            window.setTimeout(function () {
+              if (appManualHistoryCleanup && appManualHistoryCleanup.id === (targetEntry.id || "")) {
+                syncAppNavDebug("manual-cleanup-timeout:" + targetEntry.layer);
+                appManualHistoryCleanup = null;
+              }
+            }, 1500);
+          } catch (err) {
+            console.warn("[nav] manual history cleanup failed:", err);
+            appManualHistoryCleanup = null;
+            replaceCurrentAppHistoryState(cleanupReason);
+          }
+          return;
+        }
+        replaceCurrentAppHistoryState(cleanupReason);
+      }
+
+      function hasActiveSheet() {
+        return !!document.querySelector(".bottom-sheet.active");
+      }
+
+      function isOnboardingOpen() {
+        const overlay = document.getElementById("onboarding-overlay");
+        return !!(overlay && !overlay.hidden);
+      }
+
+      function isAnalysisScreenOpen() {
+        return !!(els.analysisDetailScreen && !els.analysisDetailScreen.hidden);
+      }
+
+      function isDailyReportOpen() {
+        return !!(lifeReportExpanded && els.lifeReportBody && !els.lifeReportBody.classList.contains("hidden"));
+      }
+
+      function hasOpenSwipeCard() {
+        return !!document.querySelector(".record-swipe-shell.is-open");
+      }
+
+      function closeDailyReportDetail(reason) {
+        if (!lifeReportExpanded) return false;
+        lifeReportExpanded = false;
+        renderApp();
+        syncManualAppLayerClose("daily-report", reason || "daily-report-close");
+        syncAppNavDebug("close:daily-report:" + (reason || "unknown"));
+        return true;
+      }
+
+      function openDailyReportDetail(options) {
+        const settings = options || {};
+        if (!settings.skipHistory && !isAppLayerOpen("daily-report")) pushAppLayer("daily-report");
+        lifeReportExpanded = true;
+        renderApp();
+        syncAppNavDebug("open:daily-report");
+        window.setTimeout(function () {
+          const target = document.getElementById("dailyTimelineCard") || els.lifeReportBody;
+          if (target && typeof target.scrollIntoView === "function") {
+            target.scrollIntoView({ behavior: "smooth", block: "start" });
+          }
+        }, 60);
+      }
+
+      function closeTopAppLayer(reason) {
+        const source = reason || "back";
+        appClosingLayerFromBack = true;
+        reconcileAppNavStack(source);
+        if (hasActiveSheet()) {
+          try {
+            closeSheets();
+            popAppLayer("sheet");
+            syncAppNavDebug("close:sheet:" + source);
+            return true;
+          } finally {
+            appClosingLayerFromBack = false;
+          }
+        }
+        if (isOnboardingOpen()) {
+          try {
+            closeOnboardingGuide();
+            popAppLayer("onboarding");
+            syncAppNavDebug("close:onboarding:" + source);
+            return true;
+          } finally {
+            appClosingLayerFromBack = false;
+          }
+        }
+        if (isAnalysisScreenOpen()) {
+          try {
+            showHomeScreen();
+            popAppLayer("analysis");
+            syncAppNavDebug("close:analysis:" + source);
+            return true;
+          } finally {
+            appClosingLayerFromBack = false;
+          }
+        }
+        if (isDailyReportOpen()) {
+          try {
+            closeDailyReportDetail(source);
+            popAppLayer("daily-report");
+            return true;
+          } finally {
+            appClosingLayerFromBack = false;
+          }
+        }
+        if (hasOpenSwipeCard()) {
+          try {
+            closeAllOpenSwipeCards();
+            syncAppNavDebug("close:swipe:" + source);
+            return true;
+          } finally {
+            appClosingLayerFromBack = false;
+          }
+        }
+        appClosingLayerFromBack = false;
+        syncAppNavDebug("default:" + source);
+        return false;
+      }
+
+      function handlePopStateForApp() {
+        if (typeof DEBUG_STATE !== "undefined") DEBUG_STATE.last_popstate_at = new Date().toISOString();
+        if (appHandlingPopState) return;
+        appHandlingPopState = true;
+        try {
+          if (appManualHistoryCleanup) {
+            const cleanup = appManualHistoryCleanup;
+            appManualHistoryCleanup = null;
+            reconcileAppNavStack("manual-cleanup-popstate:" + cleanup.layer);
+            syncAppNavDebug("manual-cleanup-consumed:" + cleanup.layer);
+            return;
+          }
+          reconcileAppNavStack("popstate");
+          closeTopAppLayer("popstate");
+        } finally {
+          appHandlingPopState = false;
+        }
+      }
+
+      function initAndroidBackNavigation() {
+        if (appBackNavigationReady) return;
+        appBackNavigationReady = true;
+        window.addEventListener("popstate", handlePopStateForApp);
+        syncAppNavDebug("init");
+      }
+
       function renderProfile() {
         const name = appData.profile.babyName || "우리 아기";
         const demoActive = isDemoModeActive();
@@ -19281,7 +19756,7 @@
         if (els.demoModeBadge) els.demoModeBadge.classList.toggle("hidden", !demoActive);
         if (els.demoModeNote) els.demoModeNote.classList.toggle("hidden", !demoActive);
         els.babyTitle.textContent = name;
-        document.title = name + " 터치베베";
+        document.title = name + " 생활 기록";
         els.babyNameInput.value = appData.profile.babyName || "";
         els.birthDateInput.value = appData.profile.birthDate || "";
         els.genderInput.value = appData.profile.gender || "";
@@ -21303,16 +21778,21 @@
 
       function showAnalysisScreen() {
         if (!els.analysisDetailScreen) return;
+        const wasOpen = !els.analysisDetailScreen.hidden;
         renderAnalysisDetailScreen();
         els.analysisDetailScreen.hidden = false;
         document.body.classList.add("analysis-detail-open");
         els.analysisDetailScreen.scrollTop = 0;
+        if (!wasOpen) pushAppLayer("analysis");
       }
 
       function showHomeScreen() {
         if (!els.analysisDetailScreen) return;
+        const wasOpen = !els.analysisDetailScreen.hidden;
         els.analysisDetailScreen.hidden = true;
         document.body.classList.remove("analysis-detail-open");
+        if (wasOpen) syncManualAppLayerClose("analysis", "analysis-home");
+        syncAppNavDebug("close:analysis");
       }
 
       function setLastRecord(type) {
@@ -21375,13 +21855,15 @@
           '<button type="button" class="record-delete-bg" data-swipe-delete-id="' + id + '" aria-label="' + deleteLabel + '"' + (demo ? ' disabled' : '') + '>' +
             '<span class="record-delete-action"><span class="record-delete-icon" aria-hidden="true">🗑</span><span class="record-delete-text">삭제</span></span>' +
           '</button>' +
-          '<div class="log-item record-card-modern' + (demo ? ' demo-record-card' : '') + '">' +
-          '<span class="record-swipe-bg" aria-hidden="true"></span>' +
-          (demo ? '' : '<input class="log-select" type="checkbox" aria-label="기록 선택" value="' + id + '">') +
-          '<span class="record-card-icon" aria-hidden="true">' + escapeHtml(getRecordDisplayIcon(record)) + '</span>' +
-          '<span class="log-text record-card-content">' + logItemHtml(record) + '</span>' +
-          '<span class="record-card-actions">' + actions + '<span class="record-chevron" aria-hidden="true">›</span></span>' +
-          '</div>' +
+          '<article class="log-item record-card-modern' + (demo ? ' demo-record-card' : '') + '">' +
+          '<label class="record-select-wrap">' +
+            (demo ? '<span class="record-checkbox-placeholder" aria-hidden="true"></span>' : '<input class="log-select record-checkbox" type="checkbox" aria-label="기록 선택" value="' + id + '">') +
+          '</label>' +
+          '<div class="record-card-icon" aria-hidden="true"><span>' + escapeHtml(getRecordDisplayIcon(record)) + '</span></div>' +
+          '<div class="log-text record-card-content">' + logItemHtml(record) + '</div>' +
+          '<div class="record-card-actions">' + actions + '</div>' +
+          '<button type="button" class="record-chevron" aria-label="기록 상세 보기">›</button>' +
+          '</article>' +
           '</li>';
       }
 
@@ -21594,11 +22076,11 @@
         const memo = record.memo ? '<span class="log-memo">메모: ' + escapeHtml(record.memo) + '</span>' : "";
         const cloudStatus = getRecordCloudStatus(record);
         const cloud = isDemoRecord(record)
-          ? '<span class="sync-badge local">서버 제외</span>'
-          : '<span class="sync-badge ' + escapeHtml(cloudStatus.tone) + '">' + escapeHtml(recordCloudLabel(record)) + '</span>';
-        return '<span class="log-main record-card-title"><span class="type-pill type-' + escapeHtml(record.type) + '">' + escapeHtml(typeLabels[record.type] || record.type) +
-          '</span><span>' + escapeHtml(value) + '</span></span><span class="log-meta record-card-time">' +
-          escapeHtml(when + " · " + elapsedText(record.createdAt)) + '</span><span class="record-card-meta">' + cloud + '</span>' + memo;
+          ? '<span class="sync-badge record-card-sync local">서버 제외</span>'
+          : '<span class="sync-badge record-card-sync ' + escapeHtml(cloudStatus.tone) + '">' + escapeHtml(recordCloudLabel(record)) + '</span>';
+        return '<div class="log-main record-card-main-line"><span class="type-pill record-type-pill type-' + escapeHtml(record.type) + '">' + escapeHtml(typeLabels[record.type] || "기록") +
+          '</span><strong class="record-card-title">' + escapeHtml(value || "기록") + '</strong></div><div class="log-meta record-card-time">' +
+          escapeHtml((when || "시간 없음") + " · " + elapsedText(record.createdAt)) + '</div><div class="record-card-meta">' + cloud + '</div>' + memo;
       }
 
       function getRecordDisplayTitle(record) {
@@ -21811,21 +22293,34 @@
 
       // ─── 시트 ─────────────────────────────────────────────────
       function openShareImagePreview(templateKey) {
-        closeSheets(false);
+        const wasSheetLayerOpen = isCurrentTopAppLayer("sheet");
+        closeSheetsForSwitch();
         renderShareImagePreview(templateKey || "family_today");
         els.overlay.classList.add("active");
         if (els.shareImagePreviewSheet) els.shareImagePreviewSheet.classList.add("active");
+        if (wasSheetLayerOpen) {
+          replaceTopAppLayer("sheet", { sheet: "shareImagePreview", reason: "sheet-switch" });
+        } else {
+          pushAppLayer("sheet", { sheet: "shareImagePreview" });
+        }
       }
 
       function openPrintableReportPreview(templateKey) {
-        closeSheets(false);
+        const wasSheetLayerOpen = isCurrentTopAppLayer("sheet");
+        closeSheetsForSwitch();
         renderPrintableReportPreview(templateKey || "doctor_recent7_pdf");
         els.overlay.classList.add("active");
         if (els.printableReportSheet) els.printableReportSheet.classList.add("active");
+        if (wasSheetLayerOpen) {
+          replaceTopAppLayer("sheet", { sheet: "printableReport", reason: "sheet-switch" });
+        } else {
+          pushAppLayer("sheet", { sheet: "printableReport" });
+        }
       }
 
       function openSheet(name) {
-        closeSheets(false);
+        const wasSheetLayerOpen = isCurrentTopAppLayer("sheet");
+        closeSheetsForSwitch();
         els.overlay.classList.add("active");
         if (name === "feeding") {
           els.feedingMemoInput.value = "";
@@ -21875,9 +22370,39 @@
           renderPrintableReportPreview();
           if (els.printableReportSheet) els.printableReportSheet.classList.add("active");
         }
+        if (wasSheetLayerOpen) {
+          replaceTopAppLayer("sheet", { sheet: name, reason: "sheet-switch" });
+        } else {
+          pushAppLayer("sheet", { sheet: name });
+        }
       }
 
-      function closeSheets(clearOverlay) {
+      function normalizeCloseSheetsOptions(arg) {
+        if (typeof arg === "boolean") {
+          return {
+            clearOverlay: arg,
+            syncHistory: true,
+            reason: "manual-close"
+          };
+        }
+        return Object.assign({
+          clearOverlay: true,
+          syncHistory: true,
+          reason: "manual-close"
+        }, arg || {});
+      }
+
+      function closeSheetsForSwitch() {
+        closeSheets({
+          clearOverlay: false,
+          syncHistory: false,
+          reason: "sheet-switch"
+        });
+      }
+
+      function closeSheets(options) {
+        const opts = normalizeCloseSheetsOptions(options);
+        const wasSheetOpen = hasActiveSheet();
         els.managementSheet.classList.remove("active");
         els.feedingSheet.classList.remove("active");
         els.diaperSheet.classList.remove("active");
@@ -21890,7 +22415,9 @@
         if (els.familyShareSheet) els.familyShareSheet.classList.remove("active");
         if (els.shareImagePreviewSheet) els.shareImagePreviewSheet.classList.remove("active");
         if (els.printableReportSheet) els.printableReportSheet.classList.remove("active");
-        if (clearOverlay !== false) els.overlay.classList.remove("active");
+        if (opts.clearOverlay !== false) els.overlay.classList.remove("active");
+        if (wasSheetOpen && opts.syncHistory !== false) syncManualAppLayerClose("sheet", opts.reason || "sheet-close");
+        syncAppNavDebug("close:sheets");
       }
 
       function getCryCheckedItems() {
@@ -22586,7 +23113,7 @@
         return {
           backupFormatVersion: BACKUP_FORMAT_VERSION,
           appName: APP_NAME,
-          appDisplayName: "터치베베",
+          appDisplayName: "아기 생활 기록",
           appVersion: "phase-" + APP_VERSION,
           exportedAt: nowIso(),
           schemaVersion: data.schemaVersion,
@@ -22674,7 +23201,7 @@
           if (invalidRecord) throw new Error("invalid record");
           return { ok: true, data: data };
         } catch (error) {
-          return { ok: false, message: "복원할 수 없는 백업 파일입니다.\n올바른 백업 파일을 선택해 주세요." };
+          return { ok: false, message: "복원할 수 없는 백업 파일입니다.\n올바른 아기 생활 기록 백업 파일을 선택해 주세요." };
         }
       }
 
@@ -24818,6 +25345,7 @@
       }
 
       function closeOnboardingGuide() {
+        const wasOpen = isOnboardingOpen();
         const dontShow = document.getElementById("onboarding-dont-show");
         try {
           if (dontShow && dontShow.checked) {
@@ -24835,6 +25363,8 @@
 
         const overlay = document.getElementById("onboarding-overlay");
         if (overlay) overlay.hidden = true;
+        if (wasOpen) syncManualAppLayerClose("onboarding", "onboarding-close");
+        syncAppNavDebug("close:onboarding");
       }
 
       function bindOnboardingGuideEvents() {
@@ -24879,6 +25409,7 @@
         bindOnboardingGuideEvents();
         setOnboardingIndex(0);
         overlay.hidden = false;
+        pushAppLayer("onboarding", { manual: settings.manual ? "true" : "false" });
         const closeButton = overlay.querySelector(".onboarding-close");
         if (closeButton && typeof closeButton.focus === "function") closeButton.focus();
       }
@@ -25599,6 +26130,11 @@
         lifeReportExpanded = !lifeReportExpanded;
         renderApp();
       });
+      if (els.dailyReportEntryButton) {
+        els.dailyReportEntryButton.addEventListener("click", function () {
+          openDailyReportDetail();
+        });
+      }
       els.analysisToggle.addEventListener("click", function () {
         showAnalysisScreen();
       });
@@ -26360,6 +26896,7 @@
       document.addEventListener("keydown", function (event) {
         if (event.key === "Escape") closeSheets();
       });
+      initAndroidBackNavigation();
 
       if (window.visualViewport) {
         const syncViewportOffset = function () {
