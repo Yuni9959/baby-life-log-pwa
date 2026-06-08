@@ -1,5 +1,5 @@
-const APP_VERSION = "6.1.6-record-layout-fix";
-const CACHE_NAME = "baby-life-log-v6.1.6-record-layout-fix";
+const APP_VERSION = "6.1.7-record-badge-icon";
+const CACHE_NAME = "baby-life-log-v6.1.7-record-badge-icon";
 const APP_SHELL = [
   "./manifest.json",
   `./service-worker.js?v=${APP_VERSION}`,

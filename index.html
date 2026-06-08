@@ -1205,8 +1205,8 @@
       z-index: 1;
       overflow: hidden;
       display: grid;
-      grid-template-columns: 28px 38px minmax(0, 1fr) auto 16px;
-      column-gap: 9px;
+      grid-template-columns: 28px minmax(0, 1fr) auto 14px;
+      column-gap: 10px;
       align-items: center;
       min-height: 72px;
       padding: 12px 10px;
@@ -1222,7 +1222,7 @@
     .record-card-modern.is-open { transform: translateX(-88px); }
     .record-card-modern.is-resetting { transition: transform 180ms ease; }
     .record-card-icon {
-      display: inline-flex;
+      display: none !important;
       width: 36px;
       height: 36px;
       min-width: 36px;
@@ -1319,20 +1319,41 @@
       flex: 0 0 auto;
       display: inline-flex;
       align-items: center;
+      gap: 4px;
       border-radius: 999px;
-      padding: 3px 7px;
+      padding: 4px 8px;
       font-size: 11px;
       font-weight: 800;
       line-height: 1;
       white-space: nowrap;
+      border: 1px solid transparent;
     }
+    .record-type-pill .record-type-icon {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 14px;
+      height: 14px;
+      font-size: 12px;
+      line-height: 1;
+      flex: 0 0 auto;
+    }
+    .record-type-pill .record-type-label {
+      line-height: 1;
+    }
+    .record-type-feeding { border-color: rgba(207, 129, 85, 0.28); background: #fff1e8; color: #b86d43; }
+    .record-type-diaper { border-color: rgba(201, 166, 71, 0.30); background: #fff8dc; color: #9b7a24; }
+    .record-type-burp { border-color: rgba(111, 147, 102, 0.28); background: #eef5e8; color: #5f8058; }
+    .record-type-sleep { border-color: rgba(142, 119, 184, 0.28); background: #eee8f8; color: #7865a3; }
+    .record-type-wake { border-color: rgba(95, 156, 178, 0.28); background: #e7f5f9; color: #5f9cb2; }
+    .record-type-default { border-color: rgba(186, 166, 137, 0.32); background: #f4efe6; color: #756859; }
     .record-checkbox-placeholder {
       width: 18px;
       height: 18px;
       display: block;
     }
     .record-card-main { display: contents; }
-    .record-card-modern.demo-record-card { grid-template-columns: 28px 38px minmax(0, 1fr) auto 16px; }
+    .record-card-modern.demo-record-card { grid-template-columns: 28px minmax(0, 1fr) auto 14px; }
     .record-card-actions { display: flex; flex: 0 0 auto; align-items: center; justify-content: flex-end; gap: 6px; white-space: nowrap; }
     .record-edit-btn, .record-delete-btn {
       min-width: 42px;
@@ -1560,8 +1581,8 @@
     }
     @media (max-width: 430px) {
       .daily-timeline-row { grid-template-columns: 42px 26px minmax(0, 1fr); gap: 6px; }
-      .record-card-modern { grid-template-columns: 26px 36px minmax(0, 1fr) auto; column-gap: 8px; padding: 10px 8px; }
-      .record-card-modern.demo-record-card { grid-template-columns: 26px 36px minmax(0, 1fr) auto; }
+      .record-card-modern { grid-template-columns: 26px minmax(0, 1fr) auto; column-gap: 8px; padding: 10px 8px; }
+      .record-card-modern.demo-record-card { grid-template-columns: 26px minmax(0, 1fr) auto; }
       .record-card-modern .record-chevron { display: none; }
       .record-card-actions { gap: 4px; }
       .record-edit-btn, .record-delete-btn { min-width: 38px; padding: 0 7px; font-size: 11px; }
@@ -1569,9 +1590,8 @@
       .family-member-list, .family-member-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     }
     @media (max-width: 390px) {
-      .record-card-modern { grid-template-columns: 24px 34px minmax(0, 1fr) auto; column-gap: 7px; }
+      .record-card-modern { grid-template-columns: 24px minmax(0, 1fr) auto; column-gap: 7px; }
       .record-select-wrap { width: 24px; min-width: 24px; }
-      .record-card-icon { width: 34px; height: 34px; min-width: 34px; max-width: 34px; flex-basis: 34px; }
       .record-edit-btn, .record-delete-btn { min-width: 36px; padding: 0 6px; }
     }
     .invite-link-box {
@@ -2905,6 +2925,23 @@
     .type-pill.type-burp { border-color: var(--burp-bd); background: var(--burp-bg); color: var(--burp-tx); }
     .type-pill.type-sleep { border-color: var(--sleep-bd); background: var(--sleep-bg); color: var(--sleep-tx); }
     .type-pill.type-wake { border-color: var(--wake-bd); background: var(--wake-bg); color: var(--wake-tx); }
+    .type-pill.record-type-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 4px 8px;
+      font-size: 11px;
+      font-weight: 800;
+      line-height: 1;
+      white-space: nowrap;
+      border-radius: 999px;
+    }
+    .type-pill.record-type-feeding { border-color: rgba(207, 129, 85, 0.28); background: #fff1e8; color: #b86d43; }
+    .type-pill.record-type-diaper { border-color: rgba(201, 166, 71, 0.30); background: #fff8dc; color: #9b7a24; }
+    .type-pill.record-type-burp { border-color: rgba(111, 147, 102, 0.28); background: #eef5e8; color: #5f8058; }
+    .type-pill.record-type-sleep { border-color: rgba(142, 119, 184, 0.28); background: #eee8f8; color: #7865a3; }
+    .type-pill.record-type-wake { border-color: rgba(95, 156, 178, 0.28); background: #e7f5f9; color: #5f9cb2; }
+    .type-pill.record-type-default { border-color: rgba(186, 166, 137, 0.32); background: #f4efe6; color: #756859; }
 
     .sync-badge.ok {
       border-color: var(--brand-soft-bd);
@@ -3234,7 +3271,7 @@
   <main class="app app-shell">
     <header class="topbar">
       <div>
-        <div class="version-badge" id="versionBadge">v6.1.6-record-layout-fix</div>
+        <div class="version-badge" id="versionBadge">v6.1.7-record-badge-icon</div>
         <div class="demo-mode-badge hidden" id="demoModeBadge">체험 모드</div>
         <h1 id="babyTitle">우리 아기</h1>
         <div class="baby-days" id="babyDays">생년월일을 입력해 주세요</div>
@@ -4096,7 +4133,7 @@
   <script>
     document.addEventListener("DOMContentLoaded", function () {
       if ("serviceWorker" in navigator) {
-        navigator.serviceWorker.register("./sw.js?v=6.1.6-record-layout-fix").catch(function (error) {
+        navigator.serviceWorker.register("./sw.js?v=6.1.7-record-badge-icon").catch(function (error) {
           console.warn("Service worker registration failed", error);
         });
       }
@@ -4291,9 +4328,9 @@
       const PRE_REPAIR_BACKUP_KEY = "baby_life_log_app_backup_before_repair";
       const BACKUP_FORMAT_VERSION = 2;
       const APP_NAME = "baby-life-log";
-      const APP_VERSION = "6.1.6-record-layout-fix";
+      const APP_VERSION = "6.1.7-record-badge-icon";
       const APP_PHASE_LABEL = "";
-      const SERVICE_WORKER_CACHE_NAME = "baby-life-log-v6.1.6-record-layout-fix";
+      const SERVICE_WORKER_CACHE_NAME = "baby-life-log-v6.1.7-record-badge-icon";
       const MIN_ANALYSIS_RECORDS = 10;
       const ANALYSIS_SERVER_RECONNECT_MESSAGE = "서버 연결 후 분석을 확인할 수 있어요. 서버 재연결을 눌러 주세요.";
       const ANALYSIS_GATE_DETAIL_MESSAGE = "기록이 조금 더 쌓이면 최근 흐름을 더 안정적으로 보여드릴게요.";
@@ -4861,7 +4898,7 @@
       };
       var DEBUG_LOGS = [];
       var DEBUG_STATE = {
-        version: "v6.1.6-record-layout-fix",
+        version: "v6.1.7-record-badge-icon",
         swInfo: null,
         localStorageTest: "",
         lastButtonEvent: "",
@@ -21859,7 +21896,6 @@
           '<label class="record-select-wrap">' +
             (demo ? '<span class="record-checkbox-placeholder" aria-hidden="true"></span>' : '<input class="log-select record-checkbox" type="checkbox" aria-label="기록 선택" value="' + id + '">') +
           '</label>' +
-          '<div class="record-card-icon" aria-hidden="true"><span>' + escapeHtml(getRecordDisplayIcon(record)) + '</span></div>' +
           '<div class="log-text record-card-content">' + logItemHtml(record) + '</div>' +
           '<div class="record-card-actions">' + actions + '</div>' +
           '<button type="button" class="record-chevron" aria-label="기록 상세 보기">›</button>' +
@@ -22073,12 +22109,15 @@
       function logItemHtml(record) {
         const value = getRecordDisplayTitle(record);
         const when = getRecordDisplayTime(record);
+        const typeMeta = getRecordTypeMeta(record);
         const memo = record.memo ? '<span class="log-memo">메모: ' + escapeHtml(record.memo) + '</span>' : "";
         const cloudStatus = getRecordCloudStatus(record);
         const cloud = isDemoRecord(record)
           ? '<span class="sync-badge record-card-sync local">서버 제외</span>'
           : '<span class="sync-badge record-card-sync ' + escapeHtml(cloudStatus.tone) + '">' + escapeHtml(recordCloudLabel(record)) + '</span>';
-        return '<div class="log-main record-card-main-line"><span class="type-pill record-type-pill type-' + escapeHtml(record.type) + '">' + escapeHtml(typeLabels[record.type] || "기록") +
+        return '<div class="log-main record-card-main-line"><span class="type-pill record-type-pill ' + escapeHtml(typeMeta.className) + ' type-' + escapeHtml(typeMeta.key) + '">' +
+          '<span class="record-type-icon" aria-hidden="true">' + escapeHtml(typeMeta.icon || "•") + '</span>' +
+          '<span class="record-type-label">' + escapeHtml(typeMeta.label || "기록") + '</span>' +
           '</span><strong class="record-card-title">' + escapeHtml(value || "기록") + '</strong></div><div class="log-meta record-card-time">' +
           escapeHtml((when || "시간 없음") + " · " + elapsedText(record.createdAt)) + '</div><div class="record-card-meta">' + cloud + '</div>' + memo;
       }
@@ -22098,6 +22137,16 @@
         if (record.type === "wake") return "☀";
         if (record.type === "burp") return "✓";
         return "•";
+      }
+
+      function getRecordTypeMeta(record) {
+        const type = record && (record.type || record.kind || record.category);
+        if (type === "feeding") return { key: "feeding", label: "수유", icon: "🍼", className: "record-type-feeding" };
+        if (type === "diaper") return { key: "diaper", label: "기저귀", icon: "☁️", className: "record-type-diaper" };
+        if (type === "burp") return { key: "burp", label: "트림", icon: "✓", className: "record-type-burp" };
+        if (type === "sleep" || type === "sleep_start") return { key: "sleep", label: "잠듦", icon: "🌙", className: "record-type-sleep" };
+        if (type === "wake" || type === "awake" || type === "wakeup" || type === "sleep_end") return { key: "wake", label: "깨어남", icon: "☀️", className: "record-type-wake" };
+        return { key: "record", label: "기록", icon: "•", className: "record-type-default" };
       }
 
       function getRecordCloudStatus(record) {
