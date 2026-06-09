@@ -7,6 +7,12 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <meta name="apple-mobile-web-app-title" content="터치베베">
+  <meta name="application-name" content="터치베베">
+  <meta name="description" content="누르기만 하면 기록되는 우리 아기 하루">
+  <meta property="og:title" content="터치베베">
+  <meta property="og:description" content="누르기만 하면 기록되는 우리 아기 하루">
+  <meta name="twitter:title" content="터치베베">
+  <meta name="twitter:description" content="누르기만 하면 기록되는 우리 아기 하루">
   <link rel="manifest" href="./manifest.json">
   <link rel="apple-touch-icon" href="./icons/icon-192.png">
   <title>터치베베</title>
@@ -2897,7 +2903,7 @@
   <main class="app app-shell">
     <header class="topbar">
       <div>
-        <div class="version-badge" id="versionBadge">v6.1.11-management-cleanup</div>
+        <div class="version-badge" id="versionBadge">v6.1.12-brand-touchbebe</div>
         <h1 id="babyTitle">우리 아기</h1>
         <div class="baby-days" id="babyDays">생년월일을 입력해 주세요</div>
         <div class="today-line" id="todayLine"></div>
@@ -3956,10 +3962,13 @@
       const PRE_RESTORE_BACKUP_KEY = "baby_life_log_app_backup_before_restore";
       const PRE_REPAIR_BACKUP_KEY = "baby_life_log_app_backup_before_repair";
       const BACKUP_FORMAT_VERSION = 2;
-      const APP_NAME = "baby-life-log";
-      const APP_VERSION = "6.1.11-management-cleanup";
+      const TOUCHBEBE_BRAND_NAME = "터치베베";
+      const TOUCHBEBE_APP_TITLE = "터치베베";
+      const TOUCHBEBE_APP_SUBTITLE = "누르기만 하면 기록되는 우리 아기 하루";
+      const APP_NAME = TOUCHBEBE_BRAND_NAME;
+      const APP_VERSION = "6.1.12-brand-touchbebe";
       const APP_PHASE_LABEL = "";
-      const SERVICE_WORKER_CACHE_NAME = "baby-life-log-v6.1.11-management-cleanup";
+      const SERVICE_WORKER_CACHE_NAME = "baby-life-log-v6.1.12-brand-touchbebe";
       const APP_INIT_TIME = new Date().toISOString();
       const ANALYSIS_API_ENDPOINT = "";
       const SERVER_OVERWRITE_BACKUP_KEY = "babylog_records_backup_before_server_overwrite";
@@ -3968,6 +3977,36 @@
       const PENDING_SYNC_QUEUE_UPDATED_AT_KEY = "babylog_pending_sync_queue_updated_at";
       const PENDING_SYNC_QUEUE_BACKUP_KEY = "babylog_pending_sync_queue_parse_failed_backup";
       const MAX_PENDING_AUTO_RETRIES = 5;
+
+      function applyTouchbebeBranding() {
+        const appName = TOUCHBEBE_APP_TITLE || "터치베베";
+        const description = TOUCHBEBE_APP_SUBTITLE || "누르기만 하면 기록되는 우리 아기 하루";
+        try {
+          document.title = appName;
+        } catch (err) {}
+        try {
+          const titleEl = document.querySelector("title");
+          if (titleEl) titleEl.textContent = appName;
+        } catch (err) {}
+        try {
+          const appNameMeta = document.querySelector('meta[name="application-name"]');
+          if (appNameMeta) appNameMeta.setAttribute("content", appName);
+          const appleTitleMeta = document.querySelector('meta[name="apple-mobile-web-app-title"]');
+          if (appleTitleMeta) appleTitleMeta.setAttribute("content", appName);
+          const ogTitle = document.querySelector('meta[property="og:title"]');
+          if (ogTitle) ogTitle.setAttribute("content", appName);
+          const twitterTitle = document.querySelector('meta[name="twitter:title"]');
+          if (twitterTitle) twitterTitle.setAttribute("content", appName);
+          const descriptionMeta = document.querySelector('meta[name="description"]');
+          if (descriptionMeta) descriptionMeta.setAttribute("content", description);
+          const ogDescription = document.querySelector('meta[property="og:description"]');
+          if (ogDescription) ogDescription.setAttribute("content", description);
+          const twitterDescription = document.querySelector('meta[name="twitter:description"]');
+          if (twitterDescription) twitterDescription.setAttribute("content", description);
+        } catch (err) {}
+      }
+
+      applyTouchbebeBranding();
       const TYPES = ["feeding", "burp", "diaper", "sleep", "wake"];
       const REPORT_TIMELINE_DAYS = 7;
       const ANALYSIS_RECORD_TYPES = ["feeding", "burp", "diaper", "sleep_start", "sleep_end", "wake"];
@@ -15815,7 +15854,7 @@
           cards: [],
           footer: {
             disclaimer: options.includeDisclaimer === false ? "" : "이 이미지는 앱에 남긴 기록을 바탕으로 한 참고용 요약이에요.",
-            appName: "챙겨조",
+            appName: APP_NAME,
             tagline: "기록 기반 육아 리포트"
           }
         };
@@ -16060,7 +16099,7 @@
         ctx.fill();
         ctx.fillStyle = "#7b5b39";
         ctx.font = "700 50px system-ui, -apple-system, BlinkMacSystemFont, sans-serif";
-        ctx.fillText(payload.footer.appName || "챙겨조", 74, 92);
+        ctx.fillText(payload.footer.appName || APP_NAME, 74, 92);
         ctx.font = "400 28px system-ui, -apple-system, BlinkMacSystemFont, sans-serif";
         ctx.fillStyle = "#9a7a55";
         ctx.fillText(payload.footer.tagline || "기록 기반 육아 리포트", 74, 132);
@@ -16414,7 +16453,7 @@
           sections: sections,
           footer: {
             disclaimer: options.includeDisclaimer === false ? "" : "이 문서는 앱에 남긴 기록을 바탕으로 한 참고용 요약입니다. 판단이 필요한 내용은 전문가와 상담해 주세요.",
-            appName: "챙겨조"
+            appName: APP_NAME
           }
         };
         payload.shareText = buildPrintableReportText(payload);
@@ -18276,7 +18315,7 @@
         const name = appData.profile.babyName || "우리 아기";
         if (els.versionBadge) els.versionBadge.textContent = APP_PHASE_LABEL ? ("v" + APP_VERSION + " · " + APP_PHASE_LABEL) : ("v" + APP_VERSION);
         els.babyTitle.textContent = name;
-        document.title = name + " 터치베베";
+        applyTouchbebeBranding();
         els.babyNameInput.value = appData.profile.babyName || "";
         els.birthDateInput.value = appData.profile.birthDate || "";
         els.genderInput.value = appData.profile.gender || "";
@@ -19611,7 +19650,7 @@
         ].filter(Boolean);
         els.printableReportPreview.innerHTML =
           '<header class="print-report-header">' +
-            '<div class="print-report-kicker">' + escapeHtml(payload.footer && payload.footer.appName || "챙겨조") + ' · 기록 기반 참고 자료</div>' +
+            '<div class="print-report-kicker">' + escapeHtml(payload.footer && payload.footer.appName || APP_NAME) + ' · 기록 기반 참고 자료</div>' +
             '<h1 class="print-report-title">' + escapeHtml(payload.title) + '</h1>' +
             '<div class="print-report-subtitle">' + escapeHtml(payload.subtitle) + '</div>' +
             '<div class="print-report-meta">' + meta.map(function (item) { return '<span class="print-badge">' + escapeHtml(item) + '</span>'; }).join("") + '</div>' +
@@ -20824,7 +20863,7 @@
         return {
           backupFormatVersion: BACKUP_FORMAT_VERSION,
           appName: APP_NAME,
-          appDisplayName: "터치베베",
+          appDisplayName: APP_NAME,
           appVersion: "phase-" + APP_VERSION,
           exportedAt: nowIso(),
           schemaVersion: data.schemaVersion,
@@ -21545,9 +21584,9 @@
 
       function buildPhase4DiagnosticText(result) {
         const d = result || phase4FinalDiagnosticState;
-        if (!d) return "Baby Life Log PWA - v" + APP_VERSION + " Diagnostic\n- Result: not run";
+        if (!d) return APP_NAME + " PWA - v" + APP_VERSION + " Diagnostic\n- Result: not run";
         return [
-          "Baby Life Log PWA - v" + APP_VERSION + " Diagnostic",
+          APP_NAME + " PWA - v" + APP_VERSION + " Diagnostic",
           "Generated: " + d.generatedAt,
           "",
           "App:",
@@ -22777,7 +22816,7 @@
         if (navigator.share) {
           try {
             await navigator.share({
-              title: "Baby Life Log 가족 초대",
+              title: APP_NAME + " 가족 초대",
               text: "같은 아기 기록을 함께 사용하려면 이 링크를 열고 가족 참여를 확인해 주세요.",
               url: link
             });
@@ -23196,7 +23235,7 @@
         const channel = browserAllowed ? "browser" : "in_app";
         if (channel === "browser") {
           try {
-            new Notification("Baby Life Log", {
+            new Notification(APP_NAME, {
               body: candidate.message,
               tag: "babylog-predictive-" + candidate.eventType,
               renotify: false
@@ -23639,7 +23678,7 @@
           const text = report && report.shareText ? report.shareText.text : "";
           if (navigator.share && text) {
             navigator.share({
-              title: "챙겨조 가족 공유 리포트",
+              title: APP_NAME + " 가족 공유 리포트",
               text: text
             }).then(function () {
               showToast("가족 공유 리포트를 공유했어요.");
