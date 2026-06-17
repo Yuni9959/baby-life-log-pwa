@@ -2903,7 +2903,7 @@
   <main class="app app-shell">
     <header class="topbar">
       <div>
-        <div class="version-badge" id="versionBadge">v6.1.12-brand-touchbebe</div>
+        <div class="version-badge" id="versionBadge">v6.1.14-privacy-store-ready</div>
         <h1 id="babyTitle">우리 아기</h1>
         <div class="baby-days" id="babyDays">생년월일을 입력해 주세요</div>
         <div class="today-line" id="todayLine"></div>
@@ -3768,7 +3768,7 @@
   <script>
     document.addEventListener("DOMContentLoaded", function () {
       if ("serviceWorker" in navigator) {
-        navigator.serviceWorker.register("./sw.js?v=6.1.11-management-cleanup").catch(function (error) {
+        navigator.serviceWorker.register("./sw.js?v=6.1.14-privacy-store-ready").catch(function (error) {
           console.warn("Service worker registration failed", error);
         });
       }
@@ -3966,9 +3966,9 @@
       const TOUCHBEBE_APP_TITLE = "터치베베";
       const TOUCHBEBE_APP_SUBTITLE = "누르기만 하면 기록되는 우리 아기 하루";
       const APP_NAME = TOUCHBEBE_BRAND_NAME;
-      const APP_VERSION = "6.1.12-brand-touchbebe";
+      const APP_VERSION = "6.1.14-privacy-store-ready";
       const APP_PHASE_LABEL = "";
-      const SERVICE_WORKER_CACHE_NAME = "baby-life-log-v6.1.12-brand-touchbebe";
+      const SERVICE_WORKER_CACHE_NAME = "baby-life-log-v6.1.14-privacy-store-ready";
       const APP_INIT_TIME = new Date().toISOString();
       const ANALYSIS_API_ENDPOINT = "";
       const SERVER_OVERWRITE_BACKUP_KEY = "babylog_records_backup_before_server_overwrite";
@@ -4007,6 +4007,17 @@
       }
 
       applyTouchbebeBranding();
+
+      function openStaticPage(path) {
+        try {
+          const pageWindow = window.open(path, "_blank", "noopener");
+          if (!pageWindow) location.href = path;
+        } catch (err) {
+          location.href = path;
+        }
+      }
+      window.openStaticPage = openStaticPage;
+
       const TYPES = ["feeding", "burp", "diaper", "sleep", "wake"];
       const REPORT_TIMELINE_DAYS = 7;
       const ANALYSIS_RECORD_TYPES = ["feeding", "burp", "diaper", "sleep_start", "sleep_end", "wake"];
@@ -4496,6 +4507,7 @@
       let selectedDiaperSubtype = "urine";
       let activeManagementTab = "baby";
       let versionTapCount = 0;
+      let versionTapTimer = null;
       let lifeReportExpanded = !!(appData.settings && appData.settings.ui && appData.settings.ui.lifeReportExpandedByDefault);
       let analysisExpanded = !!(appData.settings && appData.settings.ui && appData.settings.ui.analysisExpandedByDefault);
       let cloudFetchedRows = [];
@@ -18146,6 +18158,14 @@
             '<section class="management-user-card" aria-label="데이터 요약">' +
             '<h3>데이터 요약</h3>' +
             '<div class="data-grid" id="backupSummaryGrid"></div>' +
+            '</section>' +
+            '<section class="management-user-card" aria-label="개인정보와 데이터 삭제">' +
+            '<h3>개인정보와 데이터 삭제</h3>' +
+            '<p>개인정보 처리와 데이터 삭제 방법을 확인할 수 있어요.</p>' +
+            '<div class="data-tool-actions">' +
+            '<button type="button" class="small-action" onclick="openStaticPage(\'privacy.html\')">개인정보처리방침 보기</button>' +
+            '<button type="button" class="small-action" onclick="openStaticPage(\'delete.html\')">데이터 삭제 요청 안내</button>' +
+            '</div>' +
             '</section>'
           );
           els.backupSummaryGrid = document.getElementById("backupSummaryGrid");
@@ -18284,8 +18304,16 @@
 
       function handleVersionBadgeTap() {
         versionTapCount += 1;
-        if (versionTapCount < 5) return;
+        if (versionTapTimer) window.clearTimeout(versionTapTimer);
+        versionTapTimer = window.setTimeout(function () {
+          versionTapCount = 0;
+        }, 2500);
+        if (versionTapCount < 8) return;
         versionTapCount = 0;
+        if (versionTapTimer) {
+          window.clearTimeout(versionTapTimer);
+          versionTapTimer = null;
+        }
         try {
           localStorage.setItem("touchbebe_debug", "true");
         } catch (err) {}
@@ -23193,8 +23221,8 @@
 
       function deleteSampleData() {
         const count = appData.records.filter(isSampleRecord).length;
-        if (!count) { showToast("삭제할 샘플 데이터가 없습니다."); return; }
         if (!window.confirm("샘플 데이터 " + count + "개만 삭제할까요?\n실제 기록은 삭제하지 않습니다.")) return;
+        if (!count) { showToast("삭제할 샘플 데이터가 없습니다."); return; }
         appData.records = appData.records.filter(function (record) { return !isSampleRecord(record); });
         if (saveAppData()) {
           renderApp();
@@ -24288,6 +24316,7 @@
       }
       if (els.cloudBackupUploadButton) {
         els.cloudBackupUploadButton.addEventListener("click", function () {
+          if (!window.confirm("이 작업은 로컬 기록을 서버 family workspace에 백업합니다.\n기록 데이터에 영향을 줄 수 있어요. 계속 진행할까요?")) return;
           if (!window.BabyCloud || typeof window.BabyCloud.backupLocalRecordsToCloud !== "function") {
             showToast("클라우드 백업 기능을 실행할 수 없어요.");
             return;
@@ -24433,6 +24462,7 @@
       }
       if (els.cloudRepairServerRecordsButton) {
         els.cloudRepairServerRecordsButton.addEventListener("click", function () {
+          if (!window.confirm("이 작업은 기존 서버 기록의 family/baby 연결 정보를 보정합니다.\n기록 데이터에 영향을 줄 수 있어요. 계속 진행할까요?")) return;
           if (!window.BabyCloud || typeof window.BabyCloud.assignExistingRecordsToCurrentFamilyBaby !== "function") {
             showToast("서버 기록 보정을 실행할 수 없어요.");
             return;
@@ -24455,6 +24485,7 @@
       }
       if (els.cloudRepairLocalContextButton) {
         els.cloudRepairLocalContextButton.addEventListener("click", function () {
+          if (!window.confirm("이 작업은 이 기기의 로컬 기록 cloud context를 현재 가족/아기 기준으로 보정합니다.\n기록 데이터에 영향을 줄 수 있어요. 계속 진행할까요?")) return;
           if (!window.BabyCloud || typeof window.BabyCloud.repairLocalRecordsCloudContext !== "function") {
             showToast("로컬 기록 보정을 실행할 수 없어요.");
             return;
@@ -24497,6 +24528,7 @@
       }
       if (els.cloudTestSaveButton) {
         els.cloudTestSaveButton.addEventListener("click", function () {
+          if (!window.confirm("서버 테스트 기록을 생성해 저장/조회 연결을 확인합니다.\n개발자 진단용 데이터가 서버에 기록될 수 있어요. 계속할까요?")) return;
           if (!window.BabyCloud || typeof window.BabyCloud.testSaveRecord !== "function") {
             renderCloudStatus();
             showToast("서버 테스트 저장을 실행할 수 없어요.");
@@ -24521,6 +24553,7 @@
       }
       if (els.cloudTestFetchButton) {
         els.cloudTestFetchButton.addEventListener("click", function () {
+          if (!window.confirm("서버 테스트 기록 조회를 실행합니다.\n개발자 진단용 서버 조회 요청이 발생합니다. 계속할까요?")) return;
           if (!window.BabyCloud || typeof window.BabyCloud.testFetchRecords !== "function") {
             renderCloudStatus();
             showToast("서버 테스트 조회를 실행할 수 없어요.");
@@ -24626,10 +24659,16 @@
         });
       }
       if (els.cloudRetryPendingButton) {
-        els.cloudRetryPendingButton.addEventListener("click", retryPendingCloudRecords);
+        els.cloudRetryPendingButton.addEventListener("click", function () {
+          if (!window.confirm("동기화 대기 중인 기록을 서버에 다시 반영합니다.\n기록 데이터에 영향을 줄 수 있어요. 계속 진행할까요?")) return;
+          retryPendingCloudRecords();
+        });
       }
       if (els.cloudRetryErrorButton) {
-        els.cloudRetryErrorButton.addEventListener("click", retryErrorCloudRecords);
+        els.cloudRetryErrorButton.addEventListener("click", function () {
+          if (!window.confirm("서버 오류 상태의 기록을 다시 동기화합니다.\n기록 데이터에 영향을 줄 수 있어요. 계속 진행할까요?")) return;
+          retryErrorCloudRecords();
+        });
       }
       window.addEventListener("baby-cloud-status-change", renderCloudStatus);
       window.addEventListener("baby-cloud-local-restore", function (event) {

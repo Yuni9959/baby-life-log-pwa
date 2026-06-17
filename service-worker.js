@@ -1,5 +1,5 @@
-const APP_VERSION = "6.1.12-brand-touchbebe";
-const CACHE_NAME = "baby-life-log-v6.1.12-brand-touchbebe";
+const APP_VERSION = "6.1.14-privacy-store-ready";
+const CACHE_NAME = "baby-life-log-v6.1.14-privacy-store-ready";
 const APP_SHELL = [
   "./manifest.json",
   `./service-worker.js?v=${APP_VERSION}`,
