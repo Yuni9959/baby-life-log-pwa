@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow"><title>TouchBebe — Health information accessibility disclosure</title>
+<style>body{font:17px/1.7 system-ui,sans-serif;color:#493d38;background:#fffcf8;margin:0}main{max-width:850px;padding:32px 22px;margin:auto}h1,h2{line-height:1.3}video{width:100%;max-width:470px;background:#111;border-radius:12px}a{color:#885061}li{margin:.5em 0}code{overflow-wrap:anywhere}</style></head>
+<body><main><h1>TouchBebe: explicit health information disclosure</h1>
+<p>Current remediation for <code>com.yuni.touchbebe</code>, prepared October 24, 2026. The optional Bixby recording feature uses AccessibilityService API and is not an accessibility tool (<code>isAccessibilityTool=false</code>).</p>
+<video controls playsinline preload="metadata" src="review.mp4" aria-label="App launch, full health disclosure, refusal, consent, Android grant and synthetic recording"></video>
+<p><a href="review.mp4">Open current review video</a> · <a href="../../privacy.html">Privacy policy</a></p>
+<h2>What changed</h2>
+<p>A separate in-app disclosure now explicitly names health information, lists the data accessed, and explains its use, storage and sharing before requesting access. Existing version-1 consent does not authorize reading or saving after this update. Users must affirmatively accept the new version-2 disclosure. Decline, Back and closing the dialog do not grant access. Manual recording and example practice remain available.</p>
+<h2>Full disclosure translation</h2>
+<p><strong>Title: Consent to access and use health information.</strong></p>
+<p>TouchBebe uses AccessibilityService API to read the current recognized sentence on Bixby's screen. It also operates when the app is not open, when you speak to Bixby.</p>
+<p><strong>Data read:</strong> The baby's name/nickname, health information (feeding type, amount and time; burping; sleep; diapers and excretion; body temperature; medicine name, dose and unit; symptoms; vaccinations), record time and notes contained in the sentence.</p>
+<p><strong>Purpose:</strong> Automatically save baby records from the spoken content and process explicitly requested deletion of the previous record or correction of its time. Saved records support daily reports, statistics and care reminders.</p>
+<p><strong>Storage and sharing:</strong> Created records are stored on the phone. If connected to a family account, they synchronize to TouchBebe's server and can be viewed by connected family members. They are not used for advertising or sold.</p>
+<p>Original audio and full recognized sentences are not automatically retained or transmitted. Dictated notes are saved as records. Improvement phrases explicitly submitted by the user are transmitted according to their separate notice. Bixby's voice processing follows Samsung's settings. Content on other apps' screens is not read.</p>
+<p>You can use manual recording and example practice without agreeing. Automatic recording can be disabled at any time under Management → Permissions and Bixby settings.</p>
+<p><strong>Optional switch:</strong> Allow recording while locked. The baby's name and record result may appear on the lock screen. If result voice is enabled, the result is also spoken. <strong>Buttons:</strong> Agree and connect / Do not agree.</p>
+<h2>Review demonstration</h2>
+<p>The current video shows the debug build of source <code>68b5e42</code>, containing the production disclosure and service changes. It uses a dedicated Android emulator and synthetic baby records. Its Bixby input fixture is an isolated test application, not Samsung Bixby and not part of the distributed app. The fixture emits Android accessibility events through the actual TouchBebe service, local interpreter and persistent recording path. It does not demonstrate Samsung wake-word or microphone recognition. The screen recording is continuous, with no audio; English captions are added beneath it. Android Settings also lists the older release retained on this emulator for upgrade tests.</p>
+<p>Historical real-Samsung demonstrations are available for context: <a href="../first-sentence-2-3/">original spoken input and Android grant</a> and <a href="../first-sentence-2-3-2/">optional dismissal</a>. Their earlier disclosure wording is superseded by the current disclosure above.</p>
+<h2>Service boundaries</h2>
+<p>The service is limited to the current visible user-input node in <code>com.samsung.android.bixby.agent</code>. Previous conversation and assistant answers are not command sources. Consent, baby scope, Bixby version, lock permission and freshness are checked before reading and again before committing. Local classification and fixed validation rules process explicit care statements; the app does not initiate goals, plan or navigate arbitrary interfaces.</p>
+<p>The separate optional “close Bixby after recording” consent permits one fixed Back action after a newly saved nonduplicate record, only on the same unlocked Bixby processing window. The existing separate choice cannot bypass the renewed health-data consent. Automatic recording and the optional closing action can be disabled independently.</p>
+<p lang="ko">이번 수정은 접근성 권한으로 읽는 건강 정보와 그 용도·저장·가족 공유를 인앱 동의창에 명확히 공개하는 내용입니다. 이전 동의는 새 동의를 대신하지 않으며, 거절해도 직접 기록과 예문 체험을 이용할 수 있습니다.</p>
+</main></body></html>
